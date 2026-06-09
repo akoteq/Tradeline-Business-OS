@@ -1,0 +1,11 @@
+{
+  "name": "tradeline-bapx",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
+    "build": "pnpm --filter server build && pnpm --filter client build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
