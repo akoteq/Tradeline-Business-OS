@@ -1,17 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { PartnershipStatus } from '@prisma/client';
+import { qs, param } from '../lib/query';
 
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, country, search } = req.query;
+    const status = qs(req, 'status'), country = qs(req, 'country'), search = qs(req, 'search');
     const partnerships = await prisma.partnership.findMany({
       where: {
         ...(status ? { status: status as PartnershipStatus } : {}),
-        ...(country ? { country: { contains: String(country), mode: 'insensitive' } } : {}),
-        ...(search ? { partnerOrganisation: { contains: String(search), mode: 'insensitive' } } : {}),
+        ...(country ? { country: { contains: country, mode: 'insensitive' } } : {}),
+        ...(search ? { partnerOrganisation: { contains: search, mode: 'insensitive' } } : {}),
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -23,7 +24,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const p = await prisma.partnership.findUnique({ where: { id: req.params.id } });
+    const p = await prisma.partnership.findUnique({ where: { id: param(req, 'id') } });
     if (!p) return res.status(404).json({ error: 'Not found' });
     res.json(p);
   } catch (err) {
@@ -42,7 +43,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const p = await prisma.partnership.update({ where: { id: req.params.id }, data: req.body });
+    const p = await prisma.partnership.update({ where: { id: param(req, 'id') }, data: req.body });
     res.json(p);
   } catch (err) {
     res.status(400).json({ error: 'Failed to update partnership', detail: String(err) });
@@ -51,7 +52,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.partnership.delete({ where: { id: req.params.id } });
+    await prisma.partnership.delete({ where: { id: param(req, 'id') } });
     res.status(204).send();
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete partnership' });

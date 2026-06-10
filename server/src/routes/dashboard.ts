@@ -65,7 +65,7 @@ router.get('/ceo', async (_req: Request, res: Response) => {
 // Per-BDO summary
 router.get('/bdo/:id', async (req: Request, res: Response) => {
   try {
-    const bdoId = req.params.id;
+    const bdoId = String(req.params.id ?? '');
     const [bdo, bapxDeals, tradelineDeals, leads, tasks, activityLogs] = await Promise.all([
       prisma.bDO.findUnique({ where: { id: bdoId } }),
       prisma.bapxDeal.findMany({ where: { bdoId }, orderBy: { updatedAt: 'desc' } }),

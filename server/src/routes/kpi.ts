@@ -1,16 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Company } from '@prisma/client';
+import { qs, param } from '../lib/query';
 
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { company, month } = req.query;
+    const company = qs(req, 'company'), month = qs(req, 'month');
     const kpis = await prisma.kpiScorecard.findMany({
       where: {
         ...(company ? { company: company as Company } : {}),
-        ...(month ? { month: { gte: new Date(String(month)) } } : {}),
+        ...(month ? { month: { gte: new Date(month) } } : {}),
       },
       orderBy: { month: 'desc' },
     });
@@ -31,7 +32,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const kpi = await prisma.kpiScorecard.update({ where: { id: req.params.id }, data: req.body });
+    const kpi = await prisma.kpiScorecard.update({ where: { id: param(req, 'id') }, data: req.body });
     res.json(kpi);
   } catch (err) {
     res.status(400).json({ error: 'Failed to update KPI', detail: String(err) });
@@ -40,7 +41,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.kpiScorecard.delete({ where: { id: req.params.id } });
+    await prisma.kpiScorecard.delete({ where: { id: param(req, 'id') } });
     res.status(204).send();
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete KPI' });

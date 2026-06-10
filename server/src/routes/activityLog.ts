@@ -1,20 +1,21 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { TaskStatus } from '@prisma/client';
+import { qs, param } from '../lib/query';
 
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { bdo, status, category } = req.query;
+    const bdo = qs(req, 'bdo'), status = qs(req, 'status'), category = qs(req, 'category');
     const logs = await prisma.activityLog.findMany({
       where: {
-        ...(bdo ? { bdo: { name: { contains: String(bdo), mode: 'insensitive' } } } : {}),
+        ...(bdo ? { bdo: { name: { contains: bdo, mode: 'insensitive' } } } : {}),
         ...(status ? { status: status as TaskStatus } : {}),
-        ...(category ? { category: { contains: String(category), mode: 'insensitive' } } : {}),
+        ...(category ? { category: { contains: category, mode: 'insensitive' } } : {}),
       },
       include: { bdo: true },
-      orderBy: [{ taskNo: 'asc' }],
+      orderBy: { taskNo: 'asc' },
     });
     res.json(logs);
   } catch (err) {
@@ -33,7 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const log = await prisma.activityLog.update({ where: { id: req.params.id }, data: req.body });
+    const log = await prisma.activityLog.update({ where: { id: param(req, 'id') }, data: req.body });
     res.json(log);
   } catch (err) {
     res.status(400).json({ error: 'Failed to update log', detail: String(err) });
@@ -42,7 +43,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.activityLog.delete({ where: { id: req.params.id } });
+    await prisma.activityLog.delete({ where: { id: param(req, 'id') } });
     res.status(204).send();
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete log' });
