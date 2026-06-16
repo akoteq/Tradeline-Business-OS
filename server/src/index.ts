@@ -20,7 +20,7 @@ import dashboardRouter from './routes/dashboard';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
+const allowedOrigins = (process.env.CLIENT_URL || 'https://afrca-osss-client-w9vb.vercel.app' )
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
