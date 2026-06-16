@@ -25,18 +25,42 @@ const allowedOrigins = (process.env.CLIENT_URL || 'https://afrca-osss-client-w9v
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(helmet());
+// Log allowed origins on startup
+console.log('Allowed CORS origins:', allowedOrigins);
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        console.log(`CORS: Allowing origin ${origin}`);
+        return callback(null, true);
+      }
+      
+      // Log rejected origin for debugging
+      console.warn(`CORS: origin ${origin} not in allowed list:`, allowedOrigins);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 600, // 10 minutes
   })
 );
+
 app.use(morgan('dev'));
 app.use(express.json());
+
+// Explicitly handle OPTIONS preflight requests
+app.options('*', cors());
 
 app.use('/api/bapx', bapxRouter);
 app.use('/api/tradeline', tradelineRouter);
