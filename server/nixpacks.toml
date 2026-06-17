@@ -5,4 +5,4 @@ cmds = ['pnpm install --frozen-lockfile']
 cmds = ['pnpm run build']
 
 [start]
-cmd = 'node dist/index.js'
+cmd = 'npx prisma generate && node dist/index.js'
