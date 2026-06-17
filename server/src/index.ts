@@ -59,9 +59,6 @@ app.use(
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Explicitly handle OPTIONS preflight requests (Express 5 requires named wildcard)
-app.options('/{*path}', cors());
-
 app.use('/api/bapx', bapxRouter);
 app.use('/api/tradeline', tradelineRouter);
 app.use('/api/leads', leadsRouter);
