@@ -51,7 +51,7 @@ export default function PartnershipsPage() {
   ];
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Partnerships & MOUs</h1>
       <p className="text-sm text-gray-500">Strategic partnerships · Joint ventures · Revenue-sharing agreements</p>
       <DataTable

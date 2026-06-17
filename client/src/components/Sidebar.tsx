@@ -14,6 +14,7 @@ import {
   ListChecks,
   Database,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -39,18 +40,46 @@ const nav = [
   { href: "/consolidated", label: "Consolidated", icon: Database },
 ];
 
-export default function Sidebar() {
+type Props = {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+};
+
+export default function Sidebar({ mobileOpen = false, onClose }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState<string[]>(["BAPX", "Tradeline"]);
 
   const toggle = (label: string) =>
     setOpen((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
 
+  const handleLinkClick = () => {
+    onClose?.();
+  };
+
   return (
-    <aside className="w-60 min-h-screen bg-gray-900 text-gray-100 flex flex-col shrink-0">
-      <div className="px-4 py-5 border-b border-gray-700">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations</div>
-        <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+    <aside
+      className={clsx(
+        // Base — mobile: fixed overlay drawer
+        "fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 text-gray-100 flex flex-col",
+        "transition-transform duration-200 ease-in-out",
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop — in-flow sticky sidebar
+        "md:sticky md:top-0 md:h-screen md:translate-x-0 md:shrink-0 md:w-60"
+      )}
+    >
+      <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations</div>
+          <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+        </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
@@ -76,6 +105,7 @@ export default function Sidebar() {
                     <Link
                       key={child.href}
                       href={child.href}
+                      onClick={handleLinkClick}
                       className={clsx(
                         "flex items-center gap-2 px-3 py-2 pl-8 rounded-lg text-sm transition-colors",
                         pathname === child.href
@@ -95,6 +125,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleLinkClick}
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
                 pathname === item.href
