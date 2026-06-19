@@ -3,11 +3,16 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  CEO
+  BDO
+}
 
 enum Company {
   BAPX
@@ -100,10 +105,25 @@ enum Tier {
   TIER_3
 }
 
+// ─── Users (auth) ────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(BDO)
+  bdoId        String?   @db.ObjectId
+  name         String?
+  inviteToken  String?   @unique
+  inviteExpiry DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
 // ─── BDO (Business Development Officers) ──────────────────────────────────────
 
 model BDO {
-  id        String   @id @default(cuid())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   name      String
   email     String?  @unique
   phone     String?
@@ -113,20 +133,20 @@ model BDO {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bapxDeals       BapxDeal[]
-  tradelineDeals  TradelineDeal[]
-  leads           Lead[]
-  grantLoans      GrantLoanTracker[]
-  tasks           Task[]
-  activityLogs    ActivityLog[]
-  monthlyKpis     MonthlyKpi[]
+  bapxDeals      BapxDeal[]
+  tradelineDeals TradelineDeal[]
+  leads          Lead[]
+  grantLoans     GrantLoanTracker[]
+  tasks          Task[]
+  activityLogs   ActivityLog[]
+  monthlyKpis    MonthlyKpi[]
 }
 
 // ─── SME (Small & Medium Enterprise) ──────────────────────────────────────────
 
 model SME {
-  id                    String         @id @default(cuid())
-  bizId                 String?        @unique
+  id                    String          @id @default(auto()) @map("_id") @db.ObjectId
+  bizId                 String?         @unique
   companyName           String
   contactName           String?
   email                 String?
@@ -135,13 +155,13 @@ model SME {
   region                String?
   district              String?
   businessDescription   String?
-  status                SMEStatus      @default(IN_PROGRESS)
+  status                SMEStatus       @default(IN_PROGRESS)
   followUpDate          DateTime?
   investorReadinessScore Int?
   bankabilityTier       BankabilityTier @default(UNSCORED)
   notes                 String?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   bapxDeals      BapxDeal[]
   tradelineDeals TradelineDeal[]
@@ -152,45 +172,45 @@ model SME {
 // ─── BAPX Pipeline ────────────────────────────────────────────────────────────
 
 model BapxDeal {
-  id                       String     @id @default(cuid())
-  bizId                    String?    @unique
-  dealHealth               DealHealth @default(ACTIVE)
-  date                     DateTime?
-  businessName             String
-  clientName               String?
-  holdingFirm              String?
-  industry                 String?
-  telephone                String?
-  region                   String?
-  email                    String?
-  bdoId                    String?
-  bdo                      BDO?       @relation(fields: [bdoId], references: [id])
-  activityType             String?
-  keyTopics                String?
-  callOutcome              String?
-  product                  String?
-  dealStage                DealStage  @default(QUALIFICATION)
-  priority                 Priority   @default(MEDIUM)
-  nextSteps                String?
-  nextCallDate             DateTime?
-  targetGhs                Float?
-  daysSinceLastContact     Int?
-  aiCoachRecommendation    String?
-  smeId                    String?
-  sme                      SME?       @relation(fields: [smeId], references: [id])
-  createdAt                DateTime   @default(now())
-  updatedAt                DateTime   @updatedAt
+  id                    String     @id @default(auto()) @map("_id") @db.ObjectId
+  bizId                 String?    @unique
+  dealHealth            DealHealth @default(ACTIVE)
+  date                  DateTime?
+  businessName          String
+  clientName            String?
+  holdingFirm           String?
+  industry              String?
+  telephone             String?
+  region                String?
+  email                 String?
+  bdoId                 String?    @db.ObjectId
+  bdo                   BDO?       @relation(fields: [bdoId], references: [id])
+  activityType          String?
+  keyTopics             String?
+  callOutcome           String?
+  product               String?
+  dealStage             DealStage  @default(QUALIFICATION)
+  priority              Priority   @default(MEDIUM)
+  nextSteps             String?
+  nextCallDate          DateTime?
+  targetGhs             Float?
+  daysSinceLastContact  Int?
+  aiCoachRecommendation String?
+  smeId                 String?    @db.ObjectId
+  sme                   SME?       @relation(fields: [smeId], references: [id])
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 }
 
 // ─── Tradeline Pipeline ───────────────────────────────────────────────────────
 
 model TradelineDeal {
-  id                  String        @id @default(cuid())
+  id                  String        @id @default(auto()) @map("_id") @db.ObjectId
   bizId               String?       @unique
   serialNo            Int?
   businessName        String
   valueChain          String?
-  bdoId               String?
+  bdoId               String?       @db.ObjectId
   bdo                 BDO?          @relation(fields: [bdoId], references: [id])
   tier                Tier          @default(TIER_1)
   email               String?
@@ -206,7 +226,7 @@ model TradelineDeal {
   dealStage           DealStage     @default(QUALIFICATION)
   priority            Priority      @default(MEDIUM)
   dealHealth          DealHealth    @default(ACTIVE)
-  smeId               String?
+  smeId               String?       @db.ObjectId
   sme                 SME?          @relation(fields: [smeId], references: [id])
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
@@ -215,7 +235,7 @@ model TradelineDeal {
 // ─── Leads Database ───────────────────────────────────────────────────────────
 
 model Lead {
-  id            String     @id @default(cuid())
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
   bizId         String?    @unique
   businessName  String
   email         String?
@@ -223,13 +243,13 @@ model Lead {
   roleTitle     String?
   status        LeadStatus @default(NEW)
   source        String?
-  bdoId         String?
+  bdoId         String?    @db.ObjectId
   bdo           BDO?       @relation(fields: [bdoId], references: [id])
   priority      Priority?
   dateAdded     DateTime?
   followUpDate  DateTime?
   notes         String?
-  smeId         String?
+  smeId         String?    @db.ObjectId
   sme           SME?       @relation(fields: [smeId], references: [id])
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -238,7 +258,7 @@ model Lead {
 // ─── Consolidated Registry ────────────────────────────────────────────────────
 
 model ConsolidatedRecord {
-  id             String    @id @default(cuid())
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
   serialNo       Int?
   businessName   String
   contactPerson  String?
@@ -258,7 +278,7 @@ model ConsolidatedRecord {
 // ─── Partnerships ─────────────────────────────────────────────────────────────
 
 model Partnership {
-  id                  String            @id @default(cuid())
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
   partnerOrganisation String
   contactPerson       String?
   contactEmailPhone   String?
@@ -280,105 +300,105 @@ model Partnership {
 // ─── Grant & Loan Tracker ─────────────────────────────────────────────────────
 
 model GrantLoanTracker {
-  id                   String          @id @default(cuid())
-  clientName           String
-  bdoId                String?
-  bdo                  BDO?            @relation(fields: [bdoId], references: [id])
-  grantLoanType        String?
-  funderDfi            String?
-  sectorValueChain     String?
-  amountApplied        String?
-  amountApproved       Float?
-  disbursed            Float?
-  applicationDate      DateTime?
-  decisionDate         DateTime?
-  status               GrantLoanStatus @default(SUBMITTED)
-  commissionPct        Float?          @default(10)
-  commissionReceived   Float?
-  notes                String?
-  smeId                String?
-  sme                  SME?            @relation(fields: [smeId], references: [id])
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  id                 String          @id @default(auto()) @map("_id") @db.ObjectId
+  clientName         String
+  bdoId              String?         @db.ObjectId
+  bdo                BDO?            @relation(fields: [bdoId], references: [id])
+  grantLoanType      String?
+  funderDfi          String?
+  sectorValueChain   String?
+  amountApplied      String?
+  amountApproved     Float?
+  disbursed          Float?
+  applicationDate    DateTime?
+  decisionDate       DateTime?
+  status             GrantLoanStatus @default(SUBMITTED)
+  commissionPct      Float?          @default(10)
+  commissionReceived Float?
+  notes              String?
+  smeId              String?         @db.ObjectId
+  sme                SME?            @relation(fields: [smeId], references: [id])
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 }
 
 // ─── KPI Scorecard ────────────────────────────────────────────────────────────
 
 model KpiScorecard {
-  id               String   @id @default(cuid())
-  month            DateTime
-  company          Company
-  kpiMetric        String
-  currentValue     Float?
-  unit             String?
-  benchmarkTarget  Float?
-  status           String?
-  managementNotes  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  month           DateTime
+  company         Company
+  kpiMetric       String
+  currentValue    Float?
+  unit            String?
+  benchmarkTarget Float?
+  status          String?
+  managementNotes String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ─── Fred Phillips Performance Tracker ───────────────────────────────────────
 
 model ActivityLog {
-  id           String     @id @default(cuid())
-  taskNo       Int?
-  category     String?
-  description  String
-  startWeek    String?
-  endWeek      String?
-  progress     Float?     @default(0)
-  status       TaskStatus @default(PENDING)
-  notes        String?
-  bdoId        String?
-  bdo          BDO?       @relation(fields: [bdoId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  taskNo      Int?
+  category    String?
+  description String
+  startWeek   String?
+  endWeek     String?
+  progress    Float?     @default(0)
+  status      TaskStatus @default(PENDING)
+  notes       String?
+  bdoId       String?    @db.ObjectId
+  bdo         BDO?       @relation(fields: [bdoId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model MonthlyKpi {
-  id          String   @id @default(cuid())
-  serialNo    Int?
-  category    String?
-  metric      String
-  bdoId       String?
-  bdo         BDO?     @relation(fields: [bdoId], references: [id])
-  month       DateTime
-  target      Float?
-  actual      Float?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  serialNo Int?
+  category String?
+  metric   String
+  bdoId    String?  @db.ObjectId
+  bdo      BDO?     @relation(fields: [bdoId], references: [id])
+  month    DateTime
+  target   Float?
+  actual   Float?
+  notes    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Scheme of Work / Tasks ───────────────────────────────────────────────────
 
 model Task {
-  id           String     @id @default(cuid())
-  year         Int?
-  priority     Priority   @default(MEDIUM)
-  deliverable  String
-  targetDate   String?
-  bdoId        String?
-  bdo          BDO?       @relation(fields: [bdoId], references: [id])
-  status       TaskStatus @default(PENDING)
-  company      Company?
-  notes        String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  year        Int?
+  priority    Priority   @default(MEDIUM)
+  deliverable String
+  targetDate  String?
+  bdoId       String?    @db.ObjectId
+  bdo         BDO?       @relation(fields: [bdoId], references: [id])
+  status      TaskStatus @default(PENDING)
+  company     Company?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 // ─── Follow-Up Tracker ────────────────────────────────────────────────────────
 
 model FollowUp {
-  id           String   @id @default(cuid())
-  entityType   String
-  entityId     String
-  assignedTo   String?
-  dueDate      DateTime
-  notes        String?
-  completed    Boolean  @default(false)
-  completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  entityType  String
+  entityId    String
+  assignedTo  String?
+  dueDate     DateTime
+  notes       String?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
