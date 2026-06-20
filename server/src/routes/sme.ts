@@ -5,20 +5,50 @@ import { qs, param } from '../lib/query';
 
 const router = Router();
 
+function pickFields(body: Record<string, unknown>) {
+  const {
+    bizId, companyName, contactName, email, phone, valueChain, region, district,
+    businessDescription, status, followUpDate, investorReadinessScore, bankabilityTier, notes,
+  } = body;
+
+  return {
+    ...(bizId !== undefined ? { bizId: bizId as string | null } : {}),
+    ...(companyName !== undefined ? { companyName: companyName as string } : {}),
+    ...(contactName !== undefined ? { contactName: (contactName as string | null) || null } : {}),
+    ...(email !== undefined ? { email: (email as string | null) || null } : {}),
+    ...(phone !== undefined ? { phone: (phone as string | null) || null } : {}),
+    ...(valueChain !== undefined ? { valueChain: (valueChain as string | null) || null } : {}),
+    ...(region !== undefined ? { region: (region as string | null) || null } : {}),
+    ...(district !== undefined ? { district: (district as string | null) || null } : {}),
+    ...(businessDescription !== undefined ? { businessDescription: (businessDescription as string | null) || null } : {}),
+    ...(status !== undefined ? { status: status as SMEStatus } : {}),
+    ...(followUpDate !== undefined ? { followUpDate: followUpDate ? new Date(followUpDate as string) : null } : {}),
+    ...(investorReadinessScore !== undefined ? { investorReadinessScore: investorReadinessScore != null && investorReadinessScore !== '' ? Number(investorReadinessScore) : null } : {}),
+    ...(bankabilityTier !== undefined ? { bankabilityTier: bankabilityTier as BankabilityTier } : {}),
+    ...(notes !== undefined ? { notes: (notes as string | null) || null } : {}),
+  };
+}
+
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const status = qs(req, 'status'), tier = qs(req, 'tier'), valueChain = qs(req, 'valueChain'), region = qs(req, 'region'), search = qs(req, 'search');
-    const smes = await prisma.sME.findMany({
-      where: {
-        ...(status ? { status: status as SMEStatus } : {}),
-        ...(tier ? { bankabilityTier: tier as BankabilityTier } : {}),
-        ...(valueChain ? { valueChain: { contains: valueChain, mode: 'insensitive' } } : {}),
-        ...(region ? { region: { contains: region, mode: 'insensitive' } } : {}),
-        ...(search ? { companyName: { contains: search, mode: 'insensitive' } } : {}),
-      },
-      orderBy: { companyName: 'asc' },
-    });
-    res.json(smes);
+    const status = qs(req, 'status'), tier = qs(req, 'tier');
+    const valueChain = qs(req, 'valueChain'), region = qs(req, 'region'), search = qs(req, 'search');
+    const limit = Math.min(parseInt(qs(req, 'limit') ?? '100'), 500);
+    const skip = parseInt(qs(req, 'skip') ?? '0');
+
+    const where = {
+      ...(status ? { status: status as SMEStatus } : {}),
+      ...(tier ? { bankabilityTier: tier as BankabilityTier } : {}),
+      ...(valueChain ? { valueChain: { contains: valueChain, mode: 'insensitive' as const } } : {}),
+      ...(region ? { region: { contains: region, mode: 'insensitive' as const } } : {}),
+      ...(search ? { companyName: { contains: search, mode: 'insensitive' as const } } : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.sME.findMany({ where, orderBy: { companyName: 'asc' }, take: limit, skip }),
+      prisma.sME.count({ where }),
+    ]);
+    res.json({ data, total });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch SMEs' });
   }
@@ -36,7 +66,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const sme = await prisma.sME.create({ data: req.body });
+    const data = pickFields(req.body);
+    if (!data.companyName) return res.status(400).json({ error: 'companyName is required' });
+    const sme = await prisma.sME.create({ data });
     res.status(201).json(sme);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create SME', detail: String(err) });
@@ -45,7 +77,8 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const sme = await prisma.sME.update({ where: { id: param(req, 'id') }, data: req.body });
+    const data = pickFields(req.body);
+    const sme = await prisma.sME.update({ where: { id: param(req, 'id') }, data });
     res.json(sme);
   } catch (err) {
     res.status(400).json({ error: 'Failed to update SME', detail: String(err) });

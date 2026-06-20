@@ -312,31 +312,35 @@ async function seedLeads() {
     return arr[1] && String(arr[1]).trim();
   });
 
-  let count = 0;
+  // Resolve all BDO IDs upfront (uses cache after first lookup)
+  const records: Parameters<typeof prisma.lead.create>[0]['data'][] = [];
   for (const raw of dataRows) {
     const r = raw as unknown[];
     const businessName = str(r[1]);
     if (!businessName) continue;
-
     const bdoId = await getOrCreateBdo(str(r[7]), 'BAPX');
+    records.push({
+      businessName,
+      email: str(r[2]),
+      contactPerson: str(r[3]),
+      roleTitle: str(r[4]),
+      status: normLeadStatus(r[5]),
+      source: str(r[6]),
+      bdoId,
+      priority: r[8] ? normPriority(r[8]) : null,
+      dateAdded: parseDate(r[9]),
+      followUpDate: parseDate(r[10]),
+      notes: str(r[11]),
+      bizId: str(r[12]),
+    });
+  }
 
-    await prisma.lead.create({
-      data: {
-        businessName,
-        email: str(r[2]),
-        contactPerson: str(r[3]),
-        roleTitle: str(r[4]),
-        status: normLeadStatus(r[5]),
-        source: str(r[6]),
-        bdoId,
-        priority: r[8] ? normPriority(r[8]) : null,
-        dateAdded: parseDate(r[9]),
-        followUpDate: parseDate(r[10]),
-        notes: str(r[11]),
-        bizId: str(r[12]),
-      },
-    }).catch(() => {});
-    count++;
+  // Insert in parallel chunks of 20
+  const CHUNK = 20;
+  let count = 0;
+  for (let i = 0; i < records.length; i += CHUNK) {
+    await Promise.all(records.slice(i, i + CHUNK).map((data) => prisma.lead.create({ data }).catch(() => {})));
+    count += Math.min(CHUNK, records.length - i);
   }
   console.log(`  ${count} leads seeded`);
 }
@@ -601,26 +605,24 @@ async function seedLeadsFromBdDb() {
     return arr[0] && String(arr[0]).trim();
   });
 
+  // Pre-fetch all existing business names in one query
+  const existing = await prisma.lead.findMany({ select: { businessName: true } });
+  const existingNames = new Set(existing.map((l) => l.businessName));
+
+  const records = dataRows
+    .map((raw) => {
+      const r = raw as unknown[];
+      const businessName = str(r[0]);
+      if (!businessName || existingNames.has(businessName)) return null;
+      return { businessName, email: str(r[1]), contactPerson: str(r[2]), roleTitle: str(r[3]), status: 'NEW' as const, source: 'Database' };
+    })
+    .filter(Boolean) as Parameters<typeof prisma.lead.create>[0]['data'][];
+
+  const CHUNK = 20;
   let count = 0;
-  for (const raw of dataRows) {
-    const r = raw as unknown[];
-    const businessName = str(r[0]);
-    if (!businessName) continue;
-
-    const existing = await prisma.lead.findFirst({ where: { businessName } });
-    if (existing) continue;
-
-    await prisma.lead.create({
-      data: {
-        businessName,
-        email: str(r[1]),
-        contactPerson: str(r[2]),
-        roleTitle: str(r[3]),
-        status: 'NEW',
-        source: 'Database',
-      },
-    }).catch(() => {});
-    count++;
+  for (let i = 0; i < records.length; i += CHUNK) {
+    await Promise.all(records.slice(i, i + CHUNK).map((data) => prisma.lead.create({ data }).catch(() => {})));
+    count += Math.min(CHUNK, records.length - i);
   }
   console.log(`  ${count} additional leads seeded from BD Database`);
 }
@@ -657,7 +659,7 @@ async function seedKpi() {
 
     await prisma.kpiScorecard.create({
       data: { month, company, kpiMetric, currentValue: num(r[1]), unit: str(r[2]), benchmarkTarget, status: str(r[4]), managementNotes: str(r[5]) },
-    });
+    }).catch(() => {});
     count++;
   }
   console.log(`  ${count} KPI records seeded`);
