@@ -4,6 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import { prisma } from './lib/prisma';
+import { authenticate } from './middleware/auth';
+import authRouter from './routes/auth';
+import adminRouter from './routes/admin';
 import bapxRouter from './routes/bapx';
 import tradelineRouter from './routes/tradeline';
 import leadsRouter from './routes/leads';
@@ -16,6 +20,7 @@ import activityLogRouter from './routes/activityLog';
 import bdoRouter from './routes/bdo';
 import consolidatedRouter from './routes/consolidated';
 import dashboardRouter from './routes/dashboard';
+
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -58,7 +63,10 @@ app.use(
 
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(authenticate);
 
+app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/bapx', bapxRouter);
 app.use('/api/tradeline', tradelineRouter);
 app.use('/api/leads', leadsRouter);
@@ -76,8 +84,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  try {
+    await prisma.$runCommandRaw({ ping: 1 });
+    console.log('Database: connected');
+  } catch (err) {
+    console.error('Database: connection FAILED —', err);
+  }
 });
 
 export default app;
