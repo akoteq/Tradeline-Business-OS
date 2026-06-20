@@ -15,6 +15,7 @@ import {
   Database,
   ChevronDown,
   X,
+  UserCog,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -38,6 +39,7 @@ const nav = [
   { href: "/kpi", label: "KPI Scorecard", icon: BarChart3 },
   { href: "/tasks", label: "Scheme of Work", icon: ListChecks },
   { href: "/consolidated", label: "Consolidated", icon: Database },
+  { href: "/admin/bdos", label: "BDO Performance", icon: UserCog },
 ];
 
 type Props = {

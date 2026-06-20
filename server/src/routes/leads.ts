@@ -77,7 +77,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = pickFields(req.body);
     if (!data.businessName) return res.status(400).json({ error: 'businessName is required' });
-    const lead = await prisma.lead.create({ data, include: INCLUDE });
+    const lead = await prisma.lead.create({ data: data as any, include: INCLUDE });
     res.status(201).json(lead);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create lead', detail: String(err) });

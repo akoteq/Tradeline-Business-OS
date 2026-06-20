@@ -68,7 +68,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = pickFields(req.body);
     if (!data.companyName) return res.status(400).json({ error: 'companyName is required' });
-    const sme = await prisma.sME.create({ data });
+    const sme = await prisma.sME.create({ data: data as any });
     res.status(201).json(sme);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create SME', detail: String(err) });

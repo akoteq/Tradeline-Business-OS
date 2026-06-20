@@ -65,7 +65,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = pickFields(req.body);
     if (!data.clientName) return res.status(400).json({ error: 'clientName is required' });
-    const g = await prisma.grantLoanTracker.create({ data, include: INCLUDE });
+    const g = await prisma.grantLoanTracker.create({ data: data as any, include: INCLUDE });
     res.status(201).json(g);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create record', detail: String(err) });
