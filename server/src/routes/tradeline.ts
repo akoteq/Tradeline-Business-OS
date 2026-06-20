@@ -73,7 +73,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = pickFields(req.body);
     if (!data.businessName) return res.status(400).json({ error: 'businessName is required' });
-    const deal = await prisma.tradelineDeal.create({ data, include: INCLUDE });
+    const deal = await prisma.tradelineDeal.create({ data: data as any, include: INCLUDE });
     res.status(201).json(deal);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create deal', detail: String(err) });

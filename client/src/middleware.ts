@@ -43,7 +43,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user.role === 'BDO' && CEO_ONLY.includes(pathname)) {
+  if (user.role === 'BDO' && (CEO_ONLY.includes(pathname) || pathname.startsWith('/admin/'))) {
     const url = request.nextUrl.clone();
     url.pathname = '/bdo';
     return NextResponse.redirect(url);

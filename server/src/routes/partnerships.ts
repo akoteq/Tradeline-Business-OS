@@ -63,7 +63,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const data = pickFields(req.body);
     if (!data.partnerOrganisation) return res.status(400).json({ error: 'partnerOrganisation is required' });
-    const p = await prisma.partnership.create({ data });
+    const p = await prisma.partnership.create({ data: data as any });
     res.status(201).json(p);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create partnership', detail: String(err) });
