@@ -515,7 +515,7 @@ async function seedLeadsFromBdDb() {
 
   // Single batch query instead of one findOne per row
   const existingNames = new Set(
-    (await Lead.find({}, 'businessName').lean() as { businessName: string }[]).map((l) => l.businessName)
+    (await Lead.find({}, 'businessName').lean() as unknown as { businessName: string }[]).map((l) => l.businessName)
   );
 
   const toInsert = dataRows
