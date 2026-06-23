@@ -55,27 +55,27 @@ export default function CEODashboard() {
     n.toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">CEO Dashboard</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">CEO Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">Monday brief — live system overview</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <KpiCard label="BAPX Deals" value={data.bapx.total} icon={<TrendingUp size={20} />} color="indigo" />
         <KpiCard label="Tradeline Deals" value={data.tradeline.total} icon={<TrendingUp size={20} />} color="emerald" />
         <KpiCard label="Revenue Received" value={fmt(data.tradeline.revenueReceived)} icon={<DollarSign size={20} />} color="amber" />
         <KpiCard label="Outstanding" value={fmt(data.tradeline.outstanding)} icon={<AlertTriangle size={20} />} color="red" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <KpiCard label="Total Leads" value={data.leads.total} icon={<Users size={20} />} color="sky" />
         <KpiCard label="SMEs Tracked" value={data.smes.total} icon={<Building2 size={20} />} color="violet" />
         <KpiCard label="Active Partnerships" value={data.partnerships.active} icon={<Handshake size={20} />} color="teal" />
         <KpiCard label="Grants in Flight" value={data.grants.inFlight} icon={<DollarSign size={20} />} color="orange" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <ChartCard title="BAPX Pipeline by Stage">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={bapxStageData}>

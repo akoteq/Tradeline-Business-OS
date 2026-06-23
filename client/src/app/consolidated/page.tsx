@@ -42,7 +42,7 @@ export default function ConsolidatedPage() {
   ];
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Consolidated Registry</h1>

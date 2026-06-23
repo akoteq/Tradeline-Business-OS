@@ -58,11 +58,27 @@ export function DataTable<T extends { id: string }>({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 flex-wrap">
-        {title && <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {filterBar}
-          <div className="relative flex-1 max-w-xs">
+      {/* Toolbar */}
+      <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+        {/* Top row: title + add button */}
+        <div className="flex items-center justify-between gap-2">
+          {title && <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>}
+          {onAdd && (
+            <button
+              onClick={onAdd}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0"
+            >
+              <Plus size={14} /> Add
+            </button>
+          )}
+        </div>
+
+        {/* Bottom row: filters + search */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          {filterBar && (
+            <div className="flex gap-2 flex-wrap flex-1">{filterBar}</div>
+          )}
+          <div className="relative w-full sm:w-48 shrink-0">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
@@ -72,14 +88,6 @@ export function DataTable<T extends { id: string }>({
             />
           </div>
         </div>
-        {onAdd && (
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0"
-          >
-            <Plus size={14} /> Add
-          </button>
-        )}
       </div>
 
       <div className="overflow-x-auto">

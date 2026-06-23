@@ -41,7 +41,7 @@ export default function KpiPage() {
   ];
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">KPI Scorecard</h1>
       <p className="text-sm text-gray-500">Monthly performance monitoring across both companies</p>
       <DataTable
