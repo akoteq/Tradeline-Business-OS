@@ -113,6 +113,20 @@ router.put('/users/:id/role', requireAuth, requireAdmin, async (req: Request, re
   }
 });
 
+// Admin: change a user's linked BDO
+router.put('/users/:id/bdo', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { bdoId } = req.body;
+  try {
+    const user = await User.findByIdAndUpdate(param(req, 'id'), { bdoId: bdoId || null }, { new: true });
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    const json = user.toJSON() as Record<string, unknown>;
+    const bdo = json.bdoId ? await BDO.findById(json.bdoId) : null;
+    res.json({ ...json, bdoName: bdo?.get('name') ?? null });
+  } catch {
+    res.status(400).json({ error: 'Failed to update linked BDO' });
+  }
+});
+
 // Authenticated user: change their own password (clears mustChangePassword)
 router.put('/me/password', requireAuth, async (req: Request, res: Response) => {
   const { password } = req.body;

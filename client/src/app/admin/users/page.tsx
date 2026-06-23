@@ -3,16 +3,22 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
-import { UserCircle, Plus, KeyRound, Trash2, ShieldCheck } from "lucide-react";
+import { UserCircle, Plus, KeyRound, Trash2, ShieldCheck, Link2 } from "lucide-react";
 
 type BDO = { id: string; name: string; company: string };
 type UserRow = { id: string; email: string; role: string; bdoId: string | null; bdoName: string | null; mustChangePassword: boolean };
+
+function availableBdosFor(bdos: BDO[], users: UserRow[], excludeUserId?: string) {
+  const taken = new Set(users.filter((u) => u.bdoId && u.id !== excludeUserId).map((u) => u.bdoId!));
+  return bdos.filter((b) => !taken.has(b.id));
+}
 
 export default function ManageUsersPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null);
+  const [bdoTarget, setBdoTarget] = useState<UserRow | null>(null);
   const [inviteBanner, setInviteBanner] = useState<{ email: string; password: string } | null>(null);
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
@@ -85,7 +91,18 @@ export default function ManageUsersPage() {
                       {u.role}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{u.bdoName ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-600 text-sm">{u.bdoName ?? <span className="text-gray-400">—</span>}</span>
+                      <button
+                        onClick={() => setBdoTarget(u)}
+                        className="text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Change linked BDO"
+                      >
+                        <Link2 size={12} />
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     {u.mustChangePassword ? (
                       <span className="text-xs text-amber-600 font-medium">Pending password change</span>
@@ -127,8 +144,7 @@ export default function ManageUsersPage() {
 
       {showForm && (
         <CreateUserModal
-          bdos={bdos}
-          existingBdoIds={users.filter((u) => u.bdoId).map((u) => u.bdoId!)}
+          bdos={availableBdosFor(bdos, users)}
           onClose={() => setShowForm(false)}
           onSaved={(email, password) => {
             setShowForm(false);
@@ -153,21 +169,27 @@ export default function ManageUsersPage() {
           onSaved={() => { setRoleTarget(null); qc.invalidateQueries({ queryKey: ["auth-users"] }); }}
         />
       )}
+
+      {bdoTarget && (
+        <ChangeBdoModal
+          user={bdoTarget}
+          bdos={availableBdosFor(bdos, users, bdoTarget.id)}
+          onClose={() => setBdoTarget(null)}
+          onSaved={() => { setBdoTarget(null); qc.invalidateQueries({ queryKey: ["auth-users"] }); }}
+        />
+      )}
     </div>
   );
 }
 
-function CreateUserModal({ bdos, existingBdoIds, onClose, onSaved }: {
+function CreateUserModal({ bdos, onClose, onSaved }: {
   bdos: BDO[];
-  existingBdoIds: string[];
   onClose: () => void;
   onSaved: (email: string, password: string) => void;
 }) {
   const [form, setForm] = useState({ email: "", password: "", bdoId: "", role: "BDO" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const availableBdos = bdos.filter((b) => !existingBdoIds.includes(b.id));
 
   const save = async () => {
     setError("");
@@ -213,7 +235,7 @@ function CreateUserModal({ bdos, existingBdoIds, onClose, onSaved }: {
               <label className="text-xs font-medium text-gray-600 block mb-1">Link to BDO Profile</label>
               <select value={form.bdoId} onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value }))} className="w-full border rounded-lg px-2 py-2 text-sm">
                 <option value="">— Select BDO —</option>
-                {availableBdos.map((b) => (
+                {bdos.map((b) => (
                   <option key={b.id} value={b.id}>{b.name} ({b.company})</option>
                 ))}
               </select>
@@ -277,6 +299,58 @@ function ResetPasswordModal({ user, onClose, onSaved }: { user: UserRow; onClose
               {saving ? "Saving…" : "Reset"}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChangeBdoModal({ user, bdos, onClose, onSaved }: { user: UserRow; bdos: BDO[]; onClose: () => void; onSaved: () => void }) {
+  const [bdoId, setBdoId] = useState(user.bdoId ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await api.put(`/auth/users/${user.id}/bdo`, { bdoId: bdoId || null });
+      onSaved();
+    } catch {
+      setError("Failed to update linked BDO.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xs">
+        <div className="px-5 py-4 border-b flex items-center justify-between">
+          <h2 className="font-semibold">Change Linked BDO</h2>
+          <button onClick={onClose}>&times;</button>
+        </div>
+        <div className="p-5 space-y-3">
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
+          <p className="text-sm text-gray-600">Updating link for <strong>{user.email}</strong>.</p>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">BDO Profile</label>
+            <select value={bdoId} onChange={(e) => setBdoId(e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">
+              <option value="">— None (unlink) —</option>
+              {user.bdoId && !bdos.find((b) => b.id === user.bdoId) && (
+                <option value={user.bdoId}>{user.bdoName} (current)</option>
+              )}
+              {bdos.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.company})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
+          <button onClick={save} disabled={saving || bdoId === (user.bdoId ?? "")} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">
+            {saving ? "Saving…" : "Update"}
+          </button>
         </div>
       </div>
     </div>
