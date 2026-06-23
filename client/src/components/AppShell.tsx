@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 
-const NO_SHELL = ["/login", "/auth/set-password", "/auth/callback"];
+const NO_SHELL = ["/login", "/change-password", "/auth/set-password", "/auth/callback"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

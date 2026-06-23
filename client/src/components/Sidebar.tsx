@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   LogOut,
   UserCircle,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -46,29 +47,47 @@ const ADMIN_NAV = [
 
 const AUTH_PATHS = ["/login", "/change-password"];
 
-export default function Sidebar() {
+type SidebarProps = { mobileOpen?: boolean; onClose?: () => void };
+
+export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const [open, setOpen] = useState<string[]>(["BAPX", "Tradeline"]);
 
   if (AUTH_PATHS.includes(pathname)) return null;
-  if (loading) return <aside className="w-60 min-h-screen bg-gray-900 shrink-0" />;
+  if (loading) return <aside className="hidden md:flex w-60 min-h-screen bg-gray-900 shrink-0" />;
   if (!user) return null;
 
   const toggle = (label: string) =>
     setOpen((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
 
+  const asideClass = clsx(
+    "w-60 bg-gray-900 text-gray-100 flex flex-col shrink-0 z-30",
+    "fixed inset-y-0 left-0 transition-transform duration-200 md:relative md:translate-x-0",
+    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+  );
+
+  const CloseBtn = onClose && (
+    <button onClick={onClose} className="md:hidden p-1 text-gray-400 hover:text-white">
+      <X size={18} />
+    </button>
+  );
+
   if (user.role === "BDO") {
     return (
-      <aside className="w-60 min-h-screen bg-gray-900 text-gray-100 flex flex-col shrink-0">
-        <div className="px-4 py-5 border-b border-gray-700">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">BDO Portal</div>
-          <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+      <aside className={asideClass}>
+        <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">BDO Portal</div>
+            <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+          </div>
+          {CloseBtn}
         </div>
         <nav className="flex-1 overflow-y-auto py-4 px-2">
           {user.bdoId && (
             <Link
               href={`/bdo/${user.bdoId}`}
+              onClick={onClose}
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
                 pathname.startsWith("/bdo/")
@@ -87,10 +106,13 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 min-h-screen bg-gray-900 text-gray-100 flex flex-col shrink-0">
-      <div className="px-4 py-5 border-b border-gray-700">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations</div>
-        <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+    <aside className={asideClass}>
+      <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations</div>
+          <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+        </div>
+        {CloseBtn}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
@@ -113,6 +135,7 @@ export default function Sidebar() {
                     <Link
                       key={child.href}
                       href={child.href}
+                      onClick={onClose}
                       className={clsx(
                         "flex items-center gap-2 px-3 py-2 pl-8 rounded-lg text-sm transition-colors",
                         pathname === child.href
@@ -132,6 +155,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
                 pathname === item.href
