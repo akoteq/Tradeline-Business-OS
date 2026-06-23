@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/components/AuthProvider";
 import { TrendingUp, Users, ListChecks, DollarSign } from "lucide-react";
 import Link from "next/link";
 
@@ -15,7 +15,9 @@ type BdoSummary = {
 };
 
 export default function BdoDashboard() {
-  const { bdoId, displayName } = useAuth();
+  const { user } = useAuth();
+  const bdoId = user?.bdoId ?? null;
+  const displayName = user?.bdoName ?? user?.email ?? null;
 
   const { data, isLoading, isError } = useQuery<BdoSummary>({
     queryKey: ["bdo-dashboard", bdoId],
