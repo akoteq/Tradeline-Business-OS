@@ -1,25 +1,25 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
-import { DealHealth, DealStage, Priority } from '@prisma/client';
+import { BapxDeal } from '../models/BapxDeal';
+import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
 
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const bdo = qs(req, 'bdo'), stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority'), search = qs(req, 'search');
-    const deals = await prisma.bapxDeal.findMany({
-      where: {
-        ...(bdo ? { bdo: { name: { contains: bdo, mode: 'insensitive' } } } : {}),
-        ...(stage ? { dealStage: stage as DealStage } : {}),
-        ...(health ? { dealHealth: health as DealHealth } : {}),
-        ...(priority ? { priority: priority as Priority } : {}),
-        ...(search ? { businessName: { contains: search, mode: 'insensitive' } } : {}),
-      },
-      include: { bdo: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-    res.json(deals);
+    const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority'), search = qs(req, 'search');
+    const query: Record<string, unknown> = {};
+    if (bdo) {
+      const ids = await bdoIdsByName(bdo);
+      query.bdoId = { $in: ids };
+    }
+    if (bdoId) query.bdoId = bdoId;
+    if (stage) query.dealStage = stage;
+    if (health) query.dealHealth = health;
+    if (priority) query.priority = priority;
+    if (search) query.businessName = { $regex: search, $options: 'i' };
+    const deals = await BapxDeal.find(query).sort({ updatedAt: -1 });
+    res.json(await withBdo(deals));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch BAPX deals' });
   }
@@ -27,9 +27,10 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const deal = await prisma.bapxDeal.findUnique({ where: { id: param(req, 'id') }, include: { bdo: true, sme: true } });
-    if (!deal) return res.status(404).json({ error: 'Not found' });
-    res.json(deal);
+    const deal = await BapxDeal.findById(param(req, 'id'));
+    if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
+    const [result] = await withBdo([deal]);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch deal' });
   }
@@ -37,8 +38,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const deal = await prisma.bapxDeal.create({ data: req.body });
-    res.status(201).json(deal);
+    const deal = await new BapxDeal(req.body).save();
+    res.status(201).json(deal.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to create deal', detail: String(err) });
   }
@@ -46,8 +47,9 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const deal = await prisma.bapxDeal.update({ where: { id: param(req, 'id') }, data: req.body });
-    res.json(deal);
+    const deal = await BapxDeal.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
+    if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(deal.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to update deal', detail: String(err) });
   }
@@ -55,7 +57,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.bapxDeal.delete({ where: { id: param(req, 'id') } });
+    await BapxDeal.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete deal' });

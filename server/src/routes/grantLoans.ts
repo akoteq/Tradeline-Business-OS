@@ -1,23 +1,23 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
-import { GrantLoanStatus } from '@prisma/client';
+import { GrantLoanTracker } from '../models/GrantLoanTracker';
+import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
 
 const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const bdo = qs(req, 'bdo'), status = qs(req, 'status'), search = qs(req, 'search');
-    const grants = await prisma.grantLoanTracker.findMany({
-      where: {
-        ...(bdo ? { bdo: { name: { contains: bdo, mode: 'insensitive' } } } : {}),
-        ...(status ? { status: status as GrantLoanStatus } : {}),
-        ...(search ? { clientName: { contains: search, mode: 'insensitive' } } : {}),
-      },
-      include: { bdo: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-    res.json(grants);
+    const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), status = qs(req, 'status'), search = qs(req, 'search');
+    const query: Record<string, unknown> = {};
+    if (bdo) {
+      const ids = await bdoIdsByName(bdo);
+      query.bdoId = { $in: ids };
+    }
+    if (bdoId) query.bdoId = bdoId;
+    if (status) query.status = status;
+    if (search) query.clientName = { $regex: search, $options: 'i' };
+    const grants = await GrantLoanTracker.find(query).sort({ updatedAt: -1 });
+    res.json(await withBdo(grants));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch grant/loan records' });
   }
@@ -25,9 +25,10 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const g = await prisma.grantLoanTracker.findUnique({ where: { id: param(req, 'id') }, include: { bdo: true } });
-    if (!g) return res.status(404).json({ error: 'Not found' });
-    res.json(g);
+    const g = await GrantLoanTracker.findById(param(req, 'id'));
+    if (!g) { res.status(404).json({ error: 'Not found' }); return; }
+    const [result] = await withBdo([g]);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch record' });
   }
@@ -35,8 +36,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const g = await prisma.grantLoanTracker.create({ data: req.body });
-    res.status(201).json(g);
+    const g = await new GrantLoanTracker(req.body).save();
+    res.status(201).json(g.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to create record', detail: String(err) });
   }
@@ -44,8 +45,9 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const g = await prisma.grantLoanTracker.update({ where: { id: param(req, 'id') }, data: req.body });
-    res.json(g);
+    const g = await GrantLoanTracker.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
+    if (!g) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(g.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to update record', detail: String(err) });
   }
@@ -53,7 +55,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await prisma.grantLoanTracker.delete({ where: { id: param(req, 'id') } });
+    await GrantLoanTracker.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete record' });
