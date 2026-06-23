@@ -14,7 +14,8 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { TrendingUp, Users, Building2, Handshake, DollarSign, AlertTriangle } from "lucide-react";
+import { TrendingUp, Users, Building2, Handshake, DollarSign, AlertTriangle, FolderKanban } from "lucide-react";
+import Link from "next/link";
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
 
@@ -122,7 +123,64 @@ export default function CEODashboard() {
           </ResponsiveContainer>
         </ChartCard>
       </div>
+
+      {/* Projects section */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FolderKanban size={18} className="text-indigo-500" />
+            <h2 className="text-base font-semibold text-gray-900">Projects</h2>
+            <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">{data.projects.total}</span>
+          </div>
+          <Link href="/projects" className="text-xs text-indigo-600 hover:underline font-medium">
+            View all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {(data.projects.list as ProjectItem[]).map((p) => (
+            <ProjectCard key={p.id} project={p} />
+          ))}
+        </div>
+      </div>
     </div>
+  );
+}
+
+type ProjectItem = {
+  id: string;
+  name: string;
+  leader: string;
+  status: string;
+  company: string;
+};
+
+const PROJECT_STATUS_COLORS: Record<string, string> = {
+  ACTIVE:    "bg-green-100 text-green-700",
+  COMPLETED: "bg-blue-100 text-blue-700",
+  ON_HOLD:   "bg-yellow-100 text-yellow-700",
+  CANCELLED: "bg-red-100 text-red-700",
+};
+
+const PROJECT_COMPANY_COLORS: Record<string, string> = {
+  BAPX:      "text-indigo-600",
+  TRADELINE: "text-emerald-600",
+  SHARED:    "text-gray-500",
+};
+
+function ProjectCard({ project }: { project: ProjectItem }) {
+  return (
+    <Link href="/projects" className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-200 hover:shadow-sm transition-all">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <span className={`text-[11px] font-semibold uppercase tracking-wide ${PROJECT_COMPANY_COLORS[project.company] ?? "text-gray-400"}`}>
+          {project.company}
+        </span>
+        <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${PROJECT_STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-500"}`}>
+          {project.status.replace("_", " ")}
+        </span>
+      </div>
+      <p className="font-semibold text-sm text-gray-900 leading-snug">{project.name}</p>
+      <p className="text-xs text-gray-400 mt-1">Leader: {project.leader}</p>
+    </Link>
   );
 }
 

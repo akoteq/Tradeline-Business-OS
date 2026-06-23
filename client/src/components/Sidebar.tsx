@@ -18,6 +18,7 @@ import {
   LogOut,
   UserCircle,
   X,
+  FolderKanban,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -42,6 +43,7 @@ const ADMIN_NAV = [
   { href: "/kpi", label: "KPI Scorecard", icon: BarChart3 },
   { href: "/tasks", label: "Scheme of Work", icon: ListChecks },
   { href: "/consolidated", label: "Consolidated", icon: Database },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/admin/users", label: "Manage Users", icon: ShieldCheck },
 ];
 

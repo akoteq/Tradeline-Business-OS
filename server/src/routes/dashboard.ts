@@ -8,6 +8,7 @@ import { GrantLoanTracker } from '../models/GrantLoanTracker';
 import { Task } from '../models/Task';
 import { ActivityLog } from '../models/ActivityLog';
 import { BDO } from '../models/BDO';
+import { Project } from '../models/Project';
 
 const router = Router();
 
@@ -26,6 +27,9 @@ router.get('/ceo', async (_req: Request, res: Response) => {
       totalPartnerships,
       grantsInFlight,
       overdueTasks,
+      projectsTotal,
+      projectsByStatus,
+      projectsList,
     ] = await Promise.all([
       BapxDeal.countDocuments(),
       BapxDeal.aggregate([{ $group: { _id: '$dealStage', count: { $sum: 1 } } }]),
@@ -39,6 +43,9 @@ router.get('/ceo', async (_req: Request, res: Response) => {
       Partnership.countDocuments({ status: 'ACTIVE' }),
       GrantLoanTracker.countDocuments({ status: { $in: ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'] } }),
       Task.countDocuments({ status: 'OVERDUE' }),
+      Project.countDocuments(),
+      Project.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      Project.find().sort({ createdAt: 1 }),
     ]);
 
     const rev = tradelineRevenue[0] ?? { revenueReceived: 0, revenuePotential: 0, balance: 0 };
@@ -64,6 +71,11 @@ router.get('/ceo', async (_req: Request, res: Response) => {
       partnerships: { active: totalPartnerships },
       grants: { inFlight: grantsInFlight },
       tasks: { overdue: overdueTasks },
+      projects: {
+        total: projectsTotal,
+        byStatus: projectsByStatus.map((s) => ({ status: s._id, count: s.count })),
+        list: projectsList.map((p) => p.toJSON()),
+      },
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch CEO dashboard data' });
