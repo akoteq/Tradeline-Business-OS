@@ -36,6 +36,26 @@ const ADMIN_NAV = [
     icon: TrendingUp,
     children: [{ href: "/tradeline/pipeline", label: "Pipeline" }],
   },
+  {
+    label: "Alpha Africa",
+    icon: Building2,
+    children: [{ href: "/pipeline/alpha-africa", label: "Pipeline" }],
+  },
+  {
+    label: "Finance Factory",
+    icon: Building2,
+    children: [{ href: "/pipeline/finance-factory", label: "Pipeline" }],
+  },
+  {
+    label: "Community Finance",
+    icon: Building2,
+    children: [{ href: "/pipeline/community-finance", label: "Pipeline" }],
+  },
+  {
+    label: "Akoteq",
+    icon: Building2,
+    children: [{ href: "/pipeline/akoteq", label: "Pipeline" }],
+  },
   { href: "/leads", label: "Leads DB", icon: Users },
   { href: "/sme", label: "SME Database", icon: Building2 },
   { href: "/partnerships", label: "Partnerships", icon: Handshake },

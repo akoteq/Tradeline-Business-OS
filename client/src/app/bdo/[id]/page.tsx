@@ -12,8 +12,14 @@ type BapxDeal = { id: string; businessName: string; clientName: string | null; i
 type TradelineDeal = { id: string; businessName: string; valueChain: string | null; tier: string; email: string | null; telephone: string | null; currentStatus: string | null; nextAction: string | null; requiredInvestment: string | null; revenuePotentialGhs: number | null; revenueReceivedGhs: number | null; balanceGhs: number | null; paymentStatus: string; dealStage: string; dealHealth: string; priority: string; bdo: { name: string } | null };
 type Lead = { id: string; businessName: string; status: string; priority: string | null; source: string | null; followUpDate: string | null; contactPerson: string | null; email: string | null; roleTitle: string | null; notes: string | null };
 type Grant = { id: string; clientName: string; grantLoanType: string | null; funderDfi: string | null; sectorValueChain: string | null; amountApplied: string | null; amountApproved: number | null; disbursed: number | null; status: string; commissionPct: number | null; commissionReceived: number | null; notes: string | null };
+type CompanyDeal = { id: string; company: string; businessName: string; clientName: string | null; industry: string | null; dealStage: string; dealHealth: string; priority: string; paymentStatus: string | null; revenueReceivedGhs: number | null; balanceGhs: number | null; nextSteps: string | null; notes: string | null };
 
-const TABS = ["Tasks", "BAPX Deals", "Tradeline Deals", "Leads", "Grants / Loans"] as const;
+const COMPANY_LABELS: Record<string, string> = {
+  ALPHA_AFRICA: "Alpha Africa", FINANCE_FACTORY: "Finance Factory",
+  COMMUNITY_FINANCE: "Community Finance", AKOTEQ: "Akoteq",
+};
+
+const TABS = ["Tasks", "BAPX Deals", "Tradeline Deals", "Other Companies", "Leads", "Grants / Loans"] as const;
 type Tab = typeof TABS[number];
 
 export default function BdoDashboardPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +34,7 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   const { data: leadsData } = useQuery<{ data: Lead[]; total: number }>({ queryKey: ["leads", { bdoId: id }], queryFn: () => fetcher(`/leads?bdoId=${id}&limit=200`) });
   const leads = leadsData?.data ?? [];
   const { data: grants = [] } = useQuery<Grant[]>({ queryKey: ["grants", { bdoId: id }], queryFn: () => fetcher(`/grant-loans?bdoId=${id}`) });
+  const { data: companyDeals = [] } = useQuery<CompanyDeal[]>({ queryKey: ["company-deals", { bdoId: id }], queryFn: () => fetcher(`/company-deals?bdoId=${id}`) });
 
   // Modal state
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -40,6 +47,8 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [editingGrant, setEditingGrant] = useState<Grant | null>(null);
   const [showGrantForm, setShowGrantForm] = useState(false);
+  const [editingCompanyDeal, setEditingCompanyDeal] = useState<CompanyDeal | null>(null);
+  const [showCompanyDealForm, setShowCompanyDealForm] = useState(false);
 
   // Delete mutations
   const deleteTask = useMutation({ mutationFn: (tid: string) => api.delete(`/tasks/${tid}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks", { bdoId: id }] }) });
@@ -47,6 +56,7 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   const deleteTradeline = useMutation({ mutationFn: (did: string) => api.delete(`/tradeline/${did}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["tradeline", { bdoId: id }] }) });
   const deleteLead = useMutation({ mutationFn: (lid: string) => api.delete(`/leads/${lid}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["leads", { bdoId: id }] }) });
   const deleteGrant = useMutation({ mutationFn: (gid: string) => api.delete(`/grant-loans/${gid}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["grants", { bdoId: id }] }) });
+  const deleteCompanyDeal = useMutation({ mutationFn: (did: string) => api.delete(`/company-deals/${did}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["company-deals", { bdoId: id }] }) });
 
   if (bdoLoading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Loading…</div>;
   if (!bdo) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">BDO not found.</div>;
@@ -122,7 +132,7 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
             { label: "Tasks", value: tasks.length, color: "blue" },
             { label: "Completed", value: completedTasks, color: "green" },
             { label: "Overdue", value: overdueTasks, color: "red" },
-            { label: "Deals", value: bapxDeals.length + tradelineDeals.length, color: "purple" },
+            { label: "Deals", value: bapxDeals.length + tradelineDeals.length + companyDeals.length, color: "purple" },
             { label: "Leads", value: leads.length, color: "yellow" },
           ].map(({ label, value, color }) => (
             <div key={label} className={`bg-${color}-50 border border-${color}-200 rounded-lg px-3 py-2 text-center min-w-[65px]`}>
@@ -167,6 +177,26 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
           onAdd={() => { setEditingTradeline(null); setShowTradelineForm(true); }}
           onEdit={(row) => { setEditingTradeline(row); setShowTradelineForm(true); }}
           onDelete={(row) => { if (confirm(`Delete "${row.businessName}"?`)) deleteTradeline.mutate(row.id); }}
+        />
+      )}
+
+      {tab === "Other Companies" && (
+        <DataTable
+          columns={[
+            { key: "company",    label: "Company",  sortable: true, render: (r: CompanyDeal) => <span className="text-xs font-semibold text-indigo-700">{COMPANY_LABELS[r.company] ?? r.company}</span> },
+            { key: "businessName", label: "Business", sortable: true },
+            { key: "industry",   label: "Industry", render: (r: CompanyDeal) => r.industry ?? "—" },
+            { key: "dealStage",  label: "Stage",    render: (r: CompanyDeal) => <DealStageBadge  value={r.dealStage} />, sortable: true },
+            { key: "dealHealth", label: "Health",   render: (r: CompanyDeal) => <DealHealthBadge value={r.dealHealth} />, sortable: true },
+            { key: "priority",   label: "Priority", render: (r: CompanyDeal) => <PriorityBadge   value={r.priority} />, sortable: true },
+            { key: "revenueReceivedGhs", label: "Received", render: (r: CompanyDeal) => r.revenueReceivedGhs != null ? `GHS ${r.revenueReceivedGhs.toLocaleString()}` : "—" },
+            { key: "nextSteps",  label: "Next Steps", render: (r: CompanyDeal) => r.nextSteps ?? "—" },
+          ]}
+          data={companyDeals}
+          title={`${companyDeals.length} deal${companyDeals.length !== 1 ? "s" : ""} across other companies`}
+          onAdd={() => { setEditingCompanyDeal(null); setShowCompanyDealForm(true); }}
+          onEdit={(row) => { setEditingCompanyDeal(row); setShowCompanyDealForm(true); }}
+          onDelete={(row) => { if (confirm(`Delete "${row.businessName}"?`)) deleteCompanyDeal.mutate(row.id); }}
         />
       )}
 
@@ -215,6 +245,12 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
         <GrantFormModal grant={editingGrant} bdoId={id}
           onClose={() => setShowGrantForm(false)}
           onSaved={() => { setShowGrantForm(false); qc.invalidateQueries({ queryKey: ["grants", { bdoId: id }] }); }}
+        />
+      )}
+      {showCompanyDealForm && (
+        <CompanyDealFormModal deal={editingCompanyDeal} bdoId={id}
+          onClose={() => setShowCompanyDealForm(false)}
+          onSaved={() => { setShowCompanyDealForm(false); qc.invalidateQueries({ queryKey: ["company-deals", { bdoId: id }] }); }}
         />
       )}
     </div>
@@ -345,6 +381,53 @@ function LeadFormModal({ lead, bdoId, onClose, onSaved }: { lead: Lead | null; b
         <Field label="Status"><select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={sel}>{["NEW","CONTACTED","QUALIFIED","IN_PROGRESS","CONVERTED","LOST"].map((s) => <option key={s}>{s}</option>)}</select></Field>
         <Field label="Priority"><select value={form.priority ?? "MEDIUM"} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className={sel}>{["HIGH","MEDIUM","LOW"].map((s) => <option key={s}>{s}</option>)}</select></Field>
       </div>
+      <Field label="Notes"><textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={inp} /></Field>
+    </ModalShell>
+  );
+}
+
+// ── Company Deal Form ─────────────────────────────────────────────────────────
+
+function CompanyDealFormModal({ deal, bdoId, onClose, onSaved }: { deal: CompanyDeal | null; bdoId: string; onClose: () => void; onSaved: () => void }) {
+  const COMPANY_KEYS = ["ALPHA_AFRICA", "FINANCE_FACTORY", "COMMUNITY_FINANCE", "AKOTEQ"];
+  const [form, setForm] = useState({
+    company: deal?.company ?? "ALPHA_AFRICA",
+    businessName: deal?.businessName ?? "", clientName: deal?.clientName ?? "",
+    industry: deal?.industry ?? "", dealStage: deal?.dealStage ?? "QUALIFICATION",
+    dealHealth: deal?.dealHealth ?? "ACTIVE", priority: deal?.priority ?? "MEDIUM",
+    paymentStatus: deal?.paymentStatus ?? "UNPAID",
+    revenueReceivedGhs: deal?.revenueReceivedGhs ?? "", balanceGhs: deal?.balanceGhs ?? "",
+    nextSteps: deal?.nextSteps ?? "", notes: deal?.notes ?? "", bdoId,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true); setError("");
+    try {
+      deal ? await api.put(`/company-deals/${deal.id}`, form) : await api.post("/company-deals", form);
+      onSaved();
+    } catch { setError("Failed to save."); } finally { setSaving(false); }
+  };
+  return (
+    <ModalShell title={deal ? "Edit Deal" : "Add Deal"} onClose={onClose} onSave={save} saving={saving} disabled={!form.businessName.trim()}>
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+      <Field label="Company">
+        <select value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} className={sel}>
+          {COMPANY_KEYS.map((k) => <option key={k} value={k}>{COMPANY_LABELS[k]}</option>)}
+        </select>
+      </Field>
+      {[["businessName","Business Name"],["clientName","Client Name"],["industry","Industry"]].map(([k,l]) => (
+        <Field key={k} label={l}><input value={String(form[k as keyof typeof form])} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className={inp} /></Field>
+      ))}
+      <div className="grid grid-cols-2 gap-3">
+        {([["dealStage","Stage",["QUALIFICATION","DISCOVERY","PROPOSAL_SENT","NEGOTIATION","CONTRACT_REVIEW","CLOSED_WON","CLOSED_LOST","ON_HOLD"]],["dealHealth","Health",["ACTIVE","STALE","AT_RISK","CLOSED_WON","CLOSED_LOST"]],["priority","Priority",["HIGH","MEDIUM","LOW"]],["paymentStatus","Payment",["PAID","UNPAID","PARTIAL","OVERDUE"]]] as [string,string,string[]][]).map(([k,l,opts]) => (
+          <Field key={k} label={l}><select value={String(form[k as keyof typeof form])} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className={sel}>{opts.map((o) => <option key={o} value={o}>{o.replace(/_/g," ")}</option>)}</select></Field>
+        ))}
+        {[["revenueReceivedGhs","Revenue Received (GHS)"],["balanceGhs","Balance (GHS)"]].map(([k,l]) => (
+          <Field key={k} label={l}><input type="number" value={String(form[k as keyof typeof form])} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className={inp} /></Field>
+        ))}
+      </div>
+      <Field label="Next Steps"><textarea value={form.nextSteps} onChange={(e) => setForm((f) => ({ ...f, nextSteps: e.target.value }))} rows={2} className={inp} /></Field>
       <Field label="Notes"><textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={inp} /></Field>
     </ModalShell>
   );

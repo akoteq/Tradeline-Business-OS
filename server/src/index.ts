@@ -19,6 +19,7 @@ import consolidatedRouter from './routes/consolidated';
 import dashboardRouter from './routes/dashboard';
 import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
+import companyDealsRouter from './routes/companyDeals';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -65,6 +66,7 @@ app.use('/api/bdo', bdoRouter);
 app.use('/api/consolidated', consolidatedRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/company-deals', companyDealsRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

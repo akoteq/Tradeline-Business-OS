@@ -36,6 +36,21 @@ export default function CEODashboard() {
       </div>
     );
 
+  type CompanyStats = {
+    total: number;
+    byStage: Array<{ dealStage: string; _count: { _all: number } }>;
+    byHealth: Array<{ dealHealth: string; _count: { _all: number } }>;
+    revenueReceived: number;
+    outstanding: number;
+  };
+
+  const COMPANY_META: Record<string, { label: string; slug: string; color: string }> = {
+    ALPHA_AFRICA:      { label: "Alpha Africa Consult Ltd", slug: "alpha-africa",      color: "#6366f1" },
+    FINANCE_FACTORY:   { label: "Finance Factory Limited",  slug: "finance-factory",   color: "#22c55e" },
+    COMMUNITY_FINANCE: { label: "Community Finance Ltd",    slug: "community-finance", color: "#0ea5e9" },
+    AKOTEQ:            { label: "Akoteq Ltd",               slug: "akoteq",            color: "#8b5cf6" },
+  };
+
   const bapxStageData = (
     data.bapx.byStage as Array<{ dealStage: string; _count: { _all: number } }>
   ).map((s) => ({ name: s.dealStage, value: s._count._all }));
@@ -122,6 +137,60 @@ export default function CEODashboard() {
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
+      </div>
+
+      {/* Other Companies */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <Building2 size={18} className="text-gray-400" />
+          Other Companies
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Object.entries(COMPANY_META).map(([key, meta]) => {
+            const co = (data.companies as Record<string, CompanyStats>)[key];
+            if (!co) return null;
+            const stageData = co.byStage.map((s) => ({ name: s.dealStage, value: s._count._all }));
+            return (
+              <div key={key} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm text-gray-900">{meta.label}</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">{co.total} deal{co.total !== 1 ? "s" : ""}</p>
+                  </div>
+                  <Link
+                    href={`/pipeline/${meta.slug}`}
+                    className="text-xs text-indigo-600 hover:underline font-medium"
+                  >
+                    View pipeline →
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg p-2 text-center">
+                    <div className="text-[11px] text-gray-400">Received</div>
+                    <div className="text-sm font-bold text-green-700">{fmt(co.revenueReceived)}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2 text-center">
+                    <div className="text-[11px] text-gray-400">Outstanding</div>
+                    <div className="text-sm font-bold text-red-600">{fmt(co.outstanding)}</div>
+                  </div>
+                </div>
+                {stageData.length > 0 && (
+                  <ResponsiveContainer width="100%" height={100}>
+                    <BarChart data={stageData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={36} />
+                      <YAxis tick={{ fontSize: 9 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill={meta.color} radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+                {stageData.length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-3">No deals yet — add one from the pipeline page.</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Projects section */}

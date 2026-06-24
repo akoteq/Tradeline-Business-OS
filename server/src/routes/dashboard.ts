@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { BapxDeal } from '../models/BapxDeal';
 import { TradelineDeal } from '../models/TradelineDeal';
+import { CompanyDeal, COMPANY_KEYS } from '../models/CompanyDeal';
 import { Lead } from '../models/Lead';
 import { SME } from '../models/SME';
 import { Partnership } from '../models/Partnership';
@@ -11,6 +12,24 @@ import { BDO } from '../models/BDO';
 import { Project } from '../models/Project';
 
 const router = Router();
+
+async function companyStats(company: string) {
+  const [total, byStage, byHealth, revenue] = await Promise.all([
+    CompanyDeal.countDocuments({ company }),
+    CompanyDeal.aggregate([{ $match: { company } }, { $group: { _id: '$dealStage', count: { $sum: 1 } } }]),
+    CompanyDeal.aggregate([{ $match: { company } }, { $group: { _id: '$dealHealth', count: { $sum: 1 } } }]),
+    CompanyDeal.aggregate([{ $match: { company } }, { $group: { _id: null, revenueReceived: { $sum: '$revenueReceivedGhs' }, revenuePotential: { $sum: '$revenuePotentialGhs' }, balance: { $sum: '$balanceGhs' } } }]),
+  ]);
+  const rev = revenue[0] ?? { revenueReceived: 0, revenuePotential: 0, balance: 0 };
+  return {
+    total,
+    byStage: byStage.map((s) => ({ dealStage: s._id, _count: { _all: s.count } })),
+    byHealth: byHealth.map((s) => ({ dealHealth: s._id, _count: { _all: s.count } })),
+    revenueReceived:  rev.revenueReceived  ?? 0,
+    revenuePotential: rev.revenuePotential ?? 0,
+    outstanding:      rev.balance          ?? 0,
+  };
+}
 
 router.get('/ceo', async (_req: Request, res: Response) => {
   try {
@@ -30,6 +49,7 @@ router.get('/ceo', async (_req: Request, res: Response) => {
       projectsTotal,
       projectsByStatus,
       projectsList,
+      ...companyResults
     ] = await Promise.all([
       BapxDeal.countDocuments(),
       BapxDeal.aggregate([{ $group: { _id: '$dealStage', count: { $sum: 1 } } }]),
@@ -46,9 +66,14 @@ router.get('/ceo', async (_req: Request, res: Response) => {
       Project.countDocuments(),
       Project.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
       Project.find().sort({ createdAt: 1 }),
+      ...COMPANY_KEYS.map((c) => companyStats(c)),
     ]);
 
     const rev = tradelineRevenue[0] ?? { revenueReceived: 0, revenuePotential: 0, balance: 0 };
+
+    const companies = Object.fromEntries(
+      COMPANY_KEYS.map((key, i) => [key, companyResults[i]])
+    );
 
     res.json({
       bapx: {
@@ -63,6 +88,7 @@ router.get('/ceo', async (_req: Request, res: Response) => {
         revenuePotential: rev.revenuePotential ?? 0,
         outstanding: rev.balance ?? 0,
       },
+      companies,
       leads: {
         total: totalLeads,
         byStatus: leadsByStatus.map((s) => ({ status: s._id, _count: { _all: s.count } })),
