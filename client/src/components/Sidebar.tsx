@@ -105,7 +105,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           </div>
           {CloseBtn}
         </div>
-        <nav className="flex-1 overflow-y-auto py-4 px-2">
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
           {user.bdoId && (
             <Link
               href={`/bdo/${user.bdoId}`}
@@ -121,6 +121,32 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               My Dashboard
             </Link>
           )}
+          <Link
+            href="/tradeline/pipeline"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/tradeline/pipeline"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <TrendingUp size={16} />
+            Tradeline Pipeline
+          </Link>
+          <Link
+            href="/grant-loans"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/grant-loans"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <DollarSign size={16} />
+            Grants & Loans
+          </Link>
         </nav>
         <UserFooter name={user.bdoName ?? user.email} email={user.email} onLogout={logout} />
       </aside>

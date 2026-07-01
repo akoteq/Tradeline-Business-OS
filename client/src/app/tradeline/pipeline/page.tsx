@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge } from "@/components/Badges";
+import { useAuth } from "@/components/AuthProvider";
 import { X } from "lucide-react";
 
 type TradelineDeal = {
@@ -20,9 +21,9 @@ type TradelineDeal = {
   telephone: string | null;
   currentStatus: string | null;
   nextAction: string | null;
-  requiredInvestment: string | null;
   revenuePotentialGhs: number | null;
   dueDate: string | null;
+  expectedRevenueReceivedGhs: number | null;
   revenueReceivedGhs: number | null;
   balanceGhs: number | null;
   paymentStatus: string;
@@ -41,25 +42,38 @@ const PAYMENT_OPTS = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
 
 const EMPTY_FORM = {
   businessName: "", valueChain: "", email: "", telephone: "",
-  requiredInvestment: "", currentStatus: "", nextAction: "",
+  currentStatus: "", nextAction: "",
   bdoId: "", dueDate: "",
-  revenuePotentialGhs: "", revenueReceivedGhs: "", balanceGhs: "",
+  revenuePotentialGhs: "", expectedRevenueReceivedGhs: "", revenueReceivedGhs: "",
   tier: "TIER_1", dealStage: "QUALIFICATION", dealHealth: "ACTIVE",
   priority: "MEDIUM", paymentStatus: "UNPAID",
 };
 
-const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
+const fmt = (n: number) => n.toLocaleString();
 
 export default function TradelinePipelinePage() {
+  const { user } = useAuth();
+  const isBdoRole = user?.role === "BDO";
   const [filters, setFilters] = useState({ bdo: "", tier: "", stage: "", health: "", priority: "" });
   const [editing, setEditing] = useState<TradelineDeal | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [detail, setDetail] = useState<TradelineDeal | null>(null);
   const qc = useQueryClient();
 
+  // Scope to the logged-in BDO's own deals; otherwise pick up a ?bdo= link from elsewhere in the app.
+  useEffect(() => {
+    if (isBdoRole && user?.bdoName) {
+      setFilters((f) => ({ ...f, bdo: user.bdoName as string }));
+    } else {
+      const bdo = new URLSearchParams(window.location.search).get("bdo");
+      if (bdo) setFilters((f) => ({ ...f, bdo }));
+    }
+  }, [isBdoRole, user?.bdoName]);
+
   const { data: bdos = [] } = useQuery<BdoOption[]>({
     queryKey: ["bdos"],
     queryFn: () => fetcher("/bdo"),
+    enabled: !isBdoRole,
   });
   const tradelineBdos = bdos.filter((b) => b.company === "TRADELINE");
 
@@ -74,6 +88,7 @@ export default function TradelinePipelinePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tradeline"] }),
   });
 
+  const totalExpected = data.reduce((s, d) => s + (d.expectedRevenueReceivedGhs ?? 0), 0);
   const totalRevenue = data.reduce((s, d) => s + (d.revenueReceivedGhs ?? 0), 0);
   const totalOutstanding = data.reduce((s, d) => s + (d.balanceGhs ?? 0), 0);
 
@@ -101,6 +116,7 @@ export default function TradelinePipelinePage() {
     { key: "dealStage", label: "Stage", render: (r: TradelineDeal) => <DealStageBadge value={r.dealStage} />, sortable: true },
     { key: "priority", label: "Priority", render: (r: TradelineDeal) => <PriorityBadge value={r.priority} />, sortable: true },
     { key: "revenuePotentialGhs", label: "Potential (GHS)", render: (r: TradelineDeal) => r.revenuePotentialGhs ? fmt(r.revenuePotentialGhs) : "—", sortable: true },
+    { key: "expectedRevenueReceivedGhs", label: "Expected (GHS)", render: (r: TradelineDeal) => r.expectedRevenueReceivedGhs ? fmt(r.expectedRevenueReceivedGhs) : "—", sortable: true },
     { key: "revenueReceivedGhs", label: "Received (GHS)", render: (r: TradelineDeal) => r.revenueReceivedGhs ? fmt(r.revenueReceivedGhs) : "—", sortable: true },
     { key: "balanceGhs", label: "Balance (GHS)", render: (r: TradelineDeal) => r.balanceGhs ? fmt(r.balanceGhs) : "—", sortable: true },
     { key: "paymentStatus", label: "Payment", render: (r: TradelineDeal) => <PaymentBadge value={r.paymentStatus} /> },
@@ -112,9 +128,15 @@ export default function TradelinePipelinePage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tradeline Pipeline</h1>
-          <p className="text-sm text-gray-500 mt-1">Institutional clients · Investment & grant facilitation</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {isBdoRole ? "Your institutional clients · Investment & grant facilitation" : "Institutional clients · Investment & grant facilitation"}
+          </p>
         </div>
         <div className="flex gap-3 text-sm">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-center">
+            <div className="text-xs text-blue-600 font-medium">Expected Revenue</div>
+            <div className="font-bold text-blue-700">{fmt(totalExpected)}</div>
+          </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-center">
             <div className="text-xs text-emerald-600 font-medium">Revenue Received</div>
             <div className="font-bold text-emerald-700">{fmt(totalRevenue)}</div>
@@ -138,7 +160,9 @@ export default function TradelinePipelinePage() {
         }}
         filterBar={
           <div className="flex gap-2 flex-wrap">
-            <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...tradelineBdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilters((f) => ({ ...f, bdo: v }))} />
+            {!isBdoRole && (
+              <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...tradelineBdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilters((f) => ({ ...f, bdo: v }))} />
+            )}
             <FilterSelect value={filters.tier} options={[{ value: "", label: "All Tiers" }, ...TIER_OPTS.map((t) => ({ value: t, label: t.replace("_", " ") }))]} onChange={(v) => setFilters((f) => ({ ...f, tier: v }))} />
             <FilterSelect value={filters.health} options={[{ value: "", label: "All Health" }, ...HEALTH_OPTS.map((h) => ({ value: h, label: h.replace(/_/g, " ") }))]} onChange={(v) => setFilters((f) => ({ ...f, health: v }))} />
             <FilterSelect value={filters.stage} options={[{ value: "", label: "All Stages" }, ...STAGE_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]} onChange={(v) => setFilters((f) => ({ ...f, stage: v }))} />
@@ -151,6 +175,8 @@ export default function TradelinePipelinePage() {
         <DealFormModal
           deal={editing}
           bdos={tradelineBdos}
+          isBdoRole={isBdoRole}
+          currentBdoId={user?.bdoId ?? null}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["tradeline"] }); }}
         />
@@ -179,22 +205,22 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
-function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: TradelineDeal | null; bdos: BdoOption[]; onClose: () => void; onSaved: () => void }) {
+function DealFormModal({ deal, bdos, isBdoRole, currentBdoId, onClose, onSaved }: { deal: TradelineDeal | null; bdos: BdoOption[]; isBdoRole: boolean; currentBdoId: string | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     ...EMPTY_FORM,
+    ...(isBdoRole && currentBdoId ? { bdoId: currentBdoId } : {}),
     ...(deal ? {
       businessName: deal.businessName,
       valueChain: deal.valueChain ?? "",
       email: deal.email ?? "",
       telephone: deal.telephone ?? "",
-      requiredInvestment: deal.requiredInvestment ?? "",
       currentStatus: deal.currentStatus ?? "",
       nextAction: deal.nextAction ?? "",
       bdoId: deal.bdoId ?? "",
       dueDate: deal.dueDate ? deal.dueDate.slice(0, 10) : "",
       revenuePotentialGhs: deal.revenuePotentialGhs != null ? String(deal.revenuePotentialGhs) : "",
+      expectedRevenueReceivedGhs: deal.expectedRevenueReceivedGhs != null ? String(deal.expectedRevenueReceivedGhs) : "",
       revenueReceivedGhs: deal.revenueReceivedGhs != null ? String(deal.revenueReceivedGhs) : "",
-      balanceGhs: deal.balanceGhs != null ? String(deal.balanceGhs) : "",
       tier: deal.tier,
       dealStage: deal.dealStage,
       dealHealth: deal.dealHealth,
@@ -206,26 +232,30 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: TradelineDeal |
   const [error, setError] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const autoBalance = () => {
-    const potential = Number(form.revenuePotentialGhs) || 0;
-    const received = Number(form.revenueReceivedGhs) || 0;
-    set("balanceGhs", String(Math.max(0, potential - received)));
-  };
+  const computedBalance = Math.max(0, (Number(form.expectedRevenueReceivedGhs) || 0) - (Number(form.revenueReceivedGhs) || 0));
 
   const save = async () => {
     if (!form.businessName.trim()) { setError("Business name is required."); return; }
+    const potential = form.revenuePotentialGhs !== "" ? Number(form.revenuePotentialGhs) : null;
+    const expected = form.expectedRevenueReceivedGhs !== "" ? Number(form.expectedRevenueReceivedGhs) : null;
+    const received = form.revenueReceivedGhs !== "" ? Number(form.revenueReceivedGhs) : null;
+    if ((potential != null && potential < 0) || (expected != null && expected < 0) || (received != null && received < 0)) {
+      setError("Revenue fields cannot be negative."); return;
+    }
+    if (potential != null && expected != null && expected > potential) {
+      setError("Expected Revenue Received cannot exceed Revenue Potential."); return;
+    }
     setSaving(true); setError("");
     const body = {
       ...form,
       bdoId: form.bdoId || null,
       dueDate: form.dueDate || null,
-      revenuePotentialGhs: form.revenuePotentialGhs !== "" ? Number(form.revenuePotentialGhs) : null,
-      revenueReceivedGhs: form.revenueReceivedGhs !== "" ? Number(form.revenueReceivedGhs) : null,
-      balanceGhs: form.balanceGhs !== "" ? Number(form.balanceGhs) : null,
+      revenuePotentialGhs: potential,
+      expectedRevenueReceivedGhs: expected,
+      revenueReceivedGhs: received,
       valueChain: form.valueChain || null,
       email: form.email || null,
       telephone: form.telephone || null,
-      requiredInvestment: form.requiredInvestment || null,
       currentStatus: form.currentStatus || null,
       nextAction: form.nextAction || null,
     };
@@ -233,7 +263,10 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: TradelineDeal |
       if (deal) await api.put(`/tradeline/${deal.id}`, body);
       else await api.post("/tradeline", body);
       onSaved();
-    } catch { setError("Failed to save. Check the server."); }
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "Failed to save. Check the server.");
+    }
     finally { setSaving(false); }
   };
 
@@ -259,15 +292,16 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: TradelineDeal |
           {/* Deal details */}
           <Section label="Deal Details">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                  <option value="">— Unassigned —</option>
-                  {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-              </div>
-              <Field label="Required Investment" value={form.requiredInvestment} onChange={(v) => set("requiredInvestment", v)} />
-              <Field label="Due Date" type="date" value={form.dueDate} onChange={(v) => set("dueDate", v)} />
+              {!isBdoRole && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
+                  <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="">— Unassigned —</option>
+                    {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <Field label="Due Date" type="date" value={form.dueDate} onChange={(v) => set("dueDate", v)} span={isBdoRole ? 2 : undefined} />
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3 sm:grid-cols-4">
               <FormSelect label="Tier" value={form.tier} options={TIER_OPTS} onChange={(v) => set("tier", v)} />
@@ -279,15 +313,16 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: TradelineDeal |
 
           {/* Revenue */}
           <Section label="Revenue & Payment">
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Revenue Potential (GHS)" type="number" value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} />
-              <Field label="Revenue Received (GHS)" type="number" value={form.revenueReceivedGhs} onChange={(v) => set("revenueReceivedGhs", v)} />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Revenue Potential (GHS)" type="number" min={0} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} />
+              <Field label="Expected Revenue Received (GHS)" type="number" min={0} value={form.expectedRevenueReceivedGhs} onChange={(v) => set("expectedRevenueReceivedGhs", v)} />
+              <Field label="Revenue Received (GHS)" type="number" min={0} value={form.revenueReceivedGhs} onChange={(v) => set("revenueReceivedGhs", v)} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Balance (GHS)</label>
-                <div className="flex gap-1">
-                  <input type="number" value={form.balanceGhs} onChange={(e) => set("balanceGhs", e.target.value)} className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <button type="button" onClick={autoBalance} title="Auto-calculate balance" className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-500 shrink-0">Auto</button>
+                <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700">
+                  {computedBalance.toLocaleString()}
                 </div>
+                <p className="text-[11px] text-gray-400 mt-1">Auto-calculated: Expected − Received</p>
               </div>
             </div>
             <div className="mt-3">
@@ -349,13 +384,13 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
             <DetailItem label="BDO" value={deal.bdo?.name} />
             <DetailItem label="Email" value={deal.email} />
             <DetailItem label="Telephone" value={deal.telephone} />
-            <DetailItem label="Required Investment" value={deal.requiredInvestment} />
             <DetailItem label="Due Date" value={deal.dueDate ? new Date(deal.dueDate).toLocaleDateString() : null} />
           </dl>
 
           {/* Revenue panel */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <RevenueCard label="Potential" value={deal.revenuePotentialGhs} color="blue" />
+            <RevenueCard label="Expected" value={deal.expectedRevenueReceivedGhs} color="blue" />
             <RevenueCard label="Received" value={deal.revenueReceivedGhs} color="green" />
             <RevenueCard label="Balance" value={deal.balanceGhs} color="red" />
           </div>
@@ -380,11 +415,11 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Field({ label, value, onChange, type = "text", span }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number }) {
+function Field({ label, value, onChange, type = "text", span, min }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number; min?: number }) {
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
     </div>
   );
 }

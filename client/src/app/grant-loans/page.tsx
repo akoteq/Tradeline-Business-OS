@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
+import { useAuth } from "@/components/AuthProvider";
 import { X } from "lucide-react";
 
 type GrantLoan = {
@@ -49,15 +50,28 @@ const EMPTY_FORM = {
 const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
 export default function GrantLoansPage() {
+  const { user } = useAuth();
+  const isBdoRole = user?.role === "BDO";
   const [filters, setFilters] = useState({ status: "", bdo: "" });
   const [editing, setEditing] = useState<GrantLoan | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [detail, setDetail] = useState<GrantLoan | null>(null);
   const qc = useQueryClient();
 
+  // Scope to the logged-in BDO's own records; otherwise pick up a ?bdo= link from elsewhere in the app.
+  useEffect(() => {
+    if (isBdoRole && user?.bdoName) {
+      setFilters((f) => ({ ...f, bdo: user.bdoName as string }));
+    } else {
+      const bdo = new URLSearchParams(window.location.search).get("bdo");
+      if (bdo) setFilters((f) => ({ ...f, bdo }));
+    }
+  }, [isBdoRole, user?.bdoName]);
+
   const { data: bdos = [] } = useQuery<BdoOption[]>({
     queryKey: ["bdos"],
     queryFn: () => fetcher("/bdo"),
+    enabled: !isBdoRole,
   });
 
   const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)));
@@ -70,10 +84,6 @@ export default function GrantLoansPage() {
     mutationFn: (id: string) => api.delete(`/grant-loans/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["grant-loans"] }),
   });
-
-  const totalApproved = data.reduce((s, r) => s + (r.amountApproved ?? 0), 0);
-  const totalDisbursed = data.reduce((s, r) => s + (r.disbursed ?? 0), 0);
-  const totalCommission = data.reduce((s, r) => s + (r.commissionReceived ?? 0), 0);
 
   // Count by status for the summary bar
   const statusCounts = STATUS_OPTS.reduce((acc, s) => {
@@ -113,17 +123,12 @@ export default function GrantLoansPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Header + totals */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Grant & Loan Tracker</h1>
-          <p className="text-sm text-gray-500 mt-1">Finance Factory & Tradeline — grant applications & loan facilitation</p>
-        </div>
-        <div className="flex gap-3">
-          <StatCard label="Total Approved" value={fmt(totalApproved)} color="green" />
-          <StatCard label="Disbursed" value={fmt(totalDisbursed)} color="blue" />
-          <StatCard label="Commission" value={fmt(totalCommission)} color="emerald" />
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Grant & Loan Tracker</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {isBdoRole ? "Your grant applications & loan facilitation" : "Finance Factory & Tradeline — grant applications & loan facilitation"}
+        </p>
       </div>
 
       {/* Status pipeline */}
@@ -157,11 +162,13 @@ export default function GrantLoansPage() {
               options={[{ value: "", label: "All Statuses" }, ...STATUS_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]}
               onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
             />
-            <FilterSelect
-              value={filters.bdo}
-              options={[{ value: "", label: "All BDOs" }, ...bdos.map((b) => ({ value: b.name, label: `${b.name} (${b.company})` }))]}
-              onChange={(v) => setFilters((f) => ({ ...f, bdo: v }))}
-            />
+            {!isBdoRole && (
+              <FilterSelect
+                value={filters.bdo}
+                options={[{ value: "", label: "All BDOs" }, ...bdos.map((b) => ({ value: b.name, label: `${b.name} (${b.company})` }))]}
+                onChange={(v) => setFilters((f) => ({ ...f, bdo: v }))}
+              />
+            )}
           </div>
         }
       />
@@ -182,22 +189,6 @@ export default function GrantLoansPage() {
           onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }}
         />
       )}
-    </div>
-  );
-}
-
-// ─── Stat card ─────────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, color }: { label: string; value: string; color: "green" | "blue" | "emerald" }) {
-  const styles = {
-    green: "bg-green-50 border-green-200 text-green-700",
-    blue: "bg-blue-50 border-blue-200 text-blue-700",
-    emerald: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  };
-  return (
-    <div className={`border rounded-lg px-3 py-2 text-center ${styles[color]}`}>
-      <div className="text-xs font-medium opacity-75">{label}</div>
-      <div className="font-bold text-sm mt-0.5">{value}</div>
     </div>
   );
 }

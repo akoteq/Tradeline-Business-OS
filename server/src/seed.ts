@@ -265,7 +265,6 @@ async function seedTradelinePipeline() {
       telephone: str(r[7]),
       currentStatus: str(r[8]),
       nextAction: str(r[9]),
-      requiredInvestment: str(r[10]),
       revenuePotentialGhs: num(r[11]),
       dueDate: parseDate(r[12]),
       revenueReceivedGhs: num(r[13]) ?? 0,

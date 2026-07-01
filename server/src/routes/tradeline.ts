@@ -5,6 +5,25 @@ import { qs, param } from '../lib/query';
 
 const router = Router();
 
+function computeBalance(expected: unknown, received: unknown) {
+  return Math.max(0, (Number(expected) || 0) - (Number(received) || 0));
+}
+
+function validateRevenue(potential: unknown, expected: unknown, received: unknown): string | null {
+  const fields: [string, unknown][] = [
+    ['Revenue Potential', potential],
+    ['Expected Revenue Received', expected],
+    ['Revenue Received', received],
+  ];
+  for (const [label, val] of fields) {
+    if (val != null && val !== '' && Number(val) < 0) return `${label} cannot be negative.`;
+  }
+  if (potential != null && potential !== '' && expected != null && expected !== '' && Number(expected) > Number(potential)) {
+    return 'Expected Revenue Received cannot exceed Revenue Potential.';
+  }
+  return null;
+}
+
 router.get('/', async (req: Request, res: Response) => {
   try {
     const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), tier = qs(req, 'tier'), stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority'), search = qs(req, 'search');
@@ -39,7 +58,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const deal = await new TradelineDeal(req.body).save();
+    const validationError = validateRevenue(req.body.revenuePotentialGhs, req.body.expectedRevenueReceivedGhs, req.body.revenueReceivedGhs);
+    if (validationError) { res.status(400).json({ error: validationError }); return; }
+    const body = { ...req.body, balanceGhs: computeBalance(req.body.expectedRevenueReceivedGhs, req.body.revenueReceivedGhs) };
+    const deal = await new TradelineDeal(body).save();
     res.status(201).json(deal.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to create deal', detail: String(err) });
@@ -48,9 +70,16 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const deal = await TradelineDeal.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
-    if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
-    res.json(deal.toJSON());
+    const existing = await TradelineDeal.findById(param(req, 'id'));
+    if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+    const potential = req.body.revenuePotentialGhs !== undefined ? req.body.revenuePotentialGhs : existing.get('revenuePotentialGhs');
+    const expected = req.body.expectedRevenueReceivedGhs !== undefined ? req.body.expectedRevenueReceivedGhs : existing.get('expectedRevenueReceivedGhs');
+    const received = req.body.revenueReceivedGhs !== undefined ? req.body.revenueReceivedGhs : existing.get('revenueReceivedGhs');
+    const validationError = validateRevenue(potential, expected, received);
+    if (validationError) { res.status(400).json({ error: validationError }); return; }
+    const body = { ...req.body, balanceGhs: computeBalance(expected, received) };
+    const deal = await TradelineDeal.findByIdAndUpdate(param(req, 'id'), body, { new: true, runValidators: true });
+    res.json(deal!.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to update deal', detail: String(err) });
   }
