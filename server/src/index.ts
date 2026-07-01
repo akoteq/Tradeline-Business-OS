@@ -21,6 +21,8 @@ import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
 import companyDealsRouter from './routes/companyDeals';
 import alertsRouter from './routes/alerts';
+import clientDocumentsRouter from './routes/clientDocuments';
+import clientNotesRouter from './routes/clientNotes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -69,6 +71,8 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/company-deals', companyDealsRouter);
 app.use('/api/alerts', alertsRouter);
+app.use('/api/client-documents', clientDocumentsRouter);
+app.use('/api/client-notes', clientNotesRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

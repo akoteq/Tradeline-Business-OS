@@ -6,6 +6,8 @@ import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge } from "@/components/Badges";
 import { useAuth } from "@/components/AuthProvider";
+import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import Link from "next/link";
 import { X } from "lucide-react";
 
 type TradelineDeal = {
@@ -13,6 +15,7 @@ type TradelineDeal = {
   bizId: string | null;
   serialNo: number | null;
   businessName: string;
+  smeId: string | null;
   valueChain: string | null;
   bdoId: string | null;
   bdo: { id: string; name: string } | null;
@@ -41,7 +44,7 @@ const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
 const PAYMENT_OPTS = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
 
 const EMPTY_FORM = {
-  businessName: "", valueChain: "", email: "", telephone: "",
+  businessName: "", smeId: "", valueChain: "", email: "", telephone: "",
   currentStatus: "", nextAction: "",
   bdoId: "", dueDate: "",
   revenuePotentialGhs: "", expectedRevenueReceivedGhs: "", revenueReceivedGhs: "",
@@ -76,6 +79,12 @@ export default function TradelinePipelinePage() {
     enabled: !isBdoRole,
   });
   const tradelineBdos = bdos.filter((b) => b.company === "TRADELINE");
+
+  const { data: smeRes } = useQuery<{ data: ClientOption[] }>({
+    queryKey: ["sme-options"],
+    queryFn: () => fetcher("/sme"),
+  });
+  const clients = smeRes?.data ?? [];
 
   const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)));
   const { data = [], isLoading } = useQuery<TradelineDeal[]>({
@@ -175,6 +184,7 @@ export default function TradelinePipelinePage() {
         <DealFormModal
           deal={editing}
           bdos={tradelineBdos}
+          clients={clients}
           isBdoRole={isBdoRole}
           currentBdoId={user?.bdoId ?? null}
           onClose={() => setShowForm(false)}
@@ -205,12 +215,13 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
-function DealFormModal({ deal, bdos, isBdoRole, currentBdoId, onClose, onSaved }: { deal: TradelineDeal | null; bdos: BdoOption[]; isBdoRole: boolean; currentBdoId: string | null; onClose: () => void; onSaved: () => void }) {
+function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, onSaved }: { deal: TradelineDeal | null; bdos: BdoOption[]; clients: ClientOption[]; isBdoRole: boolean; currentBdoId: string | null; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(isBdoRole && currentBdoId ? { bdoId: currentBdoId } : {}),
     ...(deal ? {
       businessName: deal.businessName,
+      smeId: deal.smeId ?? "",
       valueChain: deal.valueChain ?? "",
       email: deal.email ?? "",
       telephone: deal.telephone ?? "",
@@ -235,7 +246,8 @@ function DealFormModal({ deal, bdos, isBdoRole, currentBdoId, onClose, onSaved }
   const computedBalance = Math.max(0, (Number(form.expectedRevenueReceivedGhs) || 0) - (Number(form.revenueReceivedGhs) || 0));
 
   const save = async () => {
-    if (!form.businessName.trim()) { setError("Business name is required."); return; }
+    if (!deal && !form.smeId) { setError("Please select a client."); return; }
+    if (!form.businessName.trim()) { setError("Please select a client."); return; }
     const potential = form.revenuePotentialGhs !== "" ? Number(form.revenuePotentialGhs) : null;
     const expected = form.expectedRevenueReceivedGhs !== "" ? Number(form.expectedRevenueReceivedGhs) : null;
     const received = form.revenueReceivedGhs !== "" ? Number(form.revenueReceivedGhs) : null;
@@ -248,6 +260,7 @@ function DealFormModal({ deal, bdos, isBdoRole, currentBdoId, onClose, onSaved }
     setSaving(true); setError("");
     const body = {
       ...form,
+      smeId: form.smeId || null,
       bdoId: form.bdoId || null,
       dueDate: form.dueDate || null,
       revenuePotentialGhs: potential,
@@ -282,7 +295,22 @@ function DealFormModal({ deal, bdos, isBdoRole, currentBdoId, onClose, onSaved }
           {/* Basic info */}
           <Section label="Client Information">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
+              <div className="col-span-2">
+                <ClientSelect
+                  label="Client *"
+                  value={form.smeId}
+                  options={clients}
+                  fallbackLabel={form.businessName || undefined}
+                  onChange={(id) => {
+                    const match = clients.find((c) => c.id === id);
+                    set("smeId", id);
+                    set("businessName", match?.companyName ?? "");
+                  }}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add the client in Client Overview first →</Link>
+                </p>
+              </div>
               <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />
               <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
               <Field label="Telephone" value={form.telephone} onChange={(v) => set("telephone", v)} />

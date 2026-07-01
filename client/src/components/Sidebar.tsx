@@ -57,7 +57,7 @@ const ADMIN_NAV = [
     children: [{ href: "/pipeline/akoteq", label: "Pipeline" }],
   },
   { href: "/leads", label: "Leads DB", icon: Users },
-  { href: "/sme", label: "SME Database", icon: Building2 },
+  { href: "/sme", label: "Client Overview", icon: Building2 },
   { href: "/partnerships", label: "Partnerships", icon: Handshake },
   { href: "/grant-loans", label: "Grants & Loans", icon: DollarSign },
   { href: "/kpi", label: "KPI Scorecard", icon: BarChart3 },
@@ -146,6 +146,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           >
             <DollarSign size={16} />
             Grants & Loans
+          </Link>
+          <Link
+            href="/sme"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/sme"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <Building2 size={16} />
+            Client Overview
           </Link>
         </nav>
         <UserFooter name={user.bdoName ?? user.email} email={user.email} onLogout={logout} />

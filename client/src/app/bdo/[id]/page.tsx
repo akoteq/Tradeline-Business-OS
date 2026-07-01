@@ -14,6 +14,7 @@ type BapxDeal = { id: string; dealStage: string; dealHealth: string };
 type TradelineDeal = { id: string; dealStage: string; dealHealth: string; paymentStatus: string; expectedRevenueReceivedGhs: number | null; revenueReceivedGhs: number | null; balanceGhs: number | null };
 type CompanyDeal = { id: string; dealStage: string; dealHealth: string; paymentStatus: string | null };
 type GrantLoan = { id: string; status: string; amountApproved: number | null };
+type Sme = { id: string; companyName: string; bdoId: string | null };
 
 const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
@@ -27,6 +28,8 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   const { data: tradelineDeals = [] } = useQuery<TradelineDeal[]>({ queryKey: ["tradeline", { bdoId: id }], queryFn: () => fetcher(`/tradeline?bdoId=${id}`) });
   const { data: companyDeals = [] } = useQuery<CompanyDeal[]>({ queryKey: ["company-deals", { bdoId: id }], queryFn: () => fetcher(`/company-deals?bdoId=${id}`) });
   const { data: grants = [] } = useQuery<GrantLoan[]>({ queryKey: ["grants", { bdoId: id }], queryFn: () => fetcher(`/grant-loans?bdoId=${id}`) });
+  const { data: smeRes } = useQuery<{ data: Sme[]; total: number }>({ queryKey: ["sme", { bdoId: id }], queryFn: () => fetcher(`/sme?bdoId=${id}`) });
+  const clients = smeRes?.data ?? [];
 
   if (bdoLoading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Loading…</div>;
   if (!bdo) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">BDO not found.</div>;
@@ -78,6 +81,20 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Client Overview quick link */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="font-semibold text-sm text-gray-900">Clients</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{clients.length} assigned client{clients.length !== 1 ? "s" : ""}</p>
+        </div>
+        <Link
+          href={`/sme?bdo=${encodeURIComponent(bdo.name)}`}
+          className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+        >
+          View Client Overview →
+        </Link>
       </div>
 
       {/* Tradeline revenue overview */}

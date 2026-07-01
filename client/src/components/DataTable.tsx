@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronUp, ChevronDown, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { ChevronUp, ChevronDown, Search, Plus, Pencil, Trash2, Download } from "lucide-react";
 import { clsx } from "clsx";
 
 export type Column<T> = {
@@ -10,7 +10,24 @@ export type Column<T> = {
   render?: (row: T) => React.ReactNode;
   sortable?: boolean;
   width?: string;
+  /** Plain-text value used for CSV export. Falls back to the raw field value if omitted. */
+  exportValue?: (row: T) => string | number;
 };
+
+function defaultExportValue<T>(row: T, key: string): string {
+  const v = (row as Record<string, unknown>)[key];
+  if (v == null) return "";
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    return typeof obj.name === "string" ? obj.name : "";
+  }
+  return String(v);
+}
+
+function csvEscape(v: unknown): string {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
 type Props<T extends { id: string }> = {
   columns: Column<T>[];
@@ -56,6 +73,23 @@ export function DataTable<T extends { id: string }>({
       })
     : filtered;
 
+  const handleExport = () => {
+    const headerRow = columns.map((c) => csvEscape(c.label)).join(",");
+    const dataRows = sorted.map((row) =>
+      columns
+        .map((c) => csvEscape(c.exportValue ? c.exportValue(row) : defaultExportValue(row, String(c.key))))
+        .join(",")
+    );
+    const csv = [headerRow, ...dataRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(title ?? "export").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Toolbar */}
@@ -63,14 +97,23 @@ export function DataTable<T extends { id: string }>({
         {/* Top row: title + add button */}
         <div className="flex items-center justify-between gap-2">
           {title && <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>}
-          {onAdd && (
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={onAdd}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0"
+              onClick={handleExport}
+              disabled={sorted.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
             >
-              <Plus size={14} /> Add
+              <Download size={14} /> Export
             </button>
-          )}
+            {onAdd && (
+              <button
+                onClick={onAdd}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <Plus size={14} /> Add
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Bottom row: filters + search */}
