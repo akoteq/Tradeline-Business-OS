@@ -270,7 +270,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
 
         <div className="p-5 space-y-4 overflow-y-auto">
           <Section label="Application Details">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Client / SME Name *" value={form.clientName} onChange={(v) => set("clientName", v)} span={2} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
@@ -290,7 +290,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
           </Section>
 
           <Section label="Financials">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Amount Approved (GHS)" type="number" value={form.amountApproved} onChange={(v) => set("amountApproved", v)} />
               <Field label="Amount Disbursed (GHS)" type="number" value={form.disbursed} onChange={(v) => set("disbursed", v)} />
               <Field label="Commission %" type="number" value={form.commissionPct} onChange={(v) => set("commissionPct", v)} />
@@ -348,16 +348,16 @@ function DetailDrawer({ g, onClose, onEdit }: { g: GrantLoan; onClose: () => voi
           </div>
 
           {/* Financial cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <FinCard label="Applied" value={g.amountApplied} raw />
             <FinCard label="Approved" value={g.amountApproved != null ? fmt(g.amountApproved) : null} />
             <FinCard label="Disbursed" value={g.disbursed != null ? fmt(g.disbursed) : null} highlight />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FinCard label={`Commission (${g.commissionPct ?? 10}%)`} value={g.commissionReceived != null ? fmt(g.commissionReceived) : null} highlight />
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="BDO" value={g.bdo?.name} />
             <DetailItem label="Funder / DFI" value={g.funderDfi} />
             <DetailItem label="Sector" value={g.sectorValueChain} />

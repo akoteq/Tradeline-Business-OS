@@ -294,7 +294,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
         <div className="p-5 space-y-4 overflow-y-auto">
           {/* Basic info */}
           <Section label="Client Information">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="col-span-2">
                 <ClientSelect
                   label="Client *"
@@ -319,7 +319,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
 
           {/* Deal details */}
           <Section label="Deal Details">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {!isBdoRole && (
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
@@ -341,7 +341,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
 
           {/* Revenue */}
           <Section label="Revenue & Payment">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Revenue Potential (GHS)" type="number" min={0} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} />
               <Field label="Expected Revenue Received (GHS)" type="number" min={0} value={form.expectedRevenueReceivedGhs} onChange={(v) => set("expectedRevenueReceivedGhs", v)} />
               <Field label="Revenue Received (GHS)" type="number" min={0} value={form.revenueReceivedGhs} onChange={(v) => set("revenueReceivedGhs", v)} />
@@ -407,7 +407,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
           </div>
 
           {/* Key fields */}
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Value Chain" value={deal.valueChain} />
             <DetailItem label="BDO" value={deal.bdo?.name} />
             <DetailItem label="Email" value={deal.email} />
@@ -416,7 +416,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
           </dl>
 
           {/* Revenue panel */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <RevenueCard label="Potential" value={deal.revenuePotentialGhs} color="blue" />
             <RevenueCard label="Expected" value={deal.expectedRevenueReceivedGhs} color="blue" />
             <RevenueCard label="Received" value={deal.revenueReceivedGhs} color="green" />

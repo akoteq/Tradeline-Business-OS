@@ -225,7 +225,7 @@ function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: B
 
         <div className="p-5 space-y-5">
           {/* Stats */}
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Company" value={row.company} />
             <DetailItem label="Role" value={row.role} />
             <DetailItem label="Email" value={row.email} />

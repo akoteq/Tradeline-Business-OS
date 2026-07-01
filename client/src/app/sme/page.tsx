@@ -376,7 +376,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
 
         <div className="p-5 space-y-4 overflow-y-auto">
           <Section label="Company Information">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Business Name *" value={form.companyName} onChange={(v) => set("companyName", v)} span={2} />
               <Field label="Contact Person" value={form.contactName} onChange={(v) => set("contactName", v)} />
               <Field label="Phone" value={form.phone} onChange={(v) => set("phone", v)} />
@@ -394,7 +394,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
           </Section>
 
           <Section label="Business Profile">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Date of Incorporation" type="date" value={form.dateOfIncorporation} onChange={(v) => set("dateOfIncorporation", v)} />
               <Field label="Years in Operation" type="number" min={0} value={form.yearsInOperation} onChange={(v) => set("yearsInOperation", v)} />
               <div>
@@ -408,7 +408,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
           </Section>
 
           <Section label="Financial Records — Revenue by Year (GHS)">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {REVENUE_YEARS.map((y) => (
                 <Field key={y} label={y} type="number" min={0} value={form[`revenueGhs${y}` as keyof typeof form] as string} onChange={(v) => set(`revenueGhs${y}`, v)} />
               ))}
@@ -416,7 +416,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
           </Section>
 
           <Section label="Assessment & Status">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormSelect label="Status" value={form.status} options={STATUS_OPTS as unknown as string[]} onChange={(v) => set("status", v)} />
               <FormSelect label="Bankability Tier" value={form.bankabilityTier} options={TIER_OPTS as unknown as string[]} onChange={(v) => set("bankabilityTier", v)} />
               <div>
@@ -514,7 +514,7 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
           )}
 
           {/* Key fields */}
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Contact Person" value={sme.contactName} />
             <DetailItem label="Phone" value={sme.phone} />
             <DetailItem label="Alternate Phone" value={sme.altPhone} />
@@ -540,7 +540,7 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
           {hasRevenue && (
             <div>
               <p className="text-xs font-semibold text-gray-400 mb-2">Revenue by Year</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {revenueYears.map(({ year, value }) => (
                   <div key={year} className="bg-gray-50 rounded-lg p-2 text-center">
                     <div className="text-[11px] text-gray-400">{year}</div>

@@ -265,7 +265,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
 
         <div className="p-5 space-y-4 overflow-y-auto">
           <Section label="Partner Details">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Organisation Name *" value={form.partnerOrganisation} onChange={(v) => set("partnerOrganisation", v)} span={2} />
               <Field label="Contact Person" value={form.contactPerson} onChange={(v) => set("contactPerson", v)} />
               <Field label="Email / Phone" value={form.contactEmailPhone} onChange={(v) => set("contactEmailPhone", v)} />
@@ -275,13 +275,13 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
           </Section>
 
           <Section label="Agreement">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Partnership Type" value={form.partnershipType} onChange={(v) => set("partnershipType", v)} />
               <Field label="Agreement Type" value={form.agreementType} onChange={(v) => set("agreementType", v)} />
               <Field label="Start Date" type="date" value={form.startDate} onChange={(v) => set("startDate", v)} />
               <Field label="End / Renewal Date" type="date" value={form.endRenewalDate} onChange={(v) => set("endRenewalDate", v)} />
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Entity</label>
                 <select value={form.tradelineEntity} onChange={(e) => set("tradelineEntity", e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -294,7 +294,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
           </Section>
 
           <Section label="Revenue">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Revenue Share %" type="number" value={form.revenueSharePct} onChange={(v) => set("revenueSharePct", v)} />
               <Field label="Revenue Generated (GHS)" type="number" value={form.revenueGeneratedGhs} onChange={(v) => set("revenueGeneratedGhs", v)} />
             </div>
@@ -350,7 +350,7 @@ function DetailDrawer({ p, onClose, onEdit }: { p: Partnership; onClose: () => v
 
           {/* Revenue */}
           {(p.revenueSharePct != null || p.revenueGeneratedGhs != null) && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {p.revenueSharePct != null && (
                 <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
                   <div className="text-xs font-medium text-indigo-600">Revenue Share</div>
@@ -367,7 +367,7 @@ function DetailDrawer({ p, onClose, onEdit }: { p: Partnership; onClose: () => v
           )}
 
           {/* Key fields */}
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Contact Person" value={p.contactPerson} />
             <DetailItem label="Email / Phone" value={p.contactEmailPhone} />
             <DetailItem label="Partnership Type" value={p.partnershipType} />

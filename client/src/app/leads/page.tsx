@@ -284,14 +284,14 @@ function LeadFormModal({ lead, bdos, onClose, onSaved }: { lead: Lead | null; bd
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
             <Field label="Contact Person" value={form.contactPerson} onChange={(v) => set("contactPerson", v)} />
             <Field label="Role / Title" value={form.roleTitle} onChange={(v) => set("roleTitle", v)} />
             <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} span={2} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
               <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -369,7 +369,7 @@ function DetailDrawer({ lead, onClose, onEdit }: { lead: Lead; onClose: () => vo
             {lead.priority && <PriorityBadge value={lead.priority} />}
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Contact Person" value={lead.contactPerson} />
             <DetailItem label="Role / Title" value={lead.roleTitle} />
             <DetailItem label="Email" value={lead.email} />

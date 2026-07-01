@@ -218,7 +218,7 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
         <div className="p-5 space-y-4 overflow-y-auto">
           {/* Basic info */}
           <Section label="Basic Information">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
               <Field label="Client Name" value={form.clientName} onChange={(v) => set("clientName", v)} />
               <Field label="Holding Firm" value={form.holdingFirm} onChange={(v) => set("holdingFirm", v)} />
@@ -231,7 +231,7 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
 
           {/* Deal info */}
           <Section label="Deal Details">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
                 <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -245,7 +245,7 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
               <Field label="Date" type="date" value={form.date} onChange={(v) => set("date", v)} />
               <Field label="Next Call Date" type="date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} />
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               <FormSelect label="Deal Stage" value={form.dealStage} options={STAGE_OPTS} onChange={(v) => set("dealStage", v)} />
               <FormSelect label="Health" value={form.dealHealth} options={HEALTH_OPTS} onChange={(v) => set("dealHealth", v)} />
               <FormSelect label="Priority" value={form.priority} options={PRIORITY_OPTS} onChange={(v) => set("priority", v)} />
@@ -300,7 +300,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
           </div>
 
           {/* Key fields */}
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DetailItem label="Client" value={deal.clientName} />
             <DetailItem label="Holding Firm" value={deal.holdingFirm} />
             <DetailItem label="Industry" value={deal.industry} />

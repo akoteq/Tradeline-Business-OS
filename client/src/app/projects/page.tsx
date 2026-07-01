@@ -252,7 +252,7 @@ function ProjectFormModal({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Project Name *" value={form.name}   onChange={(v) => set("name", v)}   span={2} />
             <Field label="Leader *"       value={form.leader} onChange={(v) => set("leader", v)} span={2} />
 
@@ -340,7 +340,7 @@ function DetailDrawer({
             </span>
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DItem label="Start Date" value={project.startDate ? new Date(project.startDate).toLocaleDateString() : null} />
             <DItem label="End Date"   value={project.endDate   ? new Date(project.endDate).toLocaleDateString()   : null} />
           </dl>

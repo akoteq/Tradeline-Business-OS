@@ -95,8 +95,8 @@ export function DataTable<T extends { id: string }>({
       {/* Toolbar */}
       <div className="px-4 py-3 border-b border-gray-100 space-y-2">
         {/* Top row: title + add button */}
-        <div className="flex items-center justify-between gap-2">
-          {title && <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {title && <h2 className="font-semibold text-gray-800 text-sm truncate min-w-0">{title}</h2>}
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleExport}

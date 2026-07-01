@@ -284,7 +284,7 @@ function DealFormModal({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
             <Field label="Client Name"     value={form.clientName}   onChange={(v) => set("clientName", v)} />
             <Field label="Industry"        value={form.industry}     onChange={(v) => set("industry", v)} />
@@ -295,7 +295,7 @@ function DealFormModal({
             <Field label="Product"         value={form.product}      onChange={(v) => set("product", v)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SelectField label="Assigned BDO" value={form.bdoId} onChange={(v) => set("bdoId", v)}>
               <option value="">— Unassigned —</option>
               {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
@@ -315,7 +315,7 @@ function DealFormModal({
             <Field label="Next Call Date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Revenue Potential (GHS)" value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
             <Field label="Revenue Received (GHS)"  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
             <Field label="Balance (GHS)"           value={form.balanceGhs}          onChange={(v) => set("balanceGhs", v)}          type="number" />
@@ -367,7 +367,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
             <DealHealthBadge value={deal.dealHealth} />
             <PriorityBadge   value={deal.priority} />
           </div>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <DItem label="Email"            value={deal.email} />
             <DItem label="Telephone"        value={deal.telephone} />
             <DItem label="Region"           value={deal.region} />
