@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tradeline & BAPX Dashboard",
+  title: "Tradeline Business Operating System",
   description: "Business operations management system",
 };
 

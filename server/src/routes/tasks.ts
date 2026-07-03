@@ -7,7 +7,7 @@ const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), priority = qs(req, 'priority'), status = qs(req, 'status'), company = qs(req, 'company'), year = qs(req, 'year');
+    const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), priority = qs(req, 'priority'), status = qs(req, 'status'), company = qs(req, 'company'), year = qs(req, 'year'), type = qs(req, 'type');
     const query: Record<string, unknown> = {};
     if (bdo) {
       const ids = await bdoIdsByName(bdo);
@@ -18,6 +18,7 @@ router.get('/', async (req: Request, res: Response) => {
     if (status) query.status = status;
     if (company) query.company = company;
     if (year) query.year = parseInt(year);
+    if (type) query.type = type;
     const tasks = await Task.find(query).sort({ createdAt: -1 });
     res.json(await withBdo(tasks));
   } catch (err) {

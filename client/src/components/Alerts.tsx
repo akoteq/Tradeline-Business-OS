@@ -11,7 +11,8 @@ type Urgency = "overdue" | "today" | "1day" | "3days" | "week";
 
 type Deadline = {
   id: string;
-  type: "TRADELINE";
+  type: "TRADELINE" | "TASK";
+  subtype?: string;
   businessName: string;
   dueDate: string;
   daysUntil: number;

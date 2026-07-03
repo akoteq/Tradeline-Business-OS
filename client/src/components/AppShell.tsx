@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Menu size={20} />
           </button>
-          <span className="font-semibold text-gray-900 text-sm">Tradeline · BAPX</span>
+          <span className="font-semibold text-gray-900 text-sm">Tradeline Business Operating System</span>
         </header>
 
         <Alerts />

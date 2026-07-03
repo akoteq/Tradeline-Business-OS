@@ -37,7 +37,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations Portal</div>
-          <h1 className="text-2xl font-bold text-gray-900">Tradeline · BAPX</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Tradeline Business Operating System</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
         </div>
 

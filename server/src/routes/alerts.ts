@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { TradelineDeal } from '../models/TradelineDeal';
 import { BapxDeal } from '../models/BapxDeal';
 import { CompanyDeal } from '../models/CompanyDeal';
+import { Task } from '../models/Task';
 import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs } from '../lib/query';
 
@@ -48,12 +49,13 @@ router.get('/', async (req: Request, res: Response) => {
     }).sort({ dueDate: 1 });
 
     const dueSoonJson = await withBdo(dueSoonDocs);
-    const deadlines = dueSoonJson.map((d) => {
+    const dealDeadlines = dueSoonJson.map((d) => {
       const dueDate = new Date(d.dueDate as string);
       const days = daysBetween(dueDate, now);
       return {
         id: d.id as string,
         type: 'TRADELINE' as const,
+        subtype: 'Tradeline',
         businessName: d.businessName as string,
         dueDate: d.dueDate,
         daysUntil: days,
@@ -61,6 +63,31 @@ router.get('/', async (req: Request, res: Response) => {
         bdo: d.bdo as { id: string; name: string } | null,
       };
     });
+
+    // Scheme-of-Work deadlines — tasks/proposals with an approaching target date
+    const dueSoonTasks = await Task.find({
+      ...dealFilter,
+      targetDate: { $ne: null, $lte: windowEnd },
+      status: { $nin: ['COMPLETED', 'CANCELLED'] },
+    }).sort({ targetDate: 1 });
+
+    const taskJson = await withBdo(dueSoonTasks);
+    const taskDeadlines = taskJson.map((t) => {
+      const dueDate = new Date(t.targetDate as string);
+      const days = daysBetween(dueDate, now);
+      return {
+        id: t.id as string,
+        type: 'TASK' as const,
+        subtype: t.type === 'PROPOSAL' ? 'Proposal' : 'Task',
+        businessName: t.deliverable as string,
+        dueDate: t.targetDate,
+        daysUntil: days,
+        urgency: urgencyForDaysUntil(days),
+        bdo: t.bdo as { id: string; name: string } | null,
+      };
+    });
+
+    const deadlines = [...dealDeadlines, ...taskDeadlines].sort((a, b) => a.daysUntil - b.daysUntil);
 
     // Stale deals — open deals with no updates in a while
     const [staleBapx, staleTradeline, staleCompany] = await Promise.all([

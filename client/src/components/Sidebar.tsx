@@ -103,7 +103,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
           <div>
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">BDO Portal</div>
-            <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+            <div className="font-bold text-lg text-white leading-tight">Tradeline Business Operating System</div>
           </div>
           {CloseBtn}
         </div>
@@ -150,6 +150,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
             Grants & Loans
           </Link>
           <Link
+            href="/tasks"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/tasks"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <ListChecks size={16} />
+            Scheme of Work
+          </Link>
+          <Link
             href="/sme"
             onClick={onClose}
             className={clsx(
@@ -173,7 +186,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Operations</div>
-          <div className="font-bold text-lg text-white leading-tight">Tradeline · BAPX</div>
+          <div className="font-bold text-lg text-white leading-tight">Tradeline Business Operating System</div>
         </div>
         {CloseBtn}
       </div>
