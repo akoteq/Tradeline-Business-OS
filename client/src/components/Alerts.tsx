@@ -66,6 +66,13 @@ function pipelineLink(type: StaleDeal["type"], bdoName?: string | null) {
   return bdoName ? `${base}?bdo=${encodeURIComponent(bdoName)}` : base;
 }
 
+function deadlineLink(d: Deadline) {
+  if (d.type === "TASK") {
+    return d.bdo?.name ? `/tasks?bdo=${encodeURIComponent(d.bdo.name)}` : "/tasks";
+  }
+  return pipelineLink("TRADELINE", d.bdo?.name);
+}
+
 type View = "popup" | "banner" | "hidden";
 
 export function Alerts() {
@@ -108,13 +115,13 @@ export function Alerts() {
           </p>
           <div className="space-y-1.5">
             {deadlines.map((d) => {
-              const href = pipelineLink(d.type, d.bdo?.name);
+              const href = deadlineLink(d);
               const content = (
                 <div className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{d.businessName}</p>
                     <p className="text-xs text-gray-400">
-                      Due {new Date(d.dueDate).toLocaleDateString()}
+                      {d.subtype ? `${d.subtype} · ` : ""}Due {new Date(d.dueDate).toLocaleDateString()}
                       {d.bdo && ` · ${d.bdo.name}`}
                     </p>
                   </div>
