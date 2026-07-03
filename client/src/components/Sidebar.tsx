@@ -19,6 +19,7 @@ import {
   UserCircle,
   X,
   FolderKanban,
+  UsersRound,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -64,6 +65,7 @@ const ADMIN_NAV = [
   { href: "/tasks", label: "Scheme of Work", icon: ListChecks },
   { href: "/consolidated", label: "Consolidated", icon: Database },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/admin/bdos", label: "Manage BDOs", icon: UsersRound },
   { href: "/admin/users", label: "Manage Users", icon: ShieldCheck },
 ];
 
@@ -177,7 +179,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
-        {ADMIN_NAV.map((item) => {
+        {(user.bdoId
+          ? [{ href: `/bdo/${user.bdoId}`, label: "My BDO Dashboard", icon: UserCircle }, ...ADMIN_NAV]
+          : ADMIN_NAV
+        ).map((item) => {
           if ("children" in item) {
             const isOpen = open.includes(item.label);
             const Icon = item.icon;

@@ -230,16 +230,22 @@ function CreateUserModal({ bdos, onClose, onSaved }: {
               <option value="CEO">CEO</option>
             </select>
           </div>
-          {form.role === "BDO" && (
+          {(form.role === "BDO" || form.role === "ADMIN") && (
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Link to BDO Profile</label>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Link to BDO Profile {form.role === "ADMIN" && <span className="text-gray-400 font-normal">(optional)</span>}
+              </label>
               <select value={form.bdoId} onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value }))} className="w-full border rounded-lg px-2 py-2 text-sm">
-                <option value="">— Select BDO —</option>
+                <option value="">— {form.role === "ADMIN" ? "None" : "Select BDO"} —</option>
                 {bdos.map((b) => (
                   <option key={b.id} value={b.id}>{b.name} ({b.company})</option>
                 ))}
               </select>
-              <p className="text-[11px] text-gray-400 mt-1">Linking a BDO profile means they only see their own data after login.</p>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {form.role === "ADMIN"
+                  ? "An admin keeps full access but can also be a BDO — their deals are tracked and they get a “My BDO Dashboard” link."
+                  : "Linking a BDO profile means they only see their own data after login."}
+              </p>
             </div>
           )}
         </div>
