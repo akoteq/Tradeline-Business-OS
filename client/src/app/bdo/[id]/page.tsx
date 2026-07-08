@@ -12,7 +12,10 @@ import { fetcher } from "@/lib/api";
 type BDO = { id: string; name: string; email: string | null; company: string; role: string | null };
 type BapxDeal = { id: string; dealStage: string; dealHealth: string; priority: string; targetGhs: number | null };
 type TradelineDeal = { id: string; dealStage: string; dealHealth: string; paymentStatus: string; expectedRevenueReceivedGhs: number | null; revenueReceivedGhs: number | null; balanceGhs: number | null };
-type CompanyDeal = { id: string; dealStage: string; dealHealth: string; paymentStatus: string | null };
+type CompanyDeal = {
+  id: string; dealStage: string; dealHealth: string; paymentStatus: string | null;
+  revenuePotentialGhs: number | null; revenueReceivedGhs: number | null; balanceGhs: number | null;
+};
 type GrantLoan = { id: string; status: string; amountApproved: number | null };
 type Sme = { id: string; companyName: string; bdoId: string | null };
 type TaskRow = { id: string; deliverable: string; status: string; priority: string };
@@ -21,6 +24,23 @@ type Lead = { id: string; businessName: string; status: string };
 const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
+
+// Companies whose deals live in the shared CompanyDeal collection
+const COMPANY_KEYS = ["ALPHA_AFRICA", "FINANCE_FACTORY", "COMMUNITY_FINANCE", "AKOTEQ"];
+const COMPANY_LABELS: Record<string, string> = {
+  BAPX: "BAPX",
+  TRADELINE: "Tradeline",
+  ALPHA_AFRICA: "Alpha Africa Consult Ltd",
+  FINANCE_FACTORY: "Finance Factory Limited",
+  COMMUNITY_FINANCE: "Community Finance Ltd",
+  AKOTEQ: "Akoteq Ltd",
+};
+const COMPANY_SLUGS: Record<string, string> = {
+  ALPHA_AFRICA: "alpha-africa",
+  FINANCE_FACTORY: "finance-factory",
+  COMMUNITY_FINANCE: "community-finance",
+  AKOTEQ: "akoteq",
+};
 
 const isClosedWon = (d: { dealStage: string; dealHealth: string }) => d.dealStage === "CLOSED_WON" || d.dealHealth === "CLOSED_WON";
 const OPEN_TASK_STATUSES = ["PENDING", "IN_PROGRESS", "OVERDUE"];
@@ -44,6 +64,7 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   if (!bdo) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">BDO not found.</div>;
 
   const isBapx = bdo.company === "BAPX";
+  const isCompany = COMPANY_KEYS.includes(bdo.company);
 
   // Task rollup (shared)
   const openTasks = tasks.filter((t) => OPEN_TASK_STATUSES.includes(t.status)).length;
@@ -88,6 +109,15 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
           completedTasks={completedTasks}
           totalTasks={tasks.length}
         />
+      ) : isCompany ? (
+        <CompanyBody
+          bdo={bdo}
+          deals={companyDeals}
+          openTasks={openTasks}
+          overdueTasks={overdueTasks}
+          completedTasks={completedTasks}
+          totalTasks={tasks.length}
+        />
       ) : (
         <TradelineBody bdo={bdo} tradelineDeals={tradelineDeals} companyDeals={companyDeals} bapxDeals={bapxDeals} grants={grants} />
       )}
@@ -102,8 +132,8 @@ function Header({ bdo, totalDeals, completedDeals }: { bdo: BDO; totalDeals: num
     <div className="flex items-start justify-between flex-wrap gap-3">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${bdo.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"}`}>
-            {bdo.company}
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${bdo.company === "BAPX" ? "bg-green-100 text-green-700" : bdo.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>
+            {COMPANY_LABELS[bdo.company] ?? bdo.company}
           </span>
           {bdo.role && <span className="text-xs text-gray-500">{bdo.role}</span>}
         </div>
@@ -255,6 +285,78 @@ function TradelineBody({
           <StatTile label="In Progress" value={grantsInProgress} color="blue" />
           <StatTile label="Approved" value={grantsApproved} color="blue" />
           <StatTile label="Total Value (GHS)" value={fmt(grantsTotalValue)} color="blue" />
+        </div>
+      </div>
+
+      <PipelineCharts stageData={stageData} healthData={healthData} />
+    </>
+  );
+}
+
+// ── Company body: pipeline + revenue for Alpha Africa / Finance Factory / etc. ──
+
+function CompanyBody({
+  bdo, deals, openTasks, overdueTasks, completedTasks, totalTasks,
+}: {
+  bdo: BDO;
+  deals: CompanyDeal[];
+  openTasks: number;
+  overdueTasks: number;
+  completedTasks: number;
+  totalTasks: number;
+}) {
+  const activeDeals = deals.filter((d) => d.dealHealth === "ACTIVE").length;
+  const wonDeals = deals.filter(isClosedWon).length;
+  const potential = deals.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
+  const received = deals.reduce((s, d) => s + (d.revenueReceivedGhs ?? 0), 0);
+  const outstanding = deals.reduce((s, d) => s + (d.balanceGhs ?? 0), 0);
+
+  const { stageData, healthData } = pipelineData(deals);
+
+  const slug = COMPANY_SLUGS[bdo.company] ?? "";
+  const label = COMPANY_LABELS[bdo.company] ?? bdo.company;
+  const pipelineHref = slug ? `/pipeline/${slug}?bdo=${encodeURIComponent(bdo.name)}` : "#";
+
+  return (
+    <>
+      {/* Pipeline stat tiles */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{label} Pipeline</h2>
+          <Link href={pipelineHref} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            View pipeline →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatTile label="Total Deals" value={deals.length} color="blue" />
+          <StatTile label="Active" value={activeDeals} color="green" />
+          <StatTile label="Closed Won" value={wonDeals} color="blue" />
+          <StatTile label="Potential (GHS)" value={fmt(potential)} color="blue" />
+        </div>
+      </div>
+
+      {/* Revenue overview */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Revenue</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <StatTile label="Potential Revenue" value={fmt(potential)} color="blue" />
+          <StatTile label="Revenue Received" value={fmt(received)} color="green" />
+          <StatTile label="Outstanding" value={fmt(outstanding)} color="red" />
+        </div>
+      </div>
+
+      {/* Scheme of Work */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Scheme of Work</h3>
+          <Link href={`/tasks?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            View tasks →
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile label="Open" value={openTasks} color={overdueTasks > 0 ? "red" : "blue"} />
+          <StatTile label="Overdue" value={overdueTasks} color={overdueTasks > 0 ? "red" : "green"} />
+          <StatTile label="Completed" value={`${completedTasks}/${totalTasks}`} color="green" />
         </div>
       </div>
 

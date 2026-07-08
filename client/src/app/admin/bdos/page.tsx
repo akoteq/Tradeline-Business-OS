@@ -40,7 +40,16 @@ type BdoPerf = {
   revenue: { received: number; potential: number };
 };
 
-const COMPANY_OPTS = ["BAPX", "TRADELINE"] as const;
+const COMPANY_OPTS = [
+  { value: "BAPX", label: "BAPX" },
+  { value: "TRADELINE", label: "Tradeline" },
+  { value: "ALPHA_AFRICA", label: "Alpha Africa Consult Ltd" },
+  { value: "FINANCE_FACTORY", label: "Finance Factory Limited" },
+  { value: "COMMUNITY_FINANCE", label: "Community Finance Ltd" },
+  { value: "AKOTEQ", label: "Akoteq Ltd" },
+] as const;
+
+const COMPANY_LABELS: Record<string, string> = Object.fromEntries(COMPANY_OPTS.map((c) => [c.value, c.label]));
 const EMPTY_FORM = { name: "", email: "", phone: "", company: "BAPX", role: "" };
 
 const HEALTH_COLORS: Record<string, string> = {
@@ -114,7 +123,7 @@ export default function BdoManagementPage() {
       key: "company", label: "Company", width: "100px",
       render: (r: BdoRow) => (
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.company === "BAPX" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>
-          {r.company}
+          {COMPANY_LABELS[r.company] ?? r.company}
         </span>
       ),
     },
@@ -166,7 +175,7 @@ export default function BdoManagementPage() {
           <div className="flex gap-2 flex-wrap">
             <FilterSelect
               value={companyFilter}
-              options={[{ value: "", label: "All Companies" }, ...COMPANY_OPTS.map((c) => ({ value: c, label: c }))]}
+              options={[{ value: "", label: "All Companies" }, ...COMPANY_OPTS.map((c) => ({ value: c.value, label: c.label }))]}
               onChange={setCompanyFilter}
             />
           </div>
@@ -215,7 +224,7 @@ function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: B
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div>
             <h2 className="font-semibold text-gray-900">{row.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{row.role ?? row.company} · {row.email ?? "No email"}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{row.role ?? COMPANY_LABELS[row.company] ?? row.company} · {row.email ?? "No email"}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
@@ -226,7 +235,7 @@ function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: B
         <div className="p-5 space-y-5">
           {/* Stats */}
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <DetailItem label="Company" value={row.company} />
+            <DetailItem label="Company" value={COMPANY_LABELS[row.company] ?? row.company} />
             <DetailItem label="Role" value={row.role} />
             <DetailItem label="Email" value={row.email} />
             <DetailItem label="Phone" value={row.phone} />
@@ -340,7 +349,7 @@ function BdoFormModal({ row, onClose, onSaved }: { row: BdoRow | null; onClose: 
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Company</label>
             <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {COMPANY_OPTS.map((c) => <option key={c} value={c}>{c}</option>)}
+              {COMPANY_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}

@@ -81,11 +81,14 @@ export function Alerts() {
   const [autoShown, setAutoShown] = useState(false);
   const [bannerExpanded, setBannerExpanded] = useState(false);
 
-  const bdoId = user?.role === "BDO" ? user.bdoId : null;
+  const isBdo = user?.role === "BDO";
+  const bdoId = isBdo ? user?.bdoId ?? null : null;
+  // BDOs are always scoped to their own data; admins/CEO see everyone.
+  // An unlinked BDO (no bdoId) must NOT fall through to the org-wide feed.
   const { data } = useQuery<AlertsResponse>({
     queryKey: ["alerts", { bdoId }],
     queryFn: () => fetcher(bdoId ? `/alerts?bdoId=${bdoId}` : "/alerts"),
-    enabled: !!user,
+    enabled: !!user && (!isBdo || !!bdoId),
     refetchInterval: 5 * 60 * 1000,
   });
 

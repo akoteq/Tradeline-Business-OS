@@ -25,6 +25,16 @@ import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 
+// A BDO's pipeline lives under a different route per company
+const BDO_PIPELINE: Record<string, { href: string; label: string }> = {
+  BAPX: { href: "/bapx/pipeline", label: "BAPX Pipeline" },
+  TRADELINE: { href: "/tradeline/pipeline", label: "Tradeline Pipeline" },
+  ALPHA_AFRICA: { href: "/pipeline/alpha-africa", label: "Alpha Africa Pipeline" },
+  FINANCE_FACTORY: { href: "/pipeline/finance-factory", label: "Finance Factory Pipeline" },
+  COMMUNITY_FINANCE: { href: "/pipeline/community-finance", label: "Community Finance Pipeline" },
+  AKOTEQ: { href: "/pipeline/akoteq", label: "Akoteq Pipeline" },
+};
+
 const ADMIN_NAV = [
   { href: "/", label: "CEO Dashboard", icon: LayoutDashboard },
   {
@@ -123,19 +133,24 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               My Dashboard
             </Link>
           )}
-          <Link
-            href="/tradeline/pipeline"
-            onClick={onClose}
-            className={clsx(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-              pathname === "/tradeline/pipeline"
-                ? "bg-indigo-600 text-white"
-                : "text-gray-300 hover:bg-gray-800 hover:text-white"
-            )}
-          >
-            <TrendingUp size={16} />
-            Tradeline Pipeline
-          </Link>
+          {(() => {
+            const pipe = BDO_PIPELINE[user.bdoCompany ?? "TRADELINE"] ?? BDO_PIPELINE.TRADELINE;
+            return (
+              <Link
+                href={pipe.href}
+                onClick={onClose}
+                className={clsx(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+                  pathname === pipe.href
+                    ? "bg-indigo-600 text-white"
+                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                )}
+              >
+                <TrendingUp size={16} />
+                {pipe.label}
+              </Link>
+            );
+          })()}
           <Link
             href="/grant-loans"
             onClick={onClose}

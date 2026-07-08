@@ -97,6 +97,7 @@ export default function TradelinePipelinePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tradeline"] }),
   });
 
+  const totalPotential = data.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
   const totalExpected = data.reduce((s, d) => s + (d.expectedRevenueReceivedGhs ?? 0), 0);
   const totalRevenue = data.reduce((s, d) => s + (d.revenueReceivedGhs ?? 0), 0);
   const totalOutstanding = data.reduce((s, d) => s + (d.balanceGhs ?? 0), 0);
@@ -142,6 +143,10 @@ export default function TradelinePipelinePage() {
           </p>
         </div>
         <div className="flex gap-3 text-sm">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-center">
+            <div className="text-xs text-indigo-600 font-medium">Potential Revenue</div>
+            <div className="font-bold text-indigo-700">{fmt(totalPotential)}</div>
+          </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-center">
             <div className="text-xs text-blue-600 font-medium">Expected Revenue</div>
             <div className="font-bold text-blue-700">{fmt(totalExpected)}</div>
