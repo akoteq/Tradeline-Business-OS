@@ -5,7 +5,7 @@ const BDOSchema = new Schema({
   name: { type: String, required: true },
   email: { type: String },
   phone: { type: String },
-  company: { type: String, enum: ['BAPX', 'TRADELINE'], required: true },
+  company: { type: String, enum: ['BAPX', 'TRADELINE', 'ALPHA_AFRICA', 'FINANCE_FACTORY', 'COMMUNITY_FINANCE', 'AKOTEQ'], required: true },
   role: { type: String },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });

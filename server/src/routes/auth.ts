@@ -35,6 +35,7 @@ router.post('/login', async (req: Request, res: Response) => {
         role: rawUser.role,
         bdoId,
         bdoName: bdo?.get('name') ?? null,
+        bdoCompany: bdo?.get('company') ?? null,
         mustChangePassword: rawUser.mustChangePassword,
       },
     });
@@ -49,7 +50,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
     const json = user.toJSON() as Record<string, unknown>;
     const bdo = json.bdoId ? await BDO.findById(json.bdoId) : null;
-    res.json({ ...json, bdoName: bdo?.get('name') ?? null });
+    res.json({ ...json, bdoName: bdo?.get('name') ?? null, bdoCompany: bdo?.get('company') ?? null });
   } catch {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
