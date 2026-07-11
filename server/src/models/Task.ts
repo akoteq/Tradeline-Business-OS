@@ -8,7 +8,7 @@ const TaskSchema = new Schema({
   targetDate: { type: Date },
   bdoId: { type: String, default: null },
   status: { type: String, enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED'], default: 'PENDING' },
-  company: { type: String, enum: ['BAPX', 'TRADELINE'] },
+  company: { type: String, enum: ['BAPX', 'TRADELINE', 'ALPHA_AFRICA', 'FINANCE_FACTORY', 'COMMUNITY_FINANCE', 'AKOTEQ'] },
   notes: { type: String },
   // Entry type: a normal Scheme-of-Work task, or a client proposal.
   type: { type: String, enum: ['TASK', 'PROPOSAL'], default: 'TASK' },

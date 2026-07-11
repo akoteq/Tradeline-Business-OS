@@ -20,6 +20,7 @@ import {
   X,
   FolderKanban,
   UsersRound,
+  HelpCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -77,6 +78,7 @@ const ADMIN_NAV = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/admin/bdos", label: "Manage BDOs", icon: UsersRound },
   { href: "/admin/users", label: "Manage Users", icon: ShieldCheck },
+  { href: "/help", label: "Help & Glossary", icon: HelpCircle },
 ];
 
 const AUTH_PATHS = ["/login", "/change-password"];
@@ -189,6 +191,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           >
             <Building2 size={16} />
             Client Overview
+          </Link>
+          <Link
+            href="/help"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/help"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <HelpCircle size={16} />
+            Help &amp; Glossary
           </Link>
         </nav>
         <UserFooter name={user.bdoName ?? user.email} email={user.email} onLogout={logout} />

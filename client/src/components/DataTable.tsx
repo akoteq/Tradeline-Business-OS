@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronUp, ChevronDown, Search, Plus, Pencil, Trash2, Download } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Search, Plus, Pencil, Trash2, Download } from "lucide-react";
 import { clsx } from "clsx";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export type Column<T> = {
   key: keyof T | string;
@@ -38,6 +40,8 @@ type Props<T extends { id: string }> = {
   onDelete?: (row: T) => void;
   filterBar?: React.ReactNode;
   title?: string;
+  /** Initial rows per page. Defaults to 25. */
+  pageSize?: number;
 };
 
 export function DataTable<T extends { id: string }>({
@@ -49,10 +53,13 @@ export function DataTable<T extends { id: string }>({
   onDelete,
   filterBar,
   title,
+  pageSize: initialPageSize = 25,
 }: Props<T>) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -72,6 +79,13 @@ export function DataTable<T extends { id: string }>({
         return sortDir === "asc" ? cmp : -cmp;
       })
     : filtered;
+
+  // Pagination — reset to the first page whenever the result set or ordering changes
+  useEffect(() => { setPage(1); }, [search, sortKey, sortDir, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * pageSize;
+  const paginated = sorted.slice(start, start + pageSize);
 
   const handleExport = () => {
     const headerRow = columns.map((c) => csvEscape(c.label)).join(",");
@@ -172,7 +186,7 @@ export function DataTable<T extends { id: string }>({
                 </td>
               </tr>
             ) : (
-              sorted.map((row) => (
+              paginated.map((row) => (
                 <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                   {columns.map((col) => (
                     <td key={String(col.key)} className="px-3 py-2.5 text-gray-700 max-w-xs truncate">
@@ -210,8 +224,41 @@ export function DataTable<T extends { id: string }>({
         </table>
       </div>
 
-      <div className="px-4 py-2.5 border-t border-gray-50 text-xs text-gray-400">
-        {sorted.length} of {data.length} record{data.length !== 1 ? "s" : ""}
+      <div className="px-4 py-2.5 border-t border-gray-50 flex items-center justify-between gap-3 flex-wrap text-xs text-gray-500">
+        <div className="flex items-center gap-3">
+          <span>
+            {sorted.length === 0 ? 0 : start + 1}–{Math.min(start + pageSize, sorted.length)} of {sorted.length}
+            {sorted.length !== data.length && ` (filtered from ${data.length})`}
+          </span>
+          <label className="flex items-center gap-1">
+            Rows:
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="border border-gray-200 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPage(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="flex items-center gap-0.5 px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={13} /> Prev
+          </button>
+          <span className="px-2">Page {currentPage} of {totalPages}</span>
+          <button
+            onClick={() => setPage(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="flex items-center gap-0.5 px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Next <ChevronRight size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );
