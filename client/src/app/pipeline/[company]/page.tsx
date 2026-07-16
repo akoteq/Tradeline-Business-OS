@@ -3,8 +3,9 @@
 import { use, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
-import { DealHealthBadge, DealStageBadge, PriorityBadge } from "@/components/Badges";
+import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { X } from "lucide-react";
 
 // ─── Config per company ────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ type Deal = {
   dealHealth: string;
   priority: string;
   paymentStatus?: string | null;
+  invoiceStatus?: string | null;
   revenuePotentialGhs?: number | null;
   revenueReceivedGhs?: number | null;
   balanceGhs?: number | null;
@@ -55,12 +57,13 @@ type BdoOption = { id: string; name: string; company: string };
 const STAGE_OPTS  = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
 const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
 const PAY_OPTS    = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
+const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
 
 const EMPTY_FORM = {
   businessName: "", clientName: "", email: "", telephone: "", region: "",
   industry: "", valueChain: "", product: "", bdoId: "",
   dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
-  paymentStatus: "UNPAID",
+  paymentStatus: "UNPAID", invoiceStatus: "NOT_INVOICED",
   revenuePotentialGhs: "", revenueReceivedGhs: "", balanceGhs: "",
   nextSteps: "", nextCallDate: "", notes: "",
 };
@@ -74,8 +77,10 @@ const fmt = (n: number | null | undefined) =>
 
 export default function CompanyPipelinePage({ params }: { params: Promise<{ company: string }> }) {
   const { company: slug } = use(params);
-  const companyKey = SLUG_TO_KEY[slug] ?? slug.toUpperCase();
-  const meta = COMPANY_META[companyKey] ?? { label: companyKey, color: "gray" };
+  const { bySlug } = useCompanies();
+  const co = bySlug[slug];
+  const companyKey = co?.key ?? SLUG_TO_KEY[slug] ?? slug.toUpperCase();
+  const label = co?.name ?? COMPANY_META[companyKey]?.label ?? companyKey;
 
   const qc = useQueryClient();
   const [filterStage, setFilterStage]   = useState("");
@@ -130,13 +135,14 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
       key: "balanceGhs", label: "Balance",
       render: (r: Deal) => <span className={r.balanceGhs && r.balanceGhs > 0 ? "text-red-600" : "text-gray-500"}>{fmt(r.balanceGhs)}</span>,
     },
+    { key: "invoiceStatus", label: "Invoice", sortable: true, render: (r: Deal) => <InvoiceStatusBadge value={r.invoiceStatus ?? "NOT_INVOICED"} /> },
     { key: "bdo", label: "BDO", render: (r: Deal) => r.bdo?.name ?? "—" },
   ];
 
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{meta.label}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{label}</h1>
         <p className="text-sm text-gray-500 mt-1">Deal pipeline</p>
       </div>
 
@@ -231,6 +237,7 @@ function DealFormModal({
       dealHealth:          deal.dealHealth,
       priority:            deal.priority,
       paymentStatus:       deal.paymentStatus       ?? "UNPAID",
+      invoiceStatus:       deal.invoiceStatus       ?? "NOT_INVOICED",
       revenuePotentialGhs: deal.revenuePotentialGhs != null ? String(deal.revenuePotentialGhs) : "",
       revenueReceivedGhs:  deal.revenueReceivedGhs  != null ? String(deal.revenueReceivedGhs)  : "",
       balanceGhs:          deal.balanceGhs          != null ? String(deal.balanceGhs)          : "",
@@ -312,6 +319,9 @@ function DealFormModal({
             <SelectField label="Payment Status" value={form.paymentStatus} onChange={(v) => set("paymentStatus", v)}>
               {PAY_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}
             </SelectField>
+            <SelectField label="Invoice Status" value={form.invoiceStatus} onChange={(v) => set("invoiceStatus", v)}>
+              {INVOICE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+            </SelectField>
             <Field label="Next Call Date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
           </div>
 
@@ -374,6 +384,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
             <DItem label="Industry"         value={deal.industry} />
             <DItem label="BDO"              value={deal.bdo?.name} />
             <DItem label="Payment Status"   value={deal.paymentStatus} />
+            <DItem label="Invoice Status"   value={deal.invoiceStatus ? deal.invoiceStatus.replace(/_/g, " ") : null} />
             <DItem label="Revenue Received" value={fmt(deal.revenueReceivedGhs)} />
             <DItem label="Balance"          value={fmt(deal.balanceGhs)} />
             <DItem label="Next Call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />

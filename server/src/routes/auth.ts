@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
+import { User, USER_ROLES, UserRole } from '../models/User';
 import { BDO } from '../models/BDO';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { param } from '../lib/query';
@@ -77,6 +77,7 @@ router.get('/users', requireAuth, requireAdmin, async (_req: Request, res: Respo
 router.post('/users', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const { email, password, bdoId, role = 'BDO' } = req.body;
   if (!email || !password) { res.status(400).json({ error: 'Email and password required' }); return; }
+  if (!USER_ROLES.includes(role as UserRole)) { res.status(400).json({ error: 'Invalid role' }); return; }
   try {
     const hashed = await bcrypt.hash(password, 10);
     const user = await new User({ email, password: hashed, role, bdoId: bdoId || null, mustChangePassword: true }).save();
@@ -104,7 +105,7 @@ router.put('/users/:id/password', requireAuth, requireAdmin, async (req: Request
 // Admin: change a user's role
 router.put('/users/:id/role', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const { role } = req.body;
-  if (!['ADMIN', 'BDO', 'CEO'].includes(role)) { res.status(400).json({ error: 'Invalid role' }); return; }
+  if (!USER_ROLES.includes(role as UserRole)) { res.status(400).json({ error: 'Invalid role' }); return; }
   try {
     const user = await User.findByIdAndUpdate(param(req, 'id'), { role }, { new: true });
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }

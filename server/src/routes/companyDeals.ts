@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { CompanyDeal, COMPANY_KEYS } from '../models/CompanyDeal';
+import { CompanyDeal } from '../models/CompanyDeal';
 import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
 
@@ -13,13 +13,10 @@ router.get('/', async (req: Request, res: Response) => {
     const stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority');
     const search = qs(req, 'search');
 
-    // company is required unless filtering by bdoId (BDO dashboard fetches across all companies)
-    if (company && !(COMPANY_KEYS as readonly string[]).includes(company)) {
-      res.status(400).json({ error: 'Invalid company value', valid: COMPANY_KEYS });
-      return;
-    }
+    // company is required unless filtering by bdoId (BDO dashboard fetches across all companies).
+    // Company keys are now dynamic (from the Company collection), so we no longer whitelist them here.
     if (!company && !bdoId) {
-      res.status(400).json({ error: 'Provide ?company= or ?bdoId=', valid: COMPANY_KEYS });
+      res.status(400).json({ error: 'Provide ?company= or ?bdoId=' });
       return;
     }
 

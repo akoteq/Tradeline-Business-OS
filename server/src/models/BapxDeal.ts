@@ -19,6 +19,7 @@ const BapxDealSchema = new Schema({
   product: { type: String },
   dealStage: { type: String, enum: ['QUALIFICATION', 'DISCOVERY', 'PROPOSAL_SENT', 'NEGOTIATION', 'CONTRACT_REVIEW', 'CLOSED_WON', 'CLOSED_LOST', 'ON_HOLD'], default: 'QUALIFICATION' },
   priority: { type: String, enum: ['HIGH', 'MEDIUM', 'LOW'], default: 'MEDIUM' },
+  invoiceStatus: { type: String, enum: ['NOT_INVOICED', 'INVOICED', 'PAID', 'OVERDUE'], default: 'NOT_INVOICED' },
   nextSteps: { type: String },
   nextCallDate: { type: Date },
   targetGhs: { type: Number },

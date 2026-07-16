@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import { connectDB } from './lib/db';
+import { ensureCompaniesSeeded } from './models/Company';
 import bapxRouter from './routes/bapx';
 import tradelineRouter from './routes/tradeline';
 import leadsRouter from './routes/leads';
@@ -12,6 +13,7 @@ import smeRouter from './routes/sme';
 import partnershipsRouter from './routes/partnerships';
 import grantLoansRouter from './routes/grantLoans';
 import kpiRouter from './routes/kpi';
+import kpiFrameworkRouter from './routes/kpiFramework';
 import tasksRouter from './routes/tasks';
 import activityLogRouter from './routes/activityLog';
 import bdoRouter from './routes/bdo';
@@ -20,6 +22,7 @@ import dashboardRouter from './routes/dashboard';
 import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
 import companyDealsRouter from './routes/companyDeals';
+import companiesRouter from './routes/companies';
 import alertsRouter from './routes/alerts';
 import clientDocumentsRouter from './routes/clientDocuments';
 import clientNotesRouter from './routes/clientNotes';
@@ -63,6 +66,7 @@ app.use('/api/sme', smeRouter);
 app.use('/api/partnerships', partnershipsRouter);
 app.use('/api/grant-loans', grantLoansRouter);
 app.use('/api/kpi', kpiRouter);
+app.use('/api/kpi-framework', kpiFrameworkRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/activity-log', activityLogRouter);
 app.use('/api/bdo', bdoRouter);
@@ -70,6 +74,7 @@ app.use('/api/consolidated', consolidatedRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/company-deals', companyDealsRouter);
+app.use('/api/companies', companiesRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/client-documents', clientDocumentsRouter);
 app.use('/api/client-notes', clientNotesRouter);
@@ -79,7 +84,8 @@ app.get('/health', (_req, res) => {
 });
 
 connectDB()
-  .then(() => {
+  .then(async () => {
+    await ensureCompaniesSeeded();
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });

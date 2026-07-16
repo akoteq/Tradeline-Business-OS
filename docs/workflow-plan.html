@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tradeline BOS — Build Workflow</title>
+<style>
+  :root{
+    --ink:#1f2430; --muted:#5b6472; --line:#e3e7ee; --soft:#f5f7fa;
+    --indigo:#4f46e5; --indigo-soft:#eef0fe; --teal:#0d9488; --teal-soft:#e6f7f4;
+    --amber:#b45309; --amber-soft:#fef3e2; --green:#15803d; --green-soft:#e8f6ec;
+  }
+  @page { size: A4; margin: 16mm 14mm; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:"Segoe UI", Arial, sans-serif; color:var(--ink);
+    font-size:10.7px; line-height:1.5; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  h1,h2,h3,h4{ margin:0; font-weight:700; line-height:1.25; }
+  p{ margin:0 0 6px; }
+  .muted{ color:var(--muted); }
+  .page-break{ break-before:page; }
+  .avoid-break{ break-inside:avoid; }
+
+  /* Cover */
+  .cover{ height:265mm; display:flex; flex-direction:column; justify-content:space-between;
+    background:linear-gradient(150deg,#4f46e5 0%,#6366f1 45%,#0d9488 130%); color:#fff;
+    border-radius:14px; padding:22mm 18mm; }
+  .cover .kicker{ font-size:12px; letter-spacing:3px; text-transform:uppercase; opacity:.85; font-weight:600; }
+  .cover h1{ font-size:40px; margin-top:10px; letter-spacing:-.5px; }
+  .cover .sub{ font-size:15px; opacity:.92; margin-top:14px; max-width:135mm; line-height:1.55; }
+  .cover .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:20px; }
+  .cover .chip{ background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.3);
+    padding:5px 11px; border-radius:20px; font-size:11px; font-weight:600; }
+  .cover .foot{ font-size:11px; opacity:.85; display:flex; justify-content:space-between; }
+
+  /* Section headings */
+  .sec-h{ display:flex; align-items:center; gap:10px; margin:0 0 10px; padding-bottom:7px; border-bottom:2px solid var(--indigo); }
+  .sec-h .num{ background:var(--indigo); color:#fff; font-weight:700; font-size:12px;
+    width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .sec-h h2{ font-size:16px; }
+  .lead{ font-size:11.5px; color:var(--muted); margin:-2px 0 12px; }
+
+  /* Tables */
+  table{ width:100%; border-collapse:collapse; margin:6px 0 12px; }
+  th,td{ text-align:left; padding:6px 8px; border:1px solid var(--line); vertical-align:top; }
+  th{ background:var(--soft); font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+  td strong{ color:var(--ink); }
+  tr{ break-inside:avoid; }
+
+  /* Cards */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:8px 0 12px; }
+  .card{ border:1px solid var(--line); border-radius:9px; padding:10px 12px; break-inside:avoid; background:#fff; }
+  .card h4{ font-size:11.5px; margin-bottom:4px; }
+  .tag{ display:inline-block; font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+    padding:2px 7px; border-radius:12px; margin-bottom:6px; }
+  .tag.i{ background:var(--indigo-soft); color:var(--indigo); }
+  .tag.t{ background:var(--teal-soft); color:var(--teal); }
+  .tag.a{ background:var(--amber-soft); color:var(--amber); }
+  .tag.g{ background:var(--green-soft); color:var(--green); }
+
+  ul{ margin:4px 0 8px; padding-left:16px; }
+  li{ margin:2px 0; }
+  code{ background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:9.5px;
+    font-family:"Consolas",monospace; color:#3730a3; }
+
+  .callout{ border-left:3px solid var(--amber); background:var(--amber-soft); border-radius:0 8px 8px 0;
+    padding:9px 12px; margin:8px 0 12px; font-size:10px; }
+  .callout strong{ color:var(--amber); }
+
+  /* Phase timeline */
+  .phase{ display:flex; gap:10px; margin:8px 0; break-inside:avoid; }
+  .phase .bar{ flex:0 0 6px; border-radius:4px; }
+  .phase .body{ flex:1; border:1px solid var(--line); border-radius:8px; padding:9px 12px; }
+  .phase h4{ font-size:11.5px; }
+  .phase .when{ float:right; font-size:9px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+
+  .flow{ display:flex; align-items:stretch; gap:0; margin:10px 0 14px; }
+  .flow .step{ flex:1; background:#fff; border:1.5px solid var(--indigo); border-radius:8px; padding:8px 9px; text-align:center; font-size:9.3px; }
+  .flow .step b{ display:block; font-size:10px; margin-bottom:2px; color:var(--indigo); }
+  .flow .arrow{ flex:0 0 20px; display:flex; align-items:center; justify-content:center; color:var(--indigo); font-size:16px; font-weight:700; }
+
+  .check li{ list-style:none; margin-left:-14px; padding-left:20px; position:relative; }
+  .check li::before{ content:"☐"; position:absolute; left:0; color:var(--indigo); font-weight:700; }
+  .footer-note{ margin-top:14px; font-size:9px; color:var(--muted); border-top:1px solid var(--line); padding-top:8px; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div>
+    <div class="kicker">Tradeline Business Operating System</div>
+    <h1>Build Workflow &amp;<br/>Delivery Plan</h1>
+    <div class="sub">A phased plan for the next round of work: staff accounts, a full KPI framework
+      for companies and BDOs, a Senior-BDO dashboard, an Executive dashboard, a consolidated
+      all-companies dashboard, and the payment-structure module.</div>
+    <div class="chips">
+      <span class="chip">Staff Accounts</span>
+      <span class="chip">KPI Framework</span>
+      <span class="chip">Senior BDO Dashboard</span>
+      <span class="chip">Executive Dashboard</span>
+      <span class="chip">All-Companies Dashboard</span>
+      <span class="chip">Payment Structure</span>
+    </div>
+  </div>
+  <div class="foot">
+    <span>Prepared for: BAPX &amp; Tradeline Consult group</span>
+    <span>14 July 2026 &middot; v1.0</span>
+  </div>
+</section>
+
+<!-- ============ 1. OVERVIEW ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">1</span><h2>Purpose &amp; Scope</h2></div>
+  <p class="lead">What this round of work delivers and how the six requests fit together.</p>
+
+  <p>This document turns six requested features into an ordered, buildable plan. Each item is written as a
+  <strong>workstream</strong> with its current state, the target, the concrete steps, the data-model impact,
+  and how we will know it is done. The workstreams share foundations — the roles/access model and the KPI data —
+  so they are sequenced so earlier work unblocks later work.</p>
+
+  <table class="avoid-break">
+    <thead><tr><th style="width:26px">#</th><th>Workstream</th><th>In one line</th><th style="width:70px">Depends on</th></tr></thead>
+    <tbody>
+      <tr><td>A</td><td><strong>Staff accounts</strong></td><td>Invite &amp; manage all staff logins, not just BDOs, with the right role &amp; company.</td><td>—</td></tr>
+      <tr><td>B</td><td><strong>KPI framework</strong></td><td>KPIs for every company <em>and</em> per-BDO targets vs actuals.</td><td>A</td></tr>
+      <tr><td>C</td><td><strong>Senior BDO dashboard</strong></td><td>A team-lead view: the Senior BDO sees their whole team's pipeline &amp; KPIs.</td><td>A, B</td></tr>
+      <tr><td>D</td><td><strong>Executive dashboard</strong></td><td>A CEO/board view: group-wide revenue, KPI health, top deals &amp; risks.</td><td>B</td></tr>
+      <tr><td>E</td><td><strong>All-companies dashboard</strong></td><td>Every company side by side in one comparison screen.</td><td>B, D</td></tr>
+      <tr><td>F</td><td><strong>Payment structure</strong></td><td>Model the payment method/schedule from the Excel sheet into the system.</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout"><strong>One input needed before Workstream F.</strong> Please share the Excel sheet that
+  describes how payments are made. The columns, stages and any formulas in it decide the data model — I do not want
+  to guess the structure and rebuild it later.</div>
+</section>
+
+<!-- ============ 2. ROLES ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">2</span><h2>Roles &amp; Access Model</h2></div>
+  <p class="lead">The foundation every dashboard reads from. Today there are three roles; we add one.</p>
+
+  <div class="grid">
+    <div class="card">
+      <span class="tag i">Today</span>
+      <h4>Current roles</h4>
+      <ul>
+        <li><code>ADMIN</code> — full access, manages BDOs &amp; users.</li>
+        <li><code>CEO</code> — executive read access.</li>
+        <li><code>BDO</code> — own dashboard, own pipeline &amp; tasks.</li>
+      </ul>
+      <p class="muted">A login (<code>User</code>) optionally links to a BDO profile via <code>bdoId</code>; the BDO
+      profile carries the <code>company</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag g">Proposed</span>
+      <h4>Add: Senior BDO</h4>
+      <ul>
+        <li><code>SENIOR_BDO</code> — a BDO who also leads a team within a company.</li>
+        <li>Sees their own numbers <em>plus</em> every BDO they supervise.</li>
+        <li>Needs a link from team members to their lead (e.g. <code>managerId</code> on the BDO profile).</li>
+      </ul>
+    </div>
+  </div>
+
+  <p><strong>Access matrix (target):</strong></p>
+  <table class="avoid-break">
+    <thead><tr><th>Capability</th><th>BDO</th><th>Senior BDO</th><th>CEO / Exec</th><th>Admin</th></tr></thead>
+    <tbody>
+      <tr><td>Own dashboard, pipeline &amp; tasks</td><td>✔</td><td>✔</td><td>✔ (all)</td><td>✔</td></tr>
+      <tr><td>Team members' pipeline &amp; KPIs</td><td>—</td><td>✔ (their team)</td><td>✔ (all)</td><td>✔</td></tr>
+      <tr><td>Company &amp; per-BDO KPI scorecards</td><td>Own</td><td>Team</td><td>All</td><td>All</td></tr>
+      <tr><td>Executive / all-companies dashboards</td><td>—</td><td>—</td><td>✔</td><td>✔</td></tr>
+      <tr><td>Manage staff accounts &amp; KPIs</td><td>—</td><td>—</td><td>—</td><td>✔</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 3. WORKSTREAM A ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">A</span><h2>Staff Accounts</h2></div>
+  <p class="lead">Move from "invite a BDO" to "invite any staff member" with the correct role and company.</p>
+
+  <div class="grid">
+    <div class="card"><span class="tag a">Now</span><h4>Where we are</h4>
+      <ul><li>Admin can create <code>User</code> logins and BDO profiles.</li>
+      <li>Roles exist (ADMIN/CEO/BDO) but the invite flow is BDO-centric.</li></ul></div>
+    <div class="card"><span class="tag g">Target</span><h4>Where we're going</h4>
+      <ul><li>One "Add staff" flow: name, email, <strong>role</strong>, <strong>company</strong>.</li>
+      <li>Auto-generated temp password + forced change on first login (already supported by <code>mustChangePassword</code>).</li>
+      <li>Senior BDO can be assigned team members.</li></ul></div>
+  </div>
+
+  <p><strong>Steps</strong></p>
+  <ul>
+    <li>Add <code>SENIOR_BDO</code> to the <code>User.role</code> enum and to the invite form's role selector.</li>
+    <li>Add <code>managerId</code> (nullable) to the BDO profile so members can point to their Senior BDO.</li>
+    <li>Extend the Manage Users screen: filter by role &amp; company, show status, resend invite / reset password.</li>
+    <li>On invite, email or display the temporary credentials for hand-off.</li>
+  </ul>
+
+  <p><strong>Data model</strong></p>
+  <ul>
+    <li><code>User</code>: role enum → <code>['ADMIN','CEO','SENIOR_BDO','BDO']</code>.</li>
+    <li><code>BDO</code>: add <code>managerId: string | null</code>.</li>
+  </ul>
+
+  <p class="check" ><strong>Done when</strong></p>
+  <ul class="check">
+    <li>Admin can create an account for any role and any of the six companies.</li>
+    <li>A Senior BDO can be linked to the members they supervise.</li>
+    <li>New staff are forced to set a password on first login.</li>
+  </ul>
+</section>
+
+<!-- ============ 4. WORKSTREAM B ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">B</span><h2>KPI Framework — Companies &amp; BDOs</h2></div>
+  <p class="lead">KPIs "for all" (each company) and "for each BDO" (individual targets vs actuals).</p>
+
+  <div class="grid">
+    <div class="card"><span class="tag a">Now</span><h4>What exists</h4>
+      <ul>
+        <li><code>KpiScorecard</code> — monthly company KPIs, but the company enum is locked to <strong>BAPX / TRADELINE only</strong>.</li>
+        <li><code>MonthlyKpi</code> — already has <code>bdoId</code>, <code>metric</code>, <code>target</code>, <code>actual</code>: the per-BDO foundation is present but not surfaced.</li>
+      </ul></div>
+    <div class="card"><span class="tag g">Target</span><h4>What we build</h4>
+      <ul>
+        <li>Company KPIs for <strong>all six</strong> companies.</li>
+        <li>Per-BDO KPI targets vs actuals, visible on each BDO dashboard.</li>
+        <li>Rollups: a BDO's actuals roll up to their company; companies roll up to the group.</li>
+      </ul></div>
+  </div>
+
+  <p><strong>Steps</strong></p>
+  <ul>
+    <li>Widen <code>KpiScorecard.company</code> enum to all six company keys (mirrors the fix already done for BDOs &amp; tasks).</li>
+    <li>Update the KPI Scorecard page filters/form to list all companies (currently hardcoded to BAPX/Tradeline).</li>
+    <li>Build a per-BDO KPI editor on top of <code>MonthlyKpi</code> (metric, month, target, actual, notes).</li>
+    <li>Surface per-BDO KPI tiles (target vs actual, % attainment, on-track/at-risk/off-track) on the BDO dashboard.</li>
+    <li>Define the standard metric set once (e.g. deals won, revenue, calls/meetings, conversion) so every BDO is measured the same way.</li>
+  </ul>
+
+  <div class="callout"><strong>Decision needed:</strong> the standard KPI metric list. Give me the metrics you
+  want every BDO measured on and I'll seed them so the scorecards are consistent instead of free-text.</div>
+
+  <p class="check"><strong>Done when</strong></p>
+  <ul class="check">
+    <li>Company KPI scorecards can be entered for all six companies.</li>
+    <li>Each BDO has monthly targets vs actuals visible on their dashboard.</li>
+    <li>Attainment status (on-track / at-risk / off-track) is computed, not typed.</li>
+  </ul>
+</section>
+
+<!-- ============ 5. WORKSTREAM C ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">C</span><h2>Senior BDO Dashboard</h2></div>
+  <p class="lead">A team-lead view sitting between the individual BDO view and the executive view.</p>
+
+  <div class="flow avoid-break">
+    <div class="step"><b>BDO</b>own numbers</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>Senior BDO</b>their team</div>
+    <div class="arrow">→</div>
+    <div class="step"><b>Executive</b>whole group</div>
+  </div>
+
+  <p><strong>What it shows</strong> — scoped to the members linked via <code>managerId</code>:</p>
+  <ul>
+    <li>Team pipeline: combined deals, stages, health, potential vs received revenue.</li>
+    <li>Team KPI board: each member's target vs actual, ranked, with team totals.</li>
+    <li>Scheme-of-work rollup: open / overdue / completed tasks across the team.</li>
+    <li>Drill-down: click a member to open their individual dashboard.</li>
+  </ul>
+
+  <p><strong>Steps</strong></p>
+  <ul>
+    <li>New route <code>/senior/[id]</code> (or reuse the BDO dashboard with a "team" tab when role is SENIOR_BDO).</li>
+    <li>API: list deals/tasks/KPIs where the BDO's <code>managerId</code> = the senior BDO (plus the senior's own).</li>
+    <li>Reuse existing pipeline charts &amp; stat tiles; add a per-member leaderboard table (uses the paginated DataTable).</li>
+    <li>Sidebar: show a "My Team" link when the logged-in user is a Senior BDO.</li>
+  </ul>
+
+  <p class="check"><strong>Done when</strong></p>
+  <ul class="check">
+    <li>A Senior BDO logs in and sees their team's combined pipeline, revenue and KPIs.</li>
+    <li>They can drill into any team member's own dashboard.</li>
+    <li>They cannot see other teams or other companies.</li>
+  </ul>
+</section>
+
+<!-- ============ 6. WORKSTREAM D ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">D</span><h2>Executive Dashboard</h2></div>
+  <p class="lead">The CEO/board screen: the whole group on one page, at a glance.</p>
+
+  <p><strong>What it shows</strong></p>
+  <ul>
+    <li>Group headline tiles: total potential / received / outstanding revenue across all six companies.</li>
+    <li>Revenue &amp; deal trend charts over time.</li>
+    <li>KPI health summary — how many company/BDO KPIs are on-track vs at-risk vs off-track.</li>
+    <li>Top deals and top risks (biggest at-risk / stale deals) pulled from every pipeline.</li>
+    <li>Per-company snapshot strip linking through to each company's detail.</li>
+  </ul>
+
+  <p><strong>Steps</strong></p>
+  <ul>
+    <li>New route <code>/executive</code>, restricted to CEO/Admin.</li>
+    <li>API aggregation endpoint that sums across BapxDeal + TradelineDeal + CompanyDeal and KPI collections.</li>
+    <li>Build tiles + Recharts trend/health charts; reuse revenue formatting already used on pipelines.</li>
+    <li>Add to the CEO sidebar as the landing view.</li>
+  </ul>
+
+  <div class="callout"><strong>Note:</strong> the current home page (<code>/</code>) is already a "CEO Dashboard." We should decide
+  whether the Executive dashboard <em>replaces</em> it or sits alongside it as a deeper, group-wide view. My
+  recommendation: make Executive the richer group view and keep the current page as the simpler landing.</div>
+
+  <p class="check"><strong>Done when</strong></p>
+  <ul class="check">
+    <li>The CEO sees group-wide revenue, trends and KPI health without opening each company.</li>
+    <li>Top deals and top risks surface automatically.</li>
+  </ul>
+</section>
+
+<!-- ============ 7. WORKSTREAM E ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">E</span><h2>All-Companies Dashboard</h2></div>
+  <p class="lead">Every company side by side — a comparison grid rather than a single roll-up.</p>
+
+  <p>Where the Executive dashboard answers "how is the <em>group</em> doing?", this screen answers
+  "how do the companies compare to <em>each other</em>?" One row (or card) per company:
+  BAPX, Tradeline, Alpha Africa, Finance Factory, Community Finance, Akoteq.</p>
+
+  <table class="avoid-break">
+    <thead><tr><th>Company</th><th>Active deals</th><th>Closed won</th><th>Potential rev.</th><th>Received</th><th>Outstanding</th><th>KPI health</th></tr></thead>
+    <tbody>
+      <tr><td><strong>BAPX</strong></td><td colspan="6" class="muted">…one comparison row per company, sortable &amp; exportable…</td></tr>
+      <tr><td><strong>Tradeline</strong></td><td colspan="6" class="muted"></td></tr>
+      <tr><td><strong>Alpha Africa</strong></td><td colspan="6" class="muted"></td></tr>
+      <tr><td colspan="7" class="muted" style="text-align:center">Finance Factory &middot; Community Finance &middot; Akoteq …</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Steps</strong></p>
+  <ul>
+    <li>New route <code>/companies</code> (or a tab on the Executive dashboard).</li>
+    <li>Reuse the aggregation endpoint from D, grouped by company key instead of summed.</li>
+    <li>Comparison table (paginated/sortable DataTable) + a bar chart comparing revenue across companies.</li>
+    <li>Each row links to that company's pipeline / dashboard.</li>
+  </ul>
+
+  <p class="check"><strong>Done when</strong></p>
+  <ul class="check">
+    <li>All six companies appear in one comparison view with revenue &amp; KPI health.</li>
+    <li>The view is sortable and exportable, and each row drills through.</li>
+  </ul>
+</section>
+
+<!-- ============ 8. WORKSTREAM F ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">F</span><h2>Payment Structure Module</h2></div>
+  <p class="lead">Bring the payment method/schedule from the Excel sheet into the system.</p>
+
+  <p>The deal collections already track revenue, received amounts and outstanding balances. This workstream adds the
+  <strong>how</strong> — the payment method, instalments/milestones and schedule described in your spreadsheet — so a
+  deal's money can be tracked against a defined plan rather than a single number.</p>
+
+  <p><strong>Steps (once the sheet is shared)</strong></p>
+  <ul>
+    <li>Map the spreadsheet columns → a <code>PaymentPlan</code> / <code>PaymentSchedule</code> model (milestone, due date, amount, % , status).</li>
+    <li>Attach payment plans to deals; compute received vs outstanding from the schedule.</li>
+    <li>Optional one-time importer to load the existing Excel rows so history isn't retyped.</li>
+    <li>Surface a payment tab on the deal / pipeline view and roll paid/overdue amounts into the dashboards above.</li>
+  </ul>
+
+  <div class="callout"><strong>Blocked on input.</strong> I've left this deliberately light because the model must match
+  your actual sheet. Share it and I'll turn its columns into the exact schema and screens — that avoids a guess-and-redo cycle.</div>
+
+  <p class="check"><strong>Done when</strong></p>
+  <ul class="check">
+    <li>A deal can carry a structured payment plan matching the Excel sheet.</li>
+    <li>Received vs outstanding is computed from the schedule, not entered by hand.</li>
+    <li>Overdue payments surface on the relevant dashboards.</li>
+  </ul>
+</section>
+
+<!-- ============ 9. SEQUENCING ============ -->
+<section class="page-break">
+  <div class="sec-h"><span class="num">9</span><h2>Delivery Sequence</h2></div>
+  <p class="lead">Ordered so each phase unblocks the next. Payment work can run in parallel once the sheet arrives.</p>
+
+  <div class="phase avoid-break"><div class="bar" style="background:var(--indigo)"></div>
+    <div class="body"><span class="when">Phase 1</span><h4>Foundations — Staff accounts &amp; roles</h4>
+    Add <code>SENIOR_BDO</code>, <code>managerId</code>, and the "add any staff" flow. Everything else reads from this.</div></div>
+
+  <div class="phase avoid-break"><div class="bar" style="background:var(--teal)"></div>
+    <div class="body"><span class="when">Phase 2</span><h4>KPI framework</h4>
+    Open company KPIs to all six companies; surface per-BDO targets vs actuals. Feeds C, D and E.</div></div>
+
+  <div class="phase avoid-break"><div class="bar" style="background:#6366f1"></div>
+    <div class="body"><span class="when">Phase 3</span><h4>Senior BDO dashboard</h4>
+    Team-scoped pipeline + KPI leaderboard, built on the roles and KPI data from phases 1–2.</div></div>
+
+  <div class="phase avoid-break"><div class="bar" style="background:var(--amber)"></div>
+    <div class="body"><span class="when">Phase 4</span><h4>Executive &amp; All-companies dashboards</h4>
+    One aggregation layer powers both: the group roll-up and the side-by-side company comparison.</div></div>
+
+  <div class="phase avoid-break"><div class="bar" style="background:var(--green)"></div>
+    <div class="body"><span class="when">Parallel</span><h4>Payment structure module</h4>
+    Starts as soon as the Excel sheet is shared; results feed revenue accuracy into every dashboard above.</div></div>
+
+  <h3 style="margin-top:14px; font-size:12px;">What I need from you to start</h3>
+  <ul>
+    <li><strong>The payment Excel sheet</strong> — unblocks Workstream F.</li>
+    <li><strong>The standard BDO KPI metric list</strong> — so scorecards are consistent (Workstream B).</li>
+    <li><strong>Team structure</strong> — which BDOs report to which Senior BDO (Workstreams A &amp; C).</li>
+    <li><strong>Executive vs current CEO page</strong> — replace or keep alongside (Workstream D).</li>
+  </ul>
+
+  <div class="footer-note">Tradeline Business Operating System &middot; Build Workflow &amp; Delivery Plan &middot; v1.0 &middot; 14 July 2026.
+  Grounded in the current data model (User / BDO / KpiScorecard / MonthlyKpi / deal collections). Phasing is dependency-based, not a fixed calendar.</div>
+</section>
+
+</body>
+</html>

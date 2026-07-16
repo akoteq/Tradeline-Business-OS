@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
 import { X } from "lucide-react";
 
@@ -13,6 +14,7 @@ type BdoRow = {
   name: string;
   company: string;
   role: string | null;
+  managerId: string | null;
   email: string | null;
   phone: string | null;
   bapxDeals: number;
@@ -32,7 +34,7 @@ type BdoDetail = {
 };
 
 type BdoPerf = {
-  bdo: { id: string; name: string; email: string | null; phone: string | null; company: string; role: string | null; isActive: boolean };
+  bdo: { id: string; name: string; email: string | null; phone: string | null; company: string; role: string | null; managerId: string | null; isActive: boolean };
   bapxDeals: number;
   tradelineDeals: number;
   leads: number;
@@ -40,17 +42,7 @@ type BdoPerf = {
   revenue: { received: number; potential: number };
 };
 
-const COMPANY_OPTS = [
-  { value: "BAPX", label: "BAPX" },
-  { value: "TRADELINE", label: "Tradeline" },
-  { value: "ALPHA_AFRICA", label: "Alpha Africa Consult Ltd" },
-  { value: "FINANCE_FACTORY", label: "Finance Factory Limited" },
-  { value: "COMMUNITY_FINANCE", label: "Community Finance Ltd" },
-  { value: "AKOTEQ", label: "Akoteq Ltd" },
-] as const;
-
-const COMPANY_LABELS: Record<string, string> = Object.fromEntries(COMPANY_OPTS.map((c) => [c.value, c.label]));
-const EMPTY_FORM = { name: "", email: "", phone: "", company: "BAPX", role: "" };
+const EMPTY_FORM = { name: "", email: "", phone: "", company: "BAPX", role: "", managerId: "" };
 
 const HEALTH_COLORS: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
@@ -76,6 +68,7 @@ const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
 export default function BdoManagementPage() {
   const [companyFilter, setCompanyFilter] = useState("");
+  const { companies, byKey } = useCompanies();
   const [editing, setEditing] = useState<BdoRow | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [detail, setDetail] = useState<BdoRow | null>(null);
@@ -108,6 +101,7 @@ export default function BdoManagementPage() {
       name: p.bdo.name,
       company: p.bdo.company,
       role: p.bdo.role,
+      managerId: p.bdo.managerId,
       email: p.bdo.email,
       phone: p.bdo.phone,
       bapxDeals: p.bapxDeals,
@@ -123,7 +117,7 @@ export default function BdoManagementPage() {
       key: "company", label: "Company", width: "100px",
       render: (r: BdoRow) => (
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.company === "BAPX" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>
-          {COMPANY_LABELS[r.company] ?? r.company}
+          {byKey[r.company]?.name ?? r.company}
         </span>
       ),
     },
@@ -175,7 +169,7 @@ export default function BdoManagementPage() {
           <div className="flex gap-2 flex-wrap">
             <FilterSelect
               value={companyFilter}
-              options={[{ value: "", label: "All Companies" }, ...COMPANY_OPTS.map((c) => ({ value: c.value, label: c.label }))]}
+              options={[{ value: "", label: "All Companies" }, ...companies.map((c) => ({ value: c.key, label: c.name }))]}
               onChange={setCompanyFilter}
             />
           </div>
@@ -216,6 +210,8 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: BdoDetail | null; onClose: () => void; onEdit: () => void }) {
   const [tab, setTab] = useState<"bapx" | "tradeline" | "leads" | "tasks">("bapx");
+  const { byKey } = useCompanies();
+  const companyName = byKey[row.company]?.name ?? row.company;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -224,7 +220,7 @@ function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: B
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div>
             <h2 className="font-semibold text-gray-900">{row.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{row.role ?? COMPANY_LABELS[row.company] ?? row.company} · {row.email ?? "No email"}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{row.role ?? companyName} · {row.email ?? "No email"}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
@@ -235,7 +231,7 @@ function DetailDrawer({ row, detail, onClose, onEdit }: { row: BdoRow; detail: B
         <div className="p-5 space-y-5">
           {/* Stats */}
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <DetailItem label="Company" value={COMPANY_LABELS[row.company] ?? row.company} />
+            <DetailItem label="Company" value={companyName} />
             <DetailItem label="Role" value={row.role} />
             <DetailItem label="Email" value={row.email} />
             <DetailItem label="Phone" value={row.phone} />
@@ -315,9 +311,11 @@ function ItemList({ items, empty }: { items: { id: string; primary: string; seco
 // ─── Add / Edit modal ─────────────────────────────────────────────────────────
 
 function BdoFormModal({ row, onClose, onSaved }: { row: BdoRow | null; onClose: () => void; onSaved: () => void }) {
+  const { companies } = useCompanies();
+  const { data: allStaff = [] } = useQuery<BdoRow[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
   const [form, setForm] = useState({
     ...EMPTY_FORM,
-    ...(row ? { name: row.name, email: row.email ?? "", phone: row.phone ?? "", company: row.company, role: row.role ?? "" } : {}),
+    ...(row ? { name: row.name, email: row.email ?? "", phone: row.phone ?? "", company: row.company, role: row.role ?? "", managerId: row.managerId ?? "" } : {}),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -326,7 +324,7 @@ function BdoFormModal({ row, onClose, onSaved }: { row: BdoRow | null; onClose: 
   const save = async () => {
     if (!form.name.trim()) { setError("Name is required."); return; }
     setSaving(true); setError("");
-    const body = { ...form, email: form.email || null, phone: form.phone || null, role: form.role || null };
+    const body = { ...form, email: form.email || null, phone: form.phone || null, role: form.role || null, managerId: form.managerId || null };
     try {
       row ? await api.put(`/bdo/${row.id}`, body) : await api.post("/bdo", body);
       onSaved();
@@ -349,7 +347,16 @@ function BdoFormModal({ row, onClose, onSaved }: { row: BdoRow | null; onClose: 
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Company</label>
             <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {COMPANY_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Reports to <span className="text-gray-400 font-normal">(manager)</span></label>
+            <select value={form.managerId} onChange={(e) => set("managerId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="">— None —</option>
+              {allStaff.filter((s) => s.id !== row?.id).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ""}</option>
+              ))}
             </select>
           </div>
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}

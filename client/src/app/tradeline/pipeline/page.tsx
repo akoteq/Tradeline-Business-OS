@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
-import { DealHealthBadge, DealStageBadge, PriorityBadge } from "@/components/Badges";
+import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { useAuth } from "@/components/AuthProvider";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import Link from "next/link";
@@ -30,6 +30,7 @@ type TradelineDeal = {
   revenueReceivedGhs: number | null;
   balanceGhs: number | null;
   paymentStatus: string;
+  invoiceStatus: string;
   dealStage: string;
   priority: string;
   dealHealth: string;
@@ -42,6 +43,7 @@ const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
 const STAGE_OPTS = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
 const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
 const PAYMENT_OPTS = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
+const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
 
 const EMPTY_FORM = {
   businessName: "", smeId: "", valueChain: "", email: "", telephone: "",
@@ -49,7 +51,7 @@ const EMPTY_FORM = {
   bdoId: "", dueDate: "",
   revenuePotentialGhs: "", expectedRevenueReceivedGhs: "", revenueReceivedGhs: "",
   tier: "TIER_1", dealStage: "QUALIFICATION", dealHealth: "ACTIVE",
-  priority: "MEDIUM", paymentStatus: "UNPAID",
+  priority: "MEDIUM", paymentStatus: "UNPAID", invoiceStatus: "NOT_INVOICED",
 };
 
 const fmt = (n: number) => n.toLocaleString();
@@ -130,6 +132,7 @@ export default function TradelinePipelinePage() {
     { key: "revenueReceivedGhs", label: "Received (GHS)", render: (r: TradelineDeal) => r.revenueReceivedGhs ? fmt(r.revenueReceivedGhs) : "—", sortable: true },
     { key: "balanceGhs", label: "Balance (GHS)", render: (r: TradelineDeal) => r.balanceGhs ? fmt(r.balanceGhs) : "—", sortable: true },
     { key: "paymentStatus", label: "Payment", render: (r: TradelineDeal) => <PaymentBadge value={r.paymentStatus} /> },
+    { key: "invoiceStatus", label: "Invoice", sortable: true, render: (r: TradelineDeal) => <InvoiceStatusBadge value={r.invoiceStatus ?? "NOT_INVOICED"} /> },
     { key: "nextAction", label: "Next Action", render: (r: TradelineDeal) => <span className="truncate block max-w-[160px]">{r.nextAction ?? "—"}</span> },
   ];
 
@@ -242,6 +245,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
       dealHealth: deal.dealHealth,
       priority: deal.priority,
       paymentStatus: deal.paymentStatus,
+      invoiceStatus: deal.invoiceStatus ?? "NOT_INVOICED",
     } : {}),
   });
   const [saving, setSaving] = useState(false);
@@ -360,6 +364,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
             </div>
             <div className="mt-3">
               <FormSelect label="Payment Status" value={form.paymentStatus} options={PAYMENT_OPTS} onChange={(v) => set("paymentStatus", v)} />
+              <FormSelect label="Invoice Status" value={form.invoiceStatus} options={INVOICE_OPTS} onChange={(v) => set("invoiceStatus", v)} />
             </div>
           </Section>
 
@@ -409,6 +414,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
             <PriorityBadge value={deal.priority} />
             <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">{deal.tier?.replace("_", " ")}</span>
             <PaymentBadge value={deal.paymentStatus} />
+            <InvoiceStatusBadge value={deal.invoiceStatus ?? "NOT_INVOICED"} />
           </div>
 
           {/* Key fields */}

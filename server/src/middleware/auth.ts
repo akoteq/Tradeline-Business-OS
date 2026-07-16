@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-type UserRole = 'ADMIN' | 'BDO' | 'CEO';
+import { UserRole, INDIVIDUAL_ROLES, ADMIN_ROLES } from '../models/User';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -20,14 +19,17 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'ADMIN' && req.user?.role !== 'CEO') {
+  if (!req.user || !ADMIN_ROLES.includes(req.user.role)) {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
   next();
 }
 
+// Returns the staff-profile id a request should be scoped to, or null for
+// executives/admins who see everything. Individual contributors (BDO, Junior
+// BDO, Intern, and — until team scoping lands in v2 — Senior BDO) see only their own.
 export function bdoFilter(req: Request): string | null {
-  if (req.user?.role === 'BDO') return req.user.bdoId ?? null;
+  if (req.user && INDIVIDUAL_ROLES.includes(req.user.role)) return req.user.bdoId ?? null;
   return null;
 }

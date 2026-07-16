@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   TrendingUp,
-  Briefcase,
   Users,
   Building2,
   Handshake,
@@ -25,57 +24,23 @@ import {
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
+import { useCompanies, companyHref } from "@/lib/companies";
 
-// A BDO's pipeline lives under a different route per company
-const BDO_PIPELINE: Record<string, { href: string; label: string }> = {
-  BAPX: { href: "/bapx/pipeline", label: "BAPX Pipeline" },
-  TRADELINE: { href: "/tradeline/pipeline", label: "Tradeline Pipeline" },
-  ALPHA_AFRICA: { href: "/pipeline/alpha-africa", label: "Alpha Africa Pipeline" },
-  FINANCE_FACTORY: { href: "/pipeline/finance-factory", label: "Finance Factory Pipeline" },
-  COMMUNITY_FINANCE: { href: "/pipeline/community-finance", label: "Community Finance Pipeline" },
-  AKOTEQ: { href: "/pipeline/akoteq", label: "Akoteq Pipeline" },
-};
-
+// Static (non-company) admin nav. Company pipelines are injected dynamically from the
+// Company collection so newly-added companies appear here automatically.
 const ADMIN_NAV = [
   { href: "/", label: "CEO Dashboard", icon: LayoutDashboard },
-  {
-    label: "BAPX",
-    icon: Briefcase,
-    children: [{ href: "/bapx/pipeline", label: "Pipeline" }],
-  },
-  {
-    label: "Tradeline",
-    icon: TrendingUp,
-    children: [{ href: "/tradeline/pipeline", label: "Pipeline" }],
-  },
-  {
-    label: "Alpha Africa",
-    icon: Building2,
-    children: [{ href: "/pipeline/alpha-africa", label: "Pipeline" }],
-  },
-  {
-    label: "Finance Factory",
-    icon: Building2,
-    children: [{ href: "/pipeline/finance-factory", label: "Pipeline" }],
-  },
-  {
-    label: "Community Finance",
-    icon: Building2,
-    children: [{ href: "/pipeline/community-finance", label: "Pipeline" }],
-  },
-  {
-    label: "Akoteq",
-    icon: Building2,
-    children: [{ href: "/pipeline/akoteq", label: "Pipeline" }],
-  },
   { href: "/leads", label: "Leads DB", icon: Users },
   { href: "/sme", label: "Client Overview", icon: Building2 },
   { href: "/partnerships", label: "Partnerships", icon: Handshake },
   { href: "/grant-loans", label: "Grants & Loans", icon: DollarSign },
+  { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3 },
   { href: "/kpi", label: "KPI Scorecard", icon: BarChart3 },
   { href: "/tasks", label: "Scheme of Work", icon: ListChecks },
   { href: "/consolidated", label: "Consolidated", icon: Database },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/team", label: "Team", icon: UsersRound },
+  { href: "/admin/companies", label: "Manage Companies", icon: Building2 },
   { href: "/admin/bdos", label: "Manage BDOs", icon: UsersRound },
   { href: "/admin/users", label: "Manage Users", icon: ShieldCheck },
   { href: "/help", label: "Help & Glossary", icon: HelpCircle },
@@ -88,7 +53,8 @@ type SidebarProps = { mobileOpen?: boolean; onClose?: () => void };
 export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
-  const [open, setOpen] = useState<string[]>(["BAPX", "Tradeline"]);
+  const { companies } = useCompanies();
+  const [open, setOpen] = useState<string[]>(["Companies"]);
 
   if (AUTH_PATHS.includes(pathname)) return null;
   if (loading) return <aside className="hidden md:flex w-60 min-h-screen bg-gray-900 shrink-0" />;
@@ -109,7 +75,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     </button>
   );
 
-  if (user.role === "BDO") {
+  if (["SENIOR_BDO", "BDO", "JUNIOR_BDO", "INTERN"].includes(user.role)) {
     return (
       <aside className={asideClass}>
         <div className="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
@@ -135,8 +101,26 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               My Dashboard
             </Link>
           )}
+          {user.role === "SENIOR_BDO" && user.bdoId && (
+            <Link
+              href={`/senior/${user.bdoId}`}
+              onClick={onClose}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+                pathname.startsWith("/senior/")
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              )}
+            >
+              <UsersRound size={16} />
+              My Team
+            </Link>
+          )}
           {(() => {
-            const pipe = BDO_PIPELINE[user.bdoCompany ?? "TRADELINE"] ?? BDO_PIPELINE.TRADELINE;
+            const bdoCo = companies.find((c) => c.key === (user.bdoCompany ?? "TRADELINE"));
+            const pipe = bdoCo
+              ? { href: companyHref(bdoCo), label: `${bdoCo.name} Pipeline` }
+              : { href: "/tradeline/pipeline", label: "Tradeline Pipeline" };
             return (
               <Link
                 href={pipe.href}
@@ -193,6 +177,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
             Client Overview
           </Link>
           <Link
+            href="/team"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+              pathname === "/team"
+                ? "bg-indigo-600 text-white"
+                : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            )}
+          >
+            <UsersRound size={16} />
+            Team
+          </Link>
+          <Link
             href="/help"
             onClick={onClose}
             className={clsx(
@@ -222,10 +219,18 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
-        {(user.bdoId
-          ? [{ href: `/bdo/${user.bdoId}`, label: "My BDO Dashboard", icon: UserCircle }, ...ADMIN_NAV]
-          : ADMIN_NAV
-        ).map((item) => {
+        {(() => {
+          // Inject a dynamic "Companies" group (each company's pipeline) right after the CEO Dashboard.
+          const companyGroup = {
+            label: "Companies",
+            icon: Building2,
+            children: companies.map((c) => ({ href: `/dashboard/${c.slug}`, label: c.name })),
+          };
+          const nav = [ADMIN_NAV[0], companyGroup, ...ADMIN_NAV.slice(1)];
+          return user.bdoId
+            ? [{ href: `/bdo/${user.bdoId}`, label: "My BDO Dashboard", icon: UserCircle }, ...nav]
+            : nav;
+        })().map((item) => {
           if ("children" in item) {
             const isOpen = open.includes(item.label);
             const Icon = item.icon;

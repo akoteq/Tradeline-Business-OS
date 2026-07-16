@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
-import { DealHealthBadge, DealStageBadge, PriorityBadge } from "@/components/Badges";
+import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { X } from "lucide-react";
 
 type BapxDeal = {
@@ -27,6 +27,7 @@ type BapxDeal = {
   product: string | null;
   dealStage: string;
   priority: string;
+  invoiceStatus: string | null;
   nextSteps: string | null;
   nextCallDate: string | null;
   targetGhs: number | null;
@@ -39,12 +40,14 @@ type BdoOption = { id: string; name: string; company: string };
 const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
 const STAGE_OPTS = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
 const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
+const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
 
 const EMPTY_FORM = {
   businessName: "", clientName: "", holdingFirm: "", industry: "", telephone: "",
   email: "", region: "", date: "", bdoId: "", activityType: "", product: "",
   keyTopics: "", callOutcome: "", nextSteps: "", nextCallDate: "",
   targetGhs: "", dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
+  invoiceStatus: "NOT_INVOICED",
 };
 
 export default function BapxPipelinePage() {
@@ -87,6 +90,7 @@ export default function BapxPipelinePage() {
     { key: "region", label: "Region", render: (r: BapxDeal) => r.region ?? "—" },
     { key: "dealStage", label: "Stage", render: (r: BapxDeal) => <DealStageBadge value={r.dealStage} />, sortable: true },
     { key: "priority", label: "Priority", render: (r: BapxDeal) => <PriorityBadge value={r.priority} />, sortable: true },
+    { key: "invoiceStatus", label: "Invoice", sortable: true, render: (r: BapxDeal) => <InvoiceStatusBadge value={r.invoiceStatus ?? "NOT_INVOICED"} /> },
     { key: "product", label: "Product", render: (r: BapxDeal) => r.product ?? "—" },
     { key: "targetGhs", label: "Target (GHS)", render: (r: BapxDeal) => r.targetGhs ? `GHS ${r.targetGhs.toLocaleString()}` : "—", sortable: true },
     { key: "nextSteps", label: "Next Steps", render: (r: BapxDeal) => <span className="truncate block max-w-[160px]">{r.nextSteps ?? "—"}</span> },
@@ -168,6 +172,7 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
       dealStage: deal.dealStage,
       dealHealth: deal.dealHealth,
       priority: deal.priority,
+      invoiceStatus: deal.invoiceStatus ?? "NOT_INVOICED",
     } : {}),
   });
   const [saving, setSaving] = useState(false);
@@ -249,6 +254,7 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
               <FormSelect label="Deal Stage" value={form.dealStage} options={STAGE_OPTS} onChange={(v) => set("dealStage", v)} />
               <FormSelect label="Health" value={form.dealHealth} options={HEALTH_OPTS} onChange={(v) => set("dealHealth", v)} />
               <FormSelect label="Priority" value={form.priority} options={PRIORITY_OPTS} onChange={(v) => set("priority", v)} />
+              <FormSelect label="Invoice Status" value={form.invoiceStatus} options={INVOICE_OPTS} onChange={(v) => set("invoiceStatus", v)} />
             </div>
           </Section>
 
@@ -297,6 +303,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
             <DealHealthBadge value={deal.dealHealth} />
             <DealStageBadge value={deal.dealStage} />
             <PriorityBadge value={deal.priority} />
+            <InvoiceStatusBadge value={deal.invoiceStatus ?? "NOT_INVOICED"} />
           </div>
 
           {/* Key fields */}

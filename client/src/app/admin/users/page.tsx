@@ -8,6 +8,28 @@ import { UserCircle, Plus, KeyRound, Trash2, ShieldCheck, Link2 } from "lucide-r
 type BDO = { id: string; name: string; company: string };
 type UserRow = { id: string; email: string; role: string; bdoId: string | null; bdoName: string | null; mustChangePassword: boolean };
 
+// Access roles (must mirror USER_ROLES on the server), most to least access.
+const ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "CEO", label: "CEO" },
+  { value: "MANAGING_PARTNER", label: "Managing Partner" },
+  { value: "SENIOR_PARTNER", label: "Senior Partner / Consultant" },
+  { value: "SENIOR_BDO", label: "Senior BDO" },
+  { value: "BDO", label: "BDO" },
+  { value: "JUNIOR_BDO", label: "Junior BDO" },
+  { value: "INTERN", label: "Intern" },
+];
+const ROLE_LABELS: Record<string, string> = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
+// Roles that only see their own data — linking a staff profile matters most for these.
+const INDIVIDUAL_ROLES = ["SENIOR_BDO", "BDO", "JUNIOR_BDO", "INTERN"];
+
+function roleColor(role: string) {
+  if (role === "ADMIN") return "bg-purple-100 text-purple-700";
+  if (["CEO", "MANAGING_PARTNER", "SENIOR_PARTNER"].includes(role)) return "bg-amber-100 text-amber-700";
+  if (role === "SENIOR_BDO") return "bg-teal-100 text-teal-700";
+  return "bg-blue-100 text-blue-700";
+}
+
 function availableBdosFor(bdos: BDO[], users: UserRow[], excludeUserId?: string) {
   const taken = new Set(users.filter((u) => u.bdoId && u.id !== excludeUserId).map((u) => u.bdoId!));
   return bdos.filter((b) => !taken.has(b.id));
@@ -41,14 +63,14 @@ export default function ManageUsersPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
-          <p className="text-sm text-gray-500">Create and manage BDO login accounts</p>
+          <p className="text-sm text-gray-500">Create and manage staff login accounts</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <Plus size={16} />
-          Invite BDO
+          Invite Staff
         </button>
       </div>
 
@@ -87,8 +109,8 @@ export default function ManageUsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${u.role === "ADMIN" ? "bg-purple-100 text-purple-700" : u.role === "CEO" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"}`}>
-                      {u.role}
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${roleColor(u.role)}`}>
+                      {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -225,29 +247,27 @@ function CreateUserModal({ bdos, onClose, onSaved }: {
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Role</label>
             <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className="w-full border rounded-lg px-2 py-2 text-sm">
-              <option value="BDO">BDO</option>
-              <option value="ADMIN">Admin</option>
-              <option value="CEO">CEO</option>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
             </select>
           </div>
-          {(form.role === "BDO" || form.role === "ADMIN") && (
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">
-                Link to BDO Profile {form.role === "ADMIN" && <span className="text-gray-400 font-normal">(optional)</span>}
-              </label>
-              <select value={form.bdoId} onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value }))} className="w-full border rounded-lg px-2 py-2 text-sm">
-                <option value="">— {form.role === "ADMIN" ? "None" : "Select BDO"} —</option>
-                {bdos.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.company})</option>
-                ))}
-              </select>
-              <p className="text-[11px] text-gray-400 mt-1">
-                {form.role === "ADMIN"
-                  ? "An admin keeps full access but can also be a BDO — their deals are tracked and they get a “My BDO Dashboard” link."
-                  : "Linking a BDO profile means they only see their own data after login."}
-              </p>
-            </div>
-          )}
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">
+              Link to staff profile {!INDIVIDUAL_ROLES.includes(form.role) && <span className="text-gray-400 font-normal">(optional)</span>}
+            </label>
+            <select value={form.bdoId} onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value }))} className="w-full border rounded-lg px-2 py-2 text-sm">
+              <option value="">— {INDIVIDUAL_ROLES.includes(form.role) ? "Select staff member" : "None"} —</option>
+              {bdos.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.company})</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              {INDIVIDUAL_ROLES.includes(form.role)
+                ? "Linking a staff profile means they only see their own data after login."
+                : "Executives and admins keep full access. Linking a profile is optional — it also tracks their own deals."}
+            </p>
+          </div>
         </div>
         <div className="px-5 py-3 border-t flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
@@ -394,9 +414,9 @@ function ChangeRoleModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">New Role</label>
             <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">
-              <option value="BDO">BDO</option>
-              <option value="ADMIN">Admin</option>
-              <option value="CEO">CEO</option>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
             </select>
           </div>
         </div>

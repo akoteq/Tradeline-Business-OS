@@ -67,6 +67,7 @@ router.get('/performance', async (_req: Request, res: Response) => {
           phone: b.get('phone') ?? null,
           company: b.get('company'),
           role: b.get('role') ?? null,
+          managerId: b.get('managerId') ?? null,
           isActive: b.get('isActive'),
         },
         bapxDeals: bapxMap[id] ?? 0,

@@ -8,6 +8,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { useAuth } from "@/components/AuthProvider";
+import { useCompanies } from "@/lib/companies";
 
 type Task = {
   id: string;
@@ -29,16 +30,6 @@ type Task = {
 
 type Bdo = { id: string; name: string; company: string };
 
-const COMPANY_OPTS = [
-  { value: "BAPX", label: "BAPX" },
-  { value: "TRADELINE", label: "Tradeline" },
-  { value: "ALPHA_AFRICA", label: "Alpha Africa Consult Ltd" },
-  { value: "FINANCE_FACTORY", label: "Finance Factory Limited" },
-  { value: "COMMUNITY_FINANCE", label: "Community Finance Ltd" },
-  { value: "AKOTEQ", label: "Akoteq Ltd" },
-] as const;
-
-const COMPANY_LABELS: Record<string, string> = Object.fromEntries(COMPANY_OPTS.map((c) => [c.value, c.label]));
 
 const OUTCOME_OPTS = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "NO_RESPONSE"] as const;
 const OUTCOME_COLORS: Record<string, string> = {
@@ -73,6 +64,7 @@ export default function TasksPage() {
   const isBdo = user?.role === "BDO";
   const myBdoId = user?.bdoId ?? null;
 
+  const { companies, byKey } = useCompanies();
   const [view, setView] = useState<"" | "TASK" | "PROPOSAL">("");
   const [filters, setFilters] = useState({ priority: "", status: "", year: "", company: "", bdoId: "" });
   const [editing, setEditing] = useState<Task | null>(null);
@@ -136,7 +128,7 @@ export default function TasksPage() {
       exportValue: (r: Task) => r.targetDate ?? "",
     },
     ...(isBdo ? [] : [{ key: "bdo", label: "BDO", render: (r: Task) => r.bdo?.name ?? "—" }]),
-    { key: "company", label: "Company", render: (r: Task) => r.company ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.company === "BAPX" ? "bg-green-100 text-green-700" : r.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{COMPANY_LABELS[r.company] ?? r.company}</span> : "—" },
+    { key: "company", label: "Company", render: (r: Task) => r.company ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.company === "BAPX" ? "bg-green-100 text-green-700" : r.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{byKey[r.company]?.name ?? r.company}</span> : "—" },
     { key: "status", label: "Status", render: (r: Task) => <TaskStatusBadge value={r.status} />, sortable: true },
     { key: "notes", label: "Notes" },
   ];
@@ -210,7 +202,7 @@ export default function TasksPage() {
             </select>
             <select value={filters.company} onChange={(e) => setFilters((f) => ({ ...f, company: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
               <option value="">All Companies</option>
-              {COMPANY_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
             </select>
             {!isBdo && (
               <select value={filters.bdoId} onChange={(e) => setFilters((f) => ({ ...f, bdoId: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
@@ -262,6 +254,7 @@ function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClo
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { companies } = useCompanies();
   const [form, setForm] = useState({
     year: task?.year ?? new Date().getFullYear(),
     priority: task?.priority ?? "MEDIUM",
@@ -362,7 +355,7 @@ function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClo
             <div><label className="text-xs font-medium text-gray-600 block mb-1">{isProposal ? "Due / Sent Date" : "Target Date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></div>
             <div><label className="text-xs font-medium text-gray-600 block mb-1">Priority</label><select value={form.priority} onChange={(e) => set("priority", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{["HIGH","MEDIUM","LOW"].map((s) => <option key={s}>{s}</option>)}</select></div>
             <div><label className="text-xs font-medium text-gray-600 block mb-1">Status</label><select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{["PENDING","IN_PROGRESS","COMPLETED","OVERDUE","CANCELLED"].map((s) => <option key={s}>{s}</option>)}</select></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Company</label><select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{COMPANY_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
+            <div><label className="text-xs font-medium text-gray-600 block mb-1">Company</label><select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></div>
             {!isBdo && (
               <div><label className="text-xs font-medium text-gray-600 block mb-1">BDO</label><select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm"><option value="">— Unassigned —</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}</select></div>
             )}
