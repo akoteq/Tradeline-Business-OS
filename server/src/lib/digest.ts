@@ -1,7 +1,7 @@
 import { computeAlerts } from '../routes/alerts';
 import { sendEmail } from './mailer';
 import { User, INDIVIDUAL_ROLES, UserRole } from '../models/User';
-import { BDO } from '../models/Bdo';
+import { BDO } from '../models/BDO';
 
 // Builds and sends the twice-daily personalised alert digest. Each recipient gets a warm,
 // first-name-addressed email listing only the items that are actually theirs to act on.
