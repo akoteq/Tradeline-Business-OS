@@ -18,7 +18,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.9.0",
     "morgan": "^1.10.0",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -28,6 +30,8 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "xlsx": "^0.18.5"

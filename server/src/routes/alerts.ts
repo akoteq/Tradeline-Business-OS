@@ -3,6 +3,8 @@ import { TradelineDeal } from '../models/TradelineDeal';
 import { BapxDeal } from '../models/BapxDeal';
 import { CompanyDeal } from '../models/CompanyDeal';
 import { Task } from '../models/Task';
+import { KpiEntry } from '../models/KpiEntry';
+import { KpiDefinition, computeAttainment } from '../models/KpiDefinition';
 import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs } from '../lib/query';
 
@@ -11,11 +13,28 @@ const router = Router();
 const STALE_DAYS = 14;
 const DEADLINE_WINDOW_DAYS = 7;
 const OPEN_HEALTH = { $nin: ['CLOSED_WON', 'CLOSED_LOST'] };
+const HIGH_VALUE = 100000; // GHS — deals at or above this get escalated harder
 
 type Urgency = 'overdue' | 'today' | '1day' | '3days' | 'week';
 
 function daysBetween(later: Date, earlier: Date) {
   return Math.floor((later.getTime() - earlier.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Escalation rises the longer an item is unactioned: BDO → Senior BDO → Company Head → Executive.
+function escalate(daysOverdue: number): { severity: 'low' | 'medium' | 'high' | 'critical'; escalatedTo: string } {
+  if (daysOverdue >= 14) return { severity: 'critical', escalatedTo: 'Executive' };
+  if (daysOverdue >= 7) return { severity: 'high', escalatedTo: 'Company Head' };
+  if (daysOverdue >= 3) return { severity: 'medium', escalatedTo: 'Senior BDO' };
+  return { severity: 'low', escalatedTo: 'BDO' };
+}
+
+function monthBounds(): { start: Date; end: Date } {
+  const n = new Date();
+  return {
+    start: new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)),
+    end: new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1)),
+  };
 }
 
 function urgencyForDaysUntil(days: number): Urgency {
@@ -26,9 +45,10 @@ function urgencyForDaysUntil(days: number): Urgency {
   return 'week';
 }
 
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId');
+// Computes every alert category for an optional BDO scope. Shared by the GET /api/alerts
+// endpoint and the email-digest notification so both stay in sync.
+export async function computeAlerts(opts: { bdo?: string | null; bdoId?: string | null } = {}) {
+    const { bdo, bdoId } = opts;
     const dealFilter: Record<string, unknown> = {};
     if (bdo) {
       const ids = await bdoIdsByName(bdo);
@@ -115,7 +135,61 @@ router.get('/', async (req: Request, res: Response) => {
       ...(await toStale(staleCompany, 'COMPANY')),
     ].sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
 
-    res.json({ deadlines, stale });
+    // ── Overdue payments (Tradeline + Company deals) ──────────────────────────
+    const [tlPay, coPay] = await Promise.all([
+      TradelineDeal.find({ ...dealFilter, $or: [{ paymentStatus: 'OVERDUE' }, { invoiceStatus: 'OVERDUE' }] }),
+      CompanyDeal.find({ ...dealFilter, $or: [{ paymentStatus: 'OVERDUE' }, { invoiceStatus: 'OVERDUE' }] }),
+    ]);
+    const payMap = async (docs: typeof tlPay, type: 'TRADELINE' | 'COMPANY') => (await withBdo(docs)).map((d) => {
+      const balance = (d.balanceGhs as number) ?? 0;
+      const sev = balance >= HIGH_VALUE ? escalate(7) : balance >= 20000 ? escalate(3) : escalate(0);
+      return { id: d.id as string, type, businessName: d.businessName as string, company: (d.company as string) ?? type, balance, bdo: d.bdo as { id: string; name: string } | null, ...sev };
+    });
+    const payments = [...(await payMap(tlPay, 'TRADELINE')), ...(await payMap(coPay, 'COMPANY'))].sort((a, b) => b.balance - a.balance);
+
+    // ── High-value deals at risk ──────────────────────────────────────────────
+    const riskQuery = { ...dealFilter, dealHealth: { $in: ['AT_RISK', 'STALE'] } };
+    const [tlRisk, coRisk] = await Promise.all([
+      TradelineDeal.find({ ...riskQuery, revenuePotentialGhs: { $gte: HIGH_VALUE } }).sort({ revenuePotentialGhs: -1 }).limit(8),
+      CompanyDeal.find({ ...riskQuery, revenuePotentialGhs: { $gte: HIGH_VALUE } }).sort({ revenuePotentialGhs: -1 }).limit(8),
+    ]);
+    const riskMap = async (docs: typeof tlRisk, type: 'TRADELINE' | 'COMPANY') => (await withBdo(docs)).map((d) => ({
+      id: d.id as string, type, businessName: d.businessName as string, company: (d.company as string) ?? type,
+      value: (d.revenuePotentialGhs as number) ?? 0, dealHealth: d.dealHealth as string,
+      bdo: d.bdo as { id: string; name: string } | null,
+      severity: 'high' as const, escalatedTo: 'Executive',
+    }));
+    const highValueRisks = [...(await riskMap(tlRisk, 'TRADELINE')), ...(await riskMap(coRisk, 'COMPANY'))].sort((a, b) => b.value - a.value);
+
+    // ── KPIs below target this month ──────────────────────────────────────────
+    const { start, end } = monthBounds();
+    const entryFilter: Record<string, unknown> = { period: { $gte: start, $lt: end } };
+    if (dealFilter.bdoId) entryFilter.bdoId = dealFilter.bdoId;
+    const kpiEntries = await KpiEntry.find(entryFilter);
+    const defIds = [...new Set(kpiEntries.map((e) => e.get('definitionId')))];
+    const defs = defIds.length ? await KpiDefinition.find({ _id: { $in: defIds } }) : [];
+    const defMap: Record<string, { metric: string; department: string; higherIsBetter: boolean }> = {};
+    defs.forEach((d) => { defMap[d.id] = { metric: d.get('metric'), department: d.get('department'), higherIsBetter: d.get('higherIsBetter') }; });
+    const kpiRisks = kpiEntries
+      .map((e) => {
+        const def = defMap[e.get('definitionId')];
+        if (!def) return null;
+        const { status, attainment } = computeAttainment(e.get('current'), e.get('target'), def.higherIsBetter);
+        if (status !== 'OFF_TRACK') return null;
+        return { id: e.id as string, metric: def.metric, department: def.department, current: e.get('current'), target: e.get('target'), attainment, bdoId: e.get('bdoId'), severity: 'high' as const, escalatedTo: 'Senior BDO' };
+      })
+      .filter(Boolean);
+
+    const criticalCount = payments.filter((a) => a.severity === 'critical').length + highValueRisks.length;
+    const total = deadlines.length + stale.length + payments.length + highValueRisks.length + kpiRisks.length;
+
+    return { deadlines, stale, payments, highValueRisks, kpiRisks, summary: { total, critical: criticalCount } };
+}
+
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const data = await computeAlerts({ bdo: qs(req, 'bdo'), bdoId: qs(req, 'bdoId') });
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch alerts' });
   }

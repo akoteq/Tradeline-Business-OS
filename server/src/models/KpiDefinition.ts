@@ -5,26 +5,32 @@ import { jsonTransform } from '../lib/jsonTransform';
 // KPI Framework. Actual period values live in KpiEntry, keyed by definitionId.
 export const KPI_UNITS = ['COUNT', 'CURRENCY', 'PERCENT', 'SCORE', 'DAYS', 'HOURS'] as const;
 export const KPI_FREQUENCIES = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'] as const;
-// Whose performance a KPI describes — group-wide, a single company, a department, or an individual BDO.
-export const KPI_SCOPES = ['GROUP', 'COMPANY', 'DEPARTMENT', 'BDO'] as const;
+// The entity a KPI belongs to: the whole group, or a specific company key.
+export const KPI_GROUP = 'GROUP';
+
+// How a KPI's actual value is obtained: computed live from app data, or typed by a person.
+export const KPI_SOURCES = ['MANUAL', 'AUTO'] as const;
 
 const KpiDefinitionSchema = new Schema({
   metric:             { type: String, required: true },   // e.g. "Revenue Received"
-  department:         { type: String },                   // e.g. "Finance", "Business Development", "HR"
-  category:           { type: String },                   // e.g. "Revenue", "Sales"
-  definition:         { type: String },
-  formula:            { type: String },
+  company:            { type: String, default: KPI_GROUP }, // 'GROUP' or a company key (BAPX, TRADELINE, …)
+  department:         { type: String },                   // optional sub-grouping, e.g. "Finance", "HR"
+  definition:         { type: String },                   // short description shown when entering values
   unit:               { type: String, enum: KPI_UNITS, default: 'COUNT' },
   higherIsBetter:     { type: Boolean, default: true },   // false for metrics like Sales Cycle, Overdue Follow-ups
   frequency:          { type: String, enum: KPI_FREQUENCIES, default: 'MONTHLY' },
-  scope:              { type: String, enum: KPI_SCOPES, default: 'DEPARTMENT' },
-  company:            { type: String, default: null },    // company key for COMPANY-scoped KPIs
-  ownerName:          { type: String },                   // e.g. "Ebo Awortwe (Finance & Investment Analyst)"
-  ownerId:            { type: String, default: null },    // staff (BDO) id, if resolvable
-  strategicObjective: { type: String },
-  linkedDashboard:    { type: String },                   // e.g. "01_Board_Dashboard"
+  source:             { type: String, enum: KPI_SOURCES, default: 'MANUAL' }, // AUTO ⇒ actual computed from data
+  autoKey:            { type: String, default: null },    // which auto-feed metric powers an AUTO KPI
   order:              { type: Number, default: 100 },
   isActive:           { type: Boolean, default: true },
+  // — deprecated (retained so existing docs keep their data; no longer edited in-app) —
+  scope:              { type: String },
+  category:           { type: String },
+  formula:            { type: String },
+  ownerName:          { type: String },
+  ownerId:            { type: String, default: null },
+  strategicObjective: { type: String },
+  linkedDashboard:    { type: String },
 }, { timestamps: true });
 
 KpiDefinitionSchema.index({ department: 1, order: 1 });

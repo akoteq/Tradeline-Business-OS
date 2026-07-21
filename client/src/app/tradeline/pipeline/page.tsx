@@ -31,6 +31,8 @@ type TradelineDeal = {
   balanceGhs: number | null;
   paymentStatus: string;
   invoiceStatus: string;
+  currency: string | null;
+  exchangeRate: number | null;
   dealStage: string;
   priority: string;
   dealHealth: string;
@@ -44,6 +46,7 @@ const STAGE_OPTS = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION"
 const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
 const PAYMENT_OPTS = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
 const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
+const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
 
 const EMPTY_FORM = {
   businessName: "", smeId: "", valueChain: "", email: "", telephone: "",
@@ -52,6 +55,7 @@ const EMPTY_FORM = {
   revenuePotentialGhs: "", expectedRevenueReceivedGhs: "", revenueReceivedGhs: "",
   tier: "TIER_1", dealStage: "QUALIFICATION", dealHealth: "ACTIVE",
   priority: "MEDIUM", paymentStatus: "UNPAID", invoiceStatus: "NOT_INVOICED",
+  currency: "GHS", exchangeRate: "",
 };
 
 const fmt = (n: number) => n.toLocaleString();
@@ -224,6 +228,10 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
 function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, onSaved }: { deal: TradelineDeal | null; bdos: BdoOption[]; clients: ClientOption[]; isBdoRole: boolean; currentBdoId: string | null; onClose: () => void; onSaved: () => void }) {
+  const dCur = deal?.currency ?? "GHS";
+  const dRate = deal?.exchangeRate ?? 1;
+  const disp = (ghs: number | null | undefined) =>
+    ghs == null ? "" : String(dCur === "GHS" || !dRate ? ghs : Math.round((ghs / dRate) * 100) / 100);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(isBdoRole && currentBdoId ? { bdoId: currentBdoId } : {}),
@@ -237,9 +245,11 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
       nextAction: deal.nextAction ?? "",
       bdoId: deal.bdoId ?? "",
       dueDate: deal.dueDate ? deal.dueDate.slice(0, 10) : "",
-      revenuePotentialGhs: deal.revenuePotentialGhs != null ? String(deal.revenuePotentialGhs) : "",
-      expectedRevenueReceivedGhs: deal.expectedRevenueReceivedGhs != null ? String(deal.expectedRevenueReceivedGhs) : "",
-      revenueReceivedGhs: deal.revenueReceivedGhs != null ? String(deal.revenueReceivedGhs) : "",
+      revenuePotentialGhs: disp(deal.revenuePotentialGhs),
+      expectedRevenueReceivedGhs: disp(deal.expectedRevenueReceivedGhs),
+      revenueReceivedGhs: disp(deal.revenueReceivedGhs),
+      currency: dCur,
+      exchangeRate: dCur === "GHS" ? "" : String(dRate),
       tier: deal.tier,
       dealStage: deal.dealStage,
       dealHealth: deal.dealHealth,
@@ -267,14 +277,18 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
       setError("Expected Revenue Received cannot exceed Revenue Potential."); return;
     }
     setSaving(true); setError("");
+    // Convert entered amounts to GHS (the stored / reporting currency).
+    const rate = form.currency === "GHS" ? 1 : (Number(form.exchangeRate) || 1);
     const body = {
       ...form,
       smeId: form.smeId || null,
       bdoId: form.bdoId || null,
       dueDate: form.dueDate || null,
-      revenuePotentialGhs: potential,
-      expectedRevenueReceivedGhs: expected,
-      revenueReceivedGhs: received,
+      revenuePotentialGhs: potential != null ? potential * rate : null,
+      expectedRevenueReceivedGhs: expected != null ? expected * rate : null,
+      revenueReceivedGhs: received != null ? received * rate : null,
+      balanceGhs: Math.max(0, ((expected ?? 0) - (received ?? 0)) * rate),
+      exchangeRate: rate,
       valueChain: form.valueChain || null,
       email: form.email || null,
       telephone: form.telephone || null,
@@ -312,12 +326,19 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
                   fallbackLabel={form.businessName || undefined}
                   onChange={(id) => {
                     const match = clients.find((c) => c.id === id);
-                    set("smeId", id);
-                    set("businessName", match?.companyName ?? "");
+                    setForm((f) => ({
+                      ...f,
+                      smeId: id,
+                      businessName: match?.companyName ?? "",
+                      // Pre-fill known details from the client record (only where empty is fine to overwrite on a fresh pick).
+                      valueChain: match?.valueChain ?? f.valueChain,
+                      email: match?.email ?? f.email,
+                      telephone: match?.phone ?? f.telephone,
+                    }));
                   }}
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add the client in Client Overview first →</Link>
+                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
                 </p>
               </div>
               <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />
@@ -350,12 +371,18 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
 
           {/* Revenue */}
           <Section label="Revenue & Payment">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <FormSelect label="Currency" value={form.currency} options={CURRENCIES} onChange={(v) => set("currency", v)} />
+              {form.currency !== "GHS" && (
+                <Field label={`Exchange rate (1 ${form.currency} = ? GHS)`} type="number" min={0} value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} />
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Revenue Potential (GHS)" type="number" min={0} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} />
-              <Field label="Expected Revenue Received (GHS)" type="number" min={0} value={form.expectedRevenueReceivedGhs} onChange={(v) => set("expectedRevenueReceivedGhs", v)} />
-              <Field label="Revenue Received (GHS)" type="number" min={0} value={form.revenueReceivedGhs} onChange={(v) => set("revenueReceivedGhs", v)} />
+              <Field label={`Revenue Potential (${form.currency})`} type="number" min={0} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} />
+              <Field label={`Expected Revenue Received (${form.currency})`} type="number" min={0} value={form.expectedRevenueReceivedGhs} onChange={(v) => set("expectedRevenueReceivedGhs", v)} />
+              <Field label={`Revenue Received (${form.currency})`} type="number" min={0} value={form.revenueReceivedGhs} onChange={(v) => set("revenueReceivedGhs", v)} />
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Balance (GHS)</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Balance ({form.currency})</label>
                 <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700">
                   {computedBalance.toLocaleString()}
                 </div>

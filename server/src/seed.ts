@@ -9,7 +9,6 @@ import { Lead } from './models/Lead';
 import { SME } from './models/SME';
 import { Partnership } from './models/Partnership';
 import { GrantLoanTracker } from './models/GrantLoanTracker';
-import { KpiScorecard } from './models/KpiScorecard';
 import { Task } from './models/Task';
 import { ConsolidatedRecord } from './models/ConsolidatedRecord';
 import { ActivityLog } from './models/ActivityLog';
@@ -530,47 +529,6 @@ async function seedLeadsFromBdDb() {
   console.log(`  ${toInsert.length} additional leads seeded from BD Database`);
 }
 
-async function seedKpi() {
-  console.log('Seeding KPI Scorecard...');
-  const rows = readSheetRaw(FILES.main, '📈 KPI SCORECARD');
-  let headerIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const r = rows[i];
-    if (r && String(r[0] ?? '').toUpperCase().replace(/\s+/g, ' ').includes('KPI METRIC')) {
-      headerIdx = i;
-      break;
-    }
-  }
-  if (headerIdx === -1) { console.log('  KPI SCORECARD sheet headers not found'); return; }
-
-  const month = new Date('2026-06-01');
-  let count = 0;
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const r = rows[i];
-    const kpiMetric = str(r[0]);
-    if (!kpiMetric) continue;
-    const company = kpiMetric.toLowerCase().includes('bapx') ? 'BAPX' : 'TRADELINE';
-    const targetRaw = str(r[3]);
-    let benchmarkTarget: number | null = null;
-    if (targetRaw) {
-      const m = targetRaw.replace(/,/g, '').match(/\d+\.?\d*/);
-      if (m) benchmarkTarget = parseFloat(m[0]);
-    }
-    await new KpiScorecard({
-      month,
-      company,
-      kpiMetric,
-      currentValue: num(r[1]),
-      unit: str(r[2]),
-      benchmarkTarget,
-      status: str(r[4]),
-      managementNotes: str(r[5]),
-    }).save().catch(() => {});
-    count++;
-  }
-  console.log(`  ${count} KPI records seeded`);
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -582,7 +540,6 @@ async function main() {
   await Promise.all([
     ActivityLog.deleteMany({}),
     GrantLoanTracker.deleteMany({}),
-    KpiScorecard.deleteMany({}),
     Task.deleteMany({}),
     ConsolidatedRecord.deleteMany({}),
     Partnership.deleteMany({}),
@@ -602,7 +559,6 @@ async function main() {
   await seedLeadsFromBdDb();
   await seedPartnerships();
   await seedGrantLoans();
-  await seedKpi();
   await seedConsolidated();
   await seedFredActivityLog();
   await seedSchemeOfWork();

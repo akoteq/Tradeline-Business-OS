@@ -76,21 +76,13 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
             <MoneyTile label="Outstanding" value={isBapx ? "—" : fmt(data.revenue.outstanding)} tone="amber" />
           </div>
 
-          {/* Breakdowns */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Breakdown title="By Stage" rows={data.byStage.map((s) => ({ label: <DealStageBadge value={s.dealStage} />, count: s.count }))} />
-            <Breakdown title="By Health" rows={data.byHealth.map((s) => ({ label: <DealHealthBadge value={s.dealHealth} />, count: s.count }))} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Breakdown title="Invoice Status" rows={data.invoice.map((s) => ({ label: <InvoiceStatusBadge value={s.status} />, count: s.count }))} />
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h3 className="font-semibold text-gray-800 text-sm mb-3">Scheme of Work</h3>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <MiniStat label="Open" value={data.tasks.open} />
-                <MiniStat label="Overdue" value={data.tasks.overdue} accent={data.tasks.overdue > 0 ? "text-red-600" : undefined} />
-                <MiniStat label="Completed" value={data.tasks.completed} accent="text-green-600" />
-              </div>
+          {/* Scheme of Work */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-800 text-sm mb-3">Scheme of Work</h3>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <MiniStat label="Open" value={data.tasks.open} />
+              <MiniStat label="Overdue" value={data.tasks.overdue} accent={data.tasks.overdue > 0 ? "text-red-600" : undefined} />
+              <MiniStat label="Completed" value={data.tasks.completed} accent="text-green-600" />
             </div>
           </div>
 
@@ -106,7 +98,7 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      {["Business", "Stage", "Health", isBapx ? "Target" : "Received", "Invoice"].map((h) => (
+                      {["Business", "Stage", "Health", isBapx ? "Target" : "Potential", "Invoice"].map((h) => (
                         <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                       ))}
                     </tr>
@@ -117,7 +109,7 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
                         <td className="px-3 py-2.5 font-medium text-gray-900 max-w-[200px] truncate">{d.businessName}</td>
                         <td className="px-3 py-2.5"><DealStageBadge value={d.dealStage} /></td>
                         <td className="px-3 py-2.5"><DealHealthBadge value={d.dealHealth} /></td>
-                        <td className="px-3 py-2.5 font-medium text-gray-700">{fmt(isBapx ? d.potential : d.received)}</td>
+                        <td className="px-3 py-2.5 font-medium text-gray-700">{fmt(d.potential)}</td>
                         <td className="px-3 py-2.5"><InvoiceStatusBadge value={d.invoiceStatus} /></td>
                       </tr>
                     ))}
@@ -165,26 +157,3 @@ function MiniStat({ label, value, accent = "text-gray-900" }: { label: string; v
   );
 }
 
-function Breakdown({ title, rows }: { title: string; rows: { label: React.ReactNode; count: number }[] }) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="font-semibold text-gray-800 text-sm mb-3">{title}</h3>
-      {rows.length === 0 ? (
-        <p className="text-xs text-gray-400">No data.</p>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((r, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="w-32 shrink-0">{r.label}</div>
-              <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div className="bg-indigo-400 h-full rounded-full" style={{ width: `${(r.count / max) * 100}%` }} />
-              </div>
-              <div className="w-8 text-right text-sm font-medium text-gray-700 tabular-nums">{r.count}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

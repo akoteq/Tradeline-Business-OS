@@ -5,6 +5,8 @@ import { User, USER_ROLES, UserRole } from '../models/User';
 import { BDO } from '../models/BDO';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { param } from '../lib/query';
+import { generateTempPassword } from '../lib/password';
+import { sendInviteEmail } from '../lib/inviteEmail';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -86,6 +88,85 @@ router.post('/users', requireAuth, requireAdmin, async (req: Request, res: Respo
     res.status(201).json({ ...json, bdoName: bdo?.get('name') ?? null });
   } catch (err) {
     res.status(400).json({ error: 'Failed to create user', detail: String(err) });
+  }
+});
+
+// Admin: onboard a team member in one shot — creates the staff profile AND a login
+// account with an auto-generated temporary password, then emails them the invite.
+router.post('/onboard', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { name, email, phone, company, role, accessRole = 'BDO', managerId } = req.body;
+  if (!name || !email) { res.status(400).json({ error: 'Name and email are required' }); return; }
+  if (!company) { res.status(400).json({ error: 'Company is required' }); return; }
+  if (!USER_ROLES.includes(accessRole as UserRole)) { res.status(400).json({ error: 'Invalid access role' }); return; }
+  try {
+    const existing = await User.findOne({ email });
+    if (existing) { res.status(400).json({ error: 'A login with this email already exists' }); return; }
+
+    const bdo = await new BDO({ name, email, phone: phone || null, company, role: role || null, managerId: managerId || null }).save();
+
+    const tempPassword = generateTempPassword();
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    const user = await new User({ email, password: hashed, role: accessRole, bdoId: bdo.id, mustChangePassword: true }).save();
+
+    const emailResult = await sendInviteEmail({ to: email, name, password: tempPassword });
+
+    res.status(201).json({
+      bdo: bdo.toJSON(),
+      user: { ...(user.toJSON() as Record<string, unknown>), bdoName: bdo.get('name') },
+      tempPassword,
+      emailSent: emailResult.sent,
+      emailError: emailResult.sent ? undefined : (emailResult.error ?? 'Email not sent'),
+    });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to onboard team member', detail: String(err) });
+  }
+});
+
+// Admin: create a login for an EXISTING staff profile (one that has no account yet) and
+// email them the invite. Used to onboard the profiles that pre-date the login system.
+router.post('/bdos/:id/invite', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const bdo = await BDO.findById(param(req, 'id'));
+    if (!bdo) { res.status(404).json({ error: 'Staff profile not found' }); return; }
+    const email = (req.body.email || bdo.get('email') || '').trim();
+    if (!email) { res.status(400).json({ error: 'This profile has no email — add one to invite them.' }); return; }
+    const accessRole = (req.body.accessRole || 'BDO') as UserRole;
+    if (!USER_ROLES.includes(accessRole)) { res.status(400).json({ error: 'Invalid access role' }); return; }
+
+    const existing = await User.findOne({ email });
+    if (existing) { res.status(400).json({ error: 'A login with this email already exists' }); return; }
+
+    const tempPassword = generateTempPassword();
+    const hashed = await bcrypt.hash(tempPassword, 10);
+    const user = await new User({ email, password: hashed, role: accessRole, bdoId: bdo.id, mustChangePassword: true }).save();
+    if (!bdo.get('email')) { bdo.set('email', email); await bdo.save(); }
+
+    const emailResult = await sendInviteEmail({ to: email, name: bdo.get('name'), password: tempPassword });
+    res.status(201).json({
+      user: { ...(user.toJSON() as Record<string, unknown>), bdoName: bdo.get('name') },
+      tempPassword,
+      emailSent: emailResult.sent,
+      emailError: emailResult.sent ? undefined : (emailResult.error ?? 'Email not sent'),
+    });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to invite staff profile', detail: String(err) });
+  }
+});
+
+// Admin: regenerate a user's temporary password and re-send the invite email.
+router.post('/users/:id/resend-invite', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const user = await User.findById(param(req, 'id'));
+    if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    const tempPassword = generateTempPassword();
+    user.set('password', await bcrypt.hash(tempPassword, 10));
+    user.set('mustChangePassword', true);
+    await user.save();
+    const bdo = user.get('bdoId') ? await BDO.findById(user.get('bdoId')) : null;
+    const emailResult = await sendInviteEmail({ to: user.get('email'), name: bdo?.get('name') ?? null, password: tempPassword, resend: true });
+    res.json({ tempPassword, emailSent: emailResult.sent, emailError: emailResult.sent ? undefined : (emailResult.error ?? 'Email not sent') });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to resend invite', detail: String(err) });
   }
 });
 

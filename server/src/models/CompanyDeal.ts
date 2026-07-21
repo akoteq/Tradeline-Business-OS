@@ -8,6 +8,7 @@ const CompanyDealSchema = new Schema({
   // Company is a dynamic key from the Company collection (dealSource=COMPANY), not a fixed enum,
   // so admins can add new companies. COMPANY_KEYS below are just the original defaults.
   company:             { type: String, required: true },
+  smeId:               { type: String, default: null },   // links to the shared client (SME) record
   businessName:        { type: String, required: true },
   clientName:          { type: String },
   email:               { type: String },
@@ -25,6 +26,10 @@ const CompanyDealSchema = new Schema({
   revenuePotentialGhs: { type: Number },
   revenueReceivedGhs:  { type: Number, default: 0 },
   balanceGhs:          { type: Number },
+  // Multi-currency: amounts above are always stored in GHS (the reporting currency).
+  // currency + exchangeRate record how they were entered (e.g. USD @ 15 → GHS).
+  currency:            { type: String, enum: ['GHS', 'USD', 'EUR', 'NGN', 'RWF'], default: 'GHS' },
+  exchangeRate:        { type: Number, default: 1 },
   nextSteps:           { type: String },
   nextCallDate:        { type: Date },
   notes:               { type: String },

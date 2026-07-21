@@ -12,7 +12,6 @@ import leadsRouter from './routes/leads';
 import smeRouter from './routes/sme';
 import partnershipsRouter from './routes/partnerships';
 import grantLoansRouter from './routes/grantLoans';
-import kpiRouter from './routes/kpi';
 import kpiFrameworkRouter from './routes/kpiFramework';
 import tasksRouter from './routes/tasks';
 import activityLogRouter from './routes/activityLog';
@@ -23,9 +22,13 @@ import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
 import companyDealsRouter from './routes/companyDeals';
 import companiesRouter from './routes/companies';
+import referralsRouter from './routes/referrals';
 import alertsRouter from './routes/alerts';
 import clientDocumentsRouter from './routes/clientDocuments';
 import clientNotesRouter from './routes/clientNotes';
+import notificationsRouter from './routes/notifications';
+import { verifyEmailTransport } from './lib/mailer';
+import { startScheduler } from './lib/scheduler';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -65,7 +68,6 @@ app.use('/api/leads', leadsRouter);
 app.use('/api/sme', smeRouter);
 app.use('/api/partnerships', partnershipsRouter);
 app.use('/api/grant-loans', grantLoansRouter);
-app.use('/api/kpi', kpiRouter);
 app.use('/api/kpi-framework', kpiFrameworkRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/activity-log', activityLogRouter);
@@ -75,9 +77,11 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/company-deals', companyDealsRouter);
 app.use('/api/companies', companiesRouter);
+app.use('/api/referrals', referralsRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/client-documents', clientDocumentsRouter);
 app.use('/api/client-notes', clientNotesRouter);
+app.use('/api/notifications', notificationsRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -86,6 +90,8 @@ app.get('/health', (_req, res) => {
 connectDB()
   .then(async () => {
     await ensureCompaniesSeeded();
+    verifyEmailTransport().catch(() => {});
+    startScheduler();
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });

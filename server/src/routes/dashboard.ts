@@ -118,6 +118,101 @@ router.get('/ceo', async (_req: Request, res: Response) => {
   }
 });
 
+// Normalized one-line summary for a company (used by the executive & all-companies views).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function companySummary(company: any) {
+  const key = company.get('key');
+  const source = company.get('dealSource') as 'BAPX' | 'TRADELINE' | 'COMPANY';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let Model: any = CompanyDeal;
+  let match: Record<string, unknown> = { company: key };
+  if (source === 'BAPX') { Model = BapxDeal; match = {}; }
+  else if (source === 'TRADELINE') { Model = TradelineDeal; match = {}; }
+
+  const [total, active, closedWon, rev] = await Promise.all([
+    Model.countDocuments(match),
+    Model.countDocuments({ ...match, dealHealth: 'ACTIVE' }),
+    Model.countDocuments({ ...match, dealStage: 'CLOSED_WON' }),
+    source === 'BAPX'
+      ? BapxDeal.aggregate([{ $group: { _id: null, t: { $sum: '$targetGhs' } } }])
+      : Model.aggregate([{ $match: match }, { $group: { _id: null, p: { $sum: '$revenuePotentialGhs' }, rec: { $sum: '$revenueReceivedGhs' }, bal: { $sum: '$balanceGhs' } } }]),
+  ]);
+  const r = rev[0] ?? {};
+  const revenue = source === 'BAPX'
+    ? { potential: r.t ?? 0, received: 0, outstanding: 0 }
+    : { potential: r.p ?? 0, received: r.rec ?? 0, outstanding: r.bal ?? 0 };
+  return {
+    key, name: company.get('name'), slug: company.get('slug'), color: company.get('color'),
+    dealSource: source, total, active, closedWon, revenue,
+  };
+}
+
+// Executive dashboard — group-wide roll-up across every company, KPI health for the period,
+// and auto-surfaced top deals & top risks. Powers both /executive and /companies.
+router.get('/executive', async (req: Request, res: Response) => {
+  try {
+    const companies = await Company.find({ isActive: true }).sort({ order: 1, name: 1 });
+    const summaries = await Promise.all(companies.map(companySummary));
+    const totals = summaries.reduce((a, s) => ({
+      deals: a.deals + s.total,
+      active: a.active + s.active,
+      closedWon: a.closedWon + s.closedWon,
+      potential: a.potential + s.revenue.potential,
+      received: a.received + s.revenue.received,
+      outstanding: a.outstanding + s.revenue.outstanding,
+    }), { deals: 0, active: 0, closedWon: 0, potential: 0, received: 0, outstanding: 0 });
+
+    // KPI health across all entries for the period
+    const { start, end } = monthBounds(String(req.query.period ?? ''));
+    const entries = await KpiEntry.find({ period: { $gte: start, $lt: end } });
+    const defIds = [...new Set(entries.map((e) => e.get('definitionId')))];
+    const defs = defIds.length ? await KpiDefinition.find({ _id: { $in: defIds } }) : [];
+    const hib: Record<string, boolean> = {};
+    defs.forEach((d) => { hib[d.id] = d.get('higherIsBetter'); });
+    const kpiHealth = { onTrack: 0, atRisk: 0, offTrack: 0, noTarget: 0 };
+    entries.forEach((e) => {
+      const { status } = computeAttainment(e.get('current'), e.get('target'), hib[e.get('definitionId')] ?? true);
+      if (status === 'ON_TRACK') kpiHealth.onTrack += 1;
+      else if (status === 'AT_RISK') kpiHealth.atRisk += 1;
+      else if (status === 'OFF_TRACK') kpiHealth.offTrack += 1;
+      else kpiHealth.noTarget += 1;
+    });
+
+    const companyByKey: Record<string, string> = {};
+    companies.forEach((c) => { companyByKey[c.get('key')] = c.get('name'); });
+
+    // Top deals (by revenue potential) and top risks (at-risk/stale, by value) across pipelines.
+    // BAPX deals use targetGhs as their revenue-potential figure.
+    const risk = { dealHealth: { $in: ['AT_RISK', 'STALE'] } };
+    const [tlTop, coTop, bapxTop, tlRisk, coRisk, bapxRisk] = await Promise.all([
+      TradelineDeal.find().sort({ revenuePotentialGhs: -1 }).limit(6),
+      CompanyDeal.find().sort({ revenuePotentialGhs: -1 }).limit(6),
+      BapxDeal.find().sort({ targetGhs: -1 }).limit(6),
+      TradelineDeal.find(risk).sort({ revenuePotentialGhs: -1 }).limit(6),
+      CompanyDeal.find(risk).sort({ revenuePotentialGhs: -1 }).limit(6),
+      BapxDeal.find(risk).sort({ targetGhs: -1 }).limit(6),
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dealRow = (d: any, company: string, amount: number) => ({
+      businessName: d.get('businessName'), company, amount, dealStage: d.get('dealStage'), dealHealth: d.get('dealHealth'),
+    });
+    const topDeals = [
+      ...tlTop.map((d) => dealRow(d, 'Tradeline Consult', d.get('revenuePotentialGhs') ?? 0)),
+      ...coTop.map((d) => dealRow(d, companyByKey[d.get('company')] ?? d.get('company'), d.get('revenuePotentialGhs') ?? 0)),
+      ...bapxTop.map((d) => dealRow(d, 'BAPX', d.get('targetGhs') ?? 0)),
+    ].sort((a, b) => b.amount - a.amount).slice(0, 6);
+    const topRisks = [
+      ...tlRisk.map((d) => dealRow(d, 'Tradeline Consult', d.get('revenuePotentialGhs') ?? 0)),
+      ...coRisk.map((d) => dealRow(d, companyByKey[d.get('company')] ?? d.get('company'), d.get('revenuePotentialGhs') ?? 0)),
+      ...bapxRisk.map((d) => dealRow(d, 'BAPX', d.get('targetGhs') ?? 0)),
+    ].sort((a, b) => b.amount - a.amount).slice(0, 8);
+
+    res.json({ totals, companies: summaries, kpiHealth, topDeals, topRisks });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch executive dashboard', detail: String(err) });
+  }
+});
+
 // Per-company dashboard — normalizes the three deal shapes (BapxDeal / TradelineDeal / CompanyDeal)
 // into one summary so any company (including admin-added ones) has its own dashboard.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,18 +255,18 @@ router.get('/company/:key', async (req: Request, res: Response) => {
       base = await dealAgg(BapxDeal, {});
       const r = await BapxDeal.aggregate([{ $group: { _id: null, t: { $sum: '$targetGhs' } } }]);
       revenue = { revenuePotential: r[0]?.t ?? 0, revenueReceived: 0, outstanding: 0 };
-      topDeals = (await BapxDeal.find().sort({ targetGhs: -1 }).limit(5)).map((d) => dealCard(d, 'targetGhs'));
+      topDeals = (await BapxDeal.find().sort({ targetGhs: -1 }).limit(10)).map((d) => dealCard(d, 'targetGhs'));
     } else if (source === 'TRADELINE') {
       base = await dealAgg(TradelineDeal, {});
       const r = await TradelineDeal.aggregate([{ $group: { _id: null, p: { $sum: '$revenuePotentialGhs' }, rec: { $sum: '$revenueReceivedGhs' }, bal: { $sum: '$balanceGhs' } } }]);
       const rr = r[0] ?? {}; revenue = { revenuePotential: rr.p ?? 0, revenueReceived: rr.rec ?? 0, outstanding: rr.bal ?? 0 };
-      topDeals = (await TradelineDeal.find().sort({ revenueReceivedGhs: -1 }).limit(5)).map((d) => dealCard(d, 'revenueReceivedGhs'));
+      topDeals = (await TradelineDeal.find().sort({ revenuePotentialGhs: -1 }).limit(10)).map((d) => dealCard(d, 'revenueReceivedGhs'));
     } else {
       const match = { company: key };
       base = await dealAgg(CompanyDeal, match);
       const r = await CompanyDeal.aggregate([{ $match: match }, { $group: { _id: null, p: { $sum: '$revenuePotentialGhs' }, rec: { $sum: '$revenueReceivedGhs' }, bal: { $sum: '$balanceGhs' } } }]);
       const rr = r[0] ?? {}; revenue = { revenuePotential: rr.p ?? 0, revenueReceived: rr.rec ?? 0, outstanding: rr.bal ?? 0 };
-      topDeals = (await CompanyDeal.find(match).sort({ revenueReceivedGhs: -1 }).limit(5)).map((d) => dealCard(d, 'revenueReceivedGhs'));
+      topDeals = (await CompanyDeal.find(match).sort({ revenuePotentialGhs: -1 }).limit(10)).map((d) => dealCard(d, 'revenueReceivedGhs'));
     }
 
     const [taskOpen, taskOverdue, taskCompleted] = await Promise.all([

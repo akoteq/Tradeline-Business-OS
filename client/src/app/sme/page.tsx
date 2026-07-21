@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
+import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, FileText, Trash2 } from "lucide-react";
 
@@ -236,7 +237,7 @@ export default function SmePage() {
             <FilterSelect value={filters.tier} options={[{ value: "", label: "All Tiers" }, ...TIER_OPTS.map((t) => ({ value: t, label: t.replace("_", " ") }))]} onChange={(v) => setFilter("tier", v)} />
             <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...bdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilter("bdo", v)} />
             <input value={filters.valueChain} onChange={(e) => setFilter("valueChain", e.target.value)} placeholder="Value chain…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-32" />
-            <input value={filters.region} onChange={(e) => setFilter("region", e.target.value)} placeholder="Region…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-28" />
+            <FilterSelect value={filters.region} options={[{ value: "", label: "All Regions" }, ...GHANA_REGIONS.map((r) => ({ value: r, label: r }))]} onChange={(v) => setFilter("region", v)} />
           </div>
         }
       />
@@ -382,7 +383,14 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
               <Field label="Phone" value={form.phone} onChange={(v) => set("phone", v)} />
               <Field label="Alternate Phone" value={form.altPhone} onChange={(v) => set("altPhone", v)} />
               <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
-              <Field label="Region" value={form.region} onChange={(v) => set("region", v)} />
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
+                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="">— Select region —</option>
+                  {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+                  {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
               <Field label="Town / District" value={form.district} onChange={(v) => set("district", v)} />
               <Field label="Address" value={form.address} onChange={(v) => set("address", v)} span={2} />
               <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />

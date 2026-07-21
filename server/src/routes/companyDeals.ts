@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { CompanyDeal } from '../models/CompanyDeal';
 import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
+import { backfillSmeRegion } from '../lib/smeSync';
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const deal = await new CompanyDeal(req.body).save();
+    await backfillSmeRegion(req.body.smeId, req.body.region).catch(() => {});
     res.status(201).json(deal.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to create deal', detail: String(err) });
@@ -62,6 +64,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       param(req, 'id'), req.body, { new: true, runValidators: true },
     );
     if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
+    await backfillSmeRegion(req.body.smeId, req.body.region).catch(() => {});
     res.json(deal.toJSON());
   } catch (err) {
     res.status(400).json({ error: 'Failed to update deal', detail: String(err) });

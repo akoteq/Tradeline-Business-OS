@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-export type ClientOption = { id: string; companyName: string };
+// The list only needs id + companyName to render; the rest are optional and used by
+// forms to auto-fill client details when one is selected.
+export type ClientOption = {
+  id: string;
+  companyName: string;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  valueChain?: string | null;
+  region?: string | null;
+};
 
 export function ClientSelect({
   value, options, onChange, label = "Client", placeholder = "Search clients…", fallbackLabel,

@@ -6,6 +6,9 @@ import { api, fetcher } from "@/lib/api";
 import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { GHANA_REGIONS } from "@/lib/regions";
+import Link from "next/link";
 import { X } from "lucide-react";
 
 // ─── Config per company ────────────────────────────────────────────────────────
@@ -29,6 +32,7 @@ const SLUG_TO_KEY: Record<string, string> = {
 type Deal = {
   id: string;
   company: string;
+  smeId?: string | null;
   businessName: string;
   clientName?: string | null;
   email?: string | null;
@@ -47,6 +51,8 @@ type Deal = {
   revenuePotentialGhs?: number | null;
   revenueReceivedGhs?: number | null;
   balanceGhs?: number | null;
+  currency?: string | null;
+  exchangeRate?: number | null;
   nextSteps?: string | null;
   nextCallDate?: string | null;
   notes?: string | null;
@@ -58,13 +64,15 @@ const STAGE_OPTS  = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION
 const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
 const PAY_OPTS    = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
 const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
+const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
 
 const EMPTY_FORM = {
-  businessName: "", clientName: "", email: "", telephone: "", region: "",
+  smeId: "", businessName: "", clientName: "", email: "", telephone: "", region: "",
   industry: "", valueChain: "", product: "", bdoId: "",
   dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
   paymentStatus: "UNPAID", invoiceStatus: "NOT_INVOICED",
   revenuePotentialGhs: "", revenueReceivedGhs: "", balanceGhs: "",
+  currency: "GHS", exchangeRate: "",
   nextSteps: "", nextCallDate: "", notes: "",
 };
 
@@ -93,6 +101,12 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
     queryKey: ["bdos"],
     queryFn: () => fetcher("/bdo"),
   });
+
+  const { data: smeRes } = useQuery<{ data: ClientOption[] }>({
+    queryKey: ["sme-options"],
+    queryFn: () => fetcher("/sme"),
+  });
+  const clients = smeRes?.data ?? [];
 
   const qp = new URLSearchParams({ company: companyKey });
   if (filterStage)  qp.set("stage",  filterStage);
@@ -183,6 +197,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
           deal={editing}
           companyKey={companyKey}
           bdos={bdos}
+          clients={clients}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); invalidate(); }}
         />
@@ -213,17 +228,25 @@ function KpiTile({ label, value }: { label: string; value: string | number }) {
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
 function DealFormModal({
-  deal, companyKey, bdos, onClose, onSaved,
+  deal, companyKey, bdos, clients, onClose, onSaved,
 }: {
   deal: Deal | null;
   companyKey: string;
   bdos: BdoOption[];
+  clients: ClientOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // Round-trip: stored amounts are GHS; if the deal was entered in another currency,
+  // show the original-currency values in the form (GHS ÷ rate).
+  const dCur = deal?.currency ?? "GHS";
+  const dRate = deal?.exchangeRate ?? 1;
+  const disp = (ghs: number | null | undefined) =>
+    ghs == null ? "" : String(dCur === "GHS" || !dRate ? ghs : Math.round((ghs / dRate) * 100) / 100);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(deal ? {
+      smeId:               deal.smeId               ?? "",
       businessName:        deal.businessName,
       clientName:          deal.clientName          ?? "",
       email:               deal.email               ?? "",
@@ -238,9 +261,11 @@ function DealFormModal({
       priority:            deal.priority,
       paymentStatus:       deal.paymentStatus       ?? "UNPAID",
       invoiceStatus:       deal.invoiceStatus       ?? "NOT_INVOICED",
-      revenuePotentialGhs: deal.revenuePotentialGhs != null ? String(deal.revenuePotentialGhs) : "",
-      revenueReceivedGhs:  deal.revenueReceivedGhs  != null ? String(deal.revenueReceivedGhs)  : "",
-      balanceGhs:          deal.balanceGhs          != null ? String(deal.balanceGhs)          : "",
+      revenuePotentialGhs: disp(deal.revenuePotentialGhs),
+      revenueReceivedGhs:  disp(deal.revenueReceivedGhs),
+      balanceGhs:          disp(deal.balanceGhs),
+      currency:            dCur,
+      exchangeRate:        dCur === "GHS" ? "" : String(dRate),
       nextSteps:           deal.nextSteps           ?? "",
       nextCallDate:        deal.nextCallDate        ? deal.nextCallDate.slice(0, 10) : "",
       notes:               deal.notes              ?? "",
@@ -252,11 +277,16 @@ function DealFormModal({
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
-    if (!form.businessName.trim()) { setError("Business name is required."); return; }
+    if (!deal && !form.smeId) { setError("Please select a client."); return; }
+    if (!form.businessName.trim()) { setError("Please select a client."); return; }
     setSaving(true); setError("");
+    // Convert entered amounts to GHS (the stored / reporting currency).
+    const rate = form.currency === "GHS" ? 1 : (Number(form.exchangeRate) || 1);
+    const toGhs = (v: string) => (v ? Number(v) * rate : null);
     const body = {
       company: companyKey,
       ...form,
+      smeId:               form.smeId               || null,
       bdoId:               form.bdoId               || null,
       clientName:          form.clientName           || null,
       email:               form.email                || null,
@@ -265,9 +295,10 @@ function DealFormModal({
       industry:            form.industry             || null,
       valueChain:          form.valueChain           || null,
       product:             form.product              || null,
-      revenuePotentialGhs: form.revenuePotentialGhs  ? Number(form.revenuePotentialGhs) : null,
-      revenueReceivedGhs:  form.revenueReceivedGhs   ? Number(form.revenueReceivedGhs)  : null,
-      balanceGhs:          form.balanceGhs           ? Number(form.balanceGhs)           : null,
+      exchangeRate:        rate,
+      revenuePotentialGhs: toGhs(form.revenuePotentialGhs),
+      revenueReceivedGhs:  toGhs(form.revenueReceivedGhs),
+      balanceGhs:          toGhs(form.balanceGhs),
       nextSteps:           form.nextSteps            || null,
       nextCallDate:        form.nextCallDate         || null,
       notes:               form.notes               || null,
@@ -292,12 +323,39 @@ function DealFormModal({
 
         <div className="p-5 space-y-4 overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
-            <Field label="Client Name"     value={form.clientName}   onChange={(v) => set("clientName", v)} />
+            <div className="col-span-2">
+              <ClientSelect
+                label="Client *"
+                value={form.smeId}
+                options={clients}
+                fallbackLabel={form.businessName || undefined}
+                onChange={(id) => {
+                  const match = clients.find((c) => c.id === id);
+                  setForm((f) => ({
+                    ...f,
+                    smeId: id,
+                    businessName: match?.companyName ?? "",
+                    clientName: match?.contactName ?? f.clientName,
+                    email: match?.email ?? f.email,
+                    telephone: match?.phone ?? f.telephone,
+                    valueChain: match?.valueChain ?? f.valueChain,
+                    region: match?.region ?? f.region,
+                  }));
+                }}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
+              </p>
+            </div>
+            <Field label="Client Contact"  value={form.clientName}   onChange={(v) => set("clientName", v)} />
             <Field label="Industry"        value={form.industry}     onChange={(v) => set("industry", v)} />
             <Field label="Email"           value={form.email}        onChange={(v) => set("email", v)} type="email" />
             <Field label="Telephone"       value={form.telephone}    onChange={(v) => set("telephone", v)} />
-            <Field label="Region"          value={form.region}       onChange={(v) => set("region", v)} />
+            <SelectField label="Region" value={form.region} onChange={(v) => set("region", v)}>
+              <option value="">— Select region —</option>
+              {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+              {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </SelectField>
             <Field label="Value Chain"     value={form.valueChain}   onChange={(v) => set("valueChain", v)} />
             <Field label="Product"         value={form.product}      onChange={(v) => set("product", v)} />
           </div>
@@ -325,11 +383,22 @@ function DealFormModal({
             <Field label="Next Call Date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Revenue Potential (GHS)" value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
-            <Field label="Revenue Received (GHS)"  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
-            <Field label="Balance (GHS)"           value={form.balanceGhs}          onChange={(v) => set("balanceGhs", v)}          type="number" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SelectField label="Currency" value={form.currency} onChange={(v) => set("currency", v)}>
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </SelectField>
+            {form.currency !== "GHS" && (
+              <Field label={`Exchange rate (1 ${form.currency} = ? GHS)`} value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} type="number" />
+            )}
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label={`Revenue Potential (${form.currency})`} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
+            <Field label={`Revenue Received (${form.currency})`}  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
+            <Field label={`Balance (${form.currency})`}           value={form.balanceGhs}          onChange={(v) => set("balanceGhs", v)}          type="number" />
+          </div>
+          {form.currency !== "GHS" && form.exchangeRate && (
+            <p className="text-[11px] text-gray-400">Entered in {form.currency}, stored as GHS at 1 {form.currency} = {form.exchangeRate} GHS.</p>
+          )}
 
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Next Steps</label>
@@ -385,6 +454,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
             <DItem label="BDO"              value={deal.bdo?.name} />
             <DItem label="Payment Status"   value={deal.paymentStatus} />
             <DItem label="Invoice Status"   value={deal.invoiceStatus ? deal.invoiceStatus.replace(/_/g, " ") : null} />
+            <DItem label="Entered In"       value={deal.currency && deal.currency !== "GHS" ? `${deal.currency} @ ${deal.exchangeRate} GHS` : "GHS"} />
             <DItem label="Revenue Received" value={fmt(deal.revenueReceivedGhs)} />
             <DItem label="Balance"          value={fmt(deal.balanceGhs)} />
             <DItem label="Next Call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />

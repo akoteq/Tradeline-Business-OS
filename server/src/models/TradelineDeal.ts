@@ -19,6 +19,9 @@ const TradelineDealSchema = new Schema({
   balanceGhs: { type: Number, min: 0 },
   paymentStatus: { type: String, enum: ['PAID', 'UNPAID', 'PARTIAL', 'OVERDUE'], default: 'UNPAID' },
   invoiceStatus: { type: String, enum: ['NOT_INVOICED', 'INVOICED', 'PAID', 'OVERDUE'], default: 'NOT_INVOICED' },
+  // Multi-currency: GHS amounts are canonical; currency + exchangeRate record the original entry.
+  currency: { type: String, enum: ['GHS', 'USD', 'EUR', 'NGN', 'RWF'], default: 'GHS' },
+  exchangeRate: { type: Number, default: 1 },
   dealStage: { type: String, enum: ['QUALIFICATION', 'DISCOVERY', 'PROPOSAL_SENT', 'NEGOTIATION', 'CONTRACT_REVIEW', 'CLOSED_WON', 'CLOSED_LOST', 'ON_HOLD'], default: 'QUALIFICATION' },
   priority: { type: String, enum: ['HIGH', 'MEDIUM', 'LOW'], default: 'MEDIUM' },
   dealHealth: { type: String, enum: ['ACTIVE', 'STALE', 'AT_RISK', 'CLOSED_WON', 'CLOSED_LOST'], default: 'ACTIVE' },

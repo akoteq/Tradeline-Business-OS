@@ -23,6 +23,9 @@ const BapxDealSchema = new Schema({
   nextSteps: { type: String },
   nextCallDate: { type: Date },
   targetGhs: { type: Number },
+  // Multi-currency: targetGhs is canonical (GHS); currency + exchangeRate record the original entry.
+  currency: { type: String, enum: ['GHS', 'USD', 'EUR', 'NGN', 'RWF'], default: 'GHS' },
+  exchangeRate: { type: Number, default: 1 },
   daysSinceLastContact: { type: Number },
   aiCoachRecommendation: { type: String },
   smeId: { type: String, default: null },

@@ -5,11 +5,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { GHANA_REGIONS } from "@/lib/regions";
+import Link from "next/link";
 import { X } from "lucide-react";
 
 type BapxDeal = {
   id: string;
   bizId: string | null;
+  smeId: string | null;
   dealHealth: string;
   date: string | null;
   businessName: string;
@@ -28,6 +32,8 @@ type BapxDeal = {
   dealStage: string;
   priority: string;
   invoiceStatus: string | null;
+  currency: string | null;
+  exchangeRate: number | null;
   nextSteps: string | null;
   nextCallDate: string | null;
   targetGhs: number | null;
@@ -41,13 +47,14 @@ const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
 const STAGE_OPTS = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
 const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
 const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
+const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
 
 const EMPTY_FORM = {
-  businessName: "", clientName: "", holdingFirm: "", industry: "", telephone: "",
+  smeId: "", businessName: "", clientName: "", holdingFirm: "", industry: "", telephone: "",
   email: "", region: "", date: "", bdoId: "", activityType: "", product: "",
   keyTopics: "", callOutcome: "", nextSteps: "", nextCallDate: "",
   targetGhs: "", dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
-  invoiceStatus: "NOT_INVOICED",
+  invoiceStatus: "NOT_INVOICED", currency: "GHS", exchangeRate: "",
 };
 
 export default function BapxPipelinePage() {
@@ -62,6 +69,12 @@ export default function BapxPipelinePage() {
     queryFn: () => fetcher("/bdo"),
   });
   const bapxBdos = bdos.filter((b) => b.company === "BAPX");
+
+  const { data: smeRes } = useQuery<{ data: ClientOption[] }>({
+    queryKey: ["sme-options"],
+    queryFn: () => fetcher("/sme"),
+  });
+  const clients = smeRes?.data ?? [];
 
   const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)));
   const { data = [], isLoading } = useQuery<BapxDeal[]>({
@@ -127,6 +140,7 @@ export default function BapxPipelinePage() {
         <DealFormModal
           deal={editing}
           bdos={bapxBdos}
+          clients={clients}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["bapx"] }); }}
         />
@@ -149,10 +163,15 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 // ─── Add / Edit modal ─────────────────────────────────────────────────────────
 
-function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null; bdos: BdoOption[]; onClose: () => void; onSaved: () => void }) {
+function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDeal | null; bdos: BdoOption[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+  const dCur = deal?.currency ?? "GHS";
+  const dRate = deal?.exchangeRate ?? 1;
+  const disp = (ghs: number | null | undefined) =>
+    ghs == null ? "" : String(dCur === "GHS" || !dRate ? ghs : Math.round((ghs / dRate) * 100) / 100);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(deal ? {
+      smeId: deal.smeId ?? "",
       businessName: deal.businessName,
       clientName: deal.clientName ?? "",
       holdingFirm: deal.holdingFirm ?? "",
@@ -168,7 +187,9 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
       callOutcome: deal.callOutcome ?? "",
       nextSteps: deal.nextSteps ?? "",
       nextCallDate: deal.nextCallDate ? deal.nextCallDate.slice(0, 10) : "",
-      targetGhs: deal.targetGhs != null ? String(deal.targetGhs) : "",
+      targetGhs: disp(deal.targetGhs),
+      currency: dCur,
+      exchangeRate: dCur === "GHS" ? "" : String(dRate),
       dealStage: deal.dealStage,
       dealHealth: deal.dealHealth,
       priority: deal.priority,
@@ -180,12 +201,16 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
-    if (!form.businessName.trim()) { setError("Business name is required."); return; }
+    if (!deal && !form.smeId) { setError("Please select a client."); return; }
+    if (!form.businessName.trim()) { setError("Please select a client."); return; }
     setSaving(true);
     setError("");
+    const rate = form.currency === "GHS" ? 1 : (Number(form.exchangeRate) || 1);
     const body = {
       ...form,
-      targetGhs: form.targetGhs !== "" ? Number(form.targetGhs) : null,
+      smeId: form.smeId || null,
+      targetGhs: form.targetGhs !== "" ? Number(form.targetGhs) * rate : null,
+      exchangeRate: rate,
       date: form.date || null,
       nextCallDate: form.nextCallDate || null,
       bdoId: form.bdoId || null,
@@ -224,11 +249,41 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
           {/* Basic info */}
           <Section label="Basic Information">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Business Name *" value={form.businessName} onChange={(v) => set("businessName", v)} span={2} />
+              <div className="col-span-2">
+                <ClientSelect
+                  label="Client *"
+                  value={form.smeId}
+                  options={clients}
+                  fallbackLabel={form.businessName || undefined}
+                  onChange={(id) => {
+                    const match = clients.find((c) => c.id === id);
+                    setForm((f) => ({
+                      ...f,
+                      smeId: id,
+                      businessName: match?.companyName ?? "",
+                      clientName: match?.contactName ?? f.clientName,
+                      email: match?.email ?? f.email,
+                      telephone: match?.phone ?? f.telephone,
+                      industry: match?.valueChain ?? f.industry,
+                      region: match?.region ?? f.region,
+                    }));
+                  }}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
+                </p>
+              </div>
               <Field label="Client Name" value={form.clientName} onChange={(v) => set("clientName", v)} />
               <Field label="Holding Firm" value={form.holdingFirm} onChange={(v) => set("holdingFirm", v)} />
               <Field label="Industry / Value Chain" value={form.industry} onChange={(v) => set("industry", v)} />
-              <Field label="Region" value={form.region} onChange={(v) => set("region", v)} />
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
+                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="">— Select region —</option>
+                  {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+                  {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
               <Field label="Telephone" value={form.telephone} onChange={(v) => set("telephone", v)} />
               <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
             </div>
@@ -246,7 +301,11 @@ function DealFormModal({ deal, bdos, onClose, onSaved }: { deal: BapxDeal | null
               </div>
               <Field label="Product / Service" value={form.product} onChange={(v) => set("product", v)} />
               <Field label="Activity Type" value={form.activityType} onChange={(v) => set("activityType", v)} />
-              <Field label="Target (GHS)" type="number" value={form.targetGhs} onChange={(v) => set("targetGhs", v)} />
+              <FormSelect label="Currency" value={form.currency} options={CURRENCIES} onChange={(v) => set("currency", v)} />
+              {form.currency !== "GHS" && (
+                <Field label={`Rate (1 ${form.currency} = ? GHS)`} type="number" value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} />
+              )}
+              <Field label={`Target (${form.currency})`} type="number" value={form.targetGhs} onChange={(v) => set("targetGhs", v)} />
               <Field label="Date" type="date" value={form.date} onChange={(v) => set("date", v)} />
               <Field label="Next Call Date" type="date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} />
             </div>

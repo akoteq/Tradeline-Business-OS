@@ -3,87 +3,104 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-import { TrendingUp, Users, Building2, Handshake, DollarSign, AlertTriangle, FolderKanban } from "lucide-react";
+  TrendingUp,
+  Users,
+  Building2,
+  Handshake,
+  DollarSign,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 import Link from "next/link";
+import { DealHealthBadge, DealStageBadge } from "@/components/Badges";
 
-const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
+// ---- Executive (group-wide) types, served by /dashboard/executive ----
+type CoSummary = {
+  key: string; name: string; slug: string; color: string; dealSource: string;
+  total: number; active: number; closedWon: number;
+  revenue: { potential: number; received: number; outstanding: number };
+};
+type DealRow = { businessName: string; company: string; amount: number; dealStage: string; dealHealth: string };
+type Exec = {
+  totals: { deals: number; active: number; closedWon: number; potential: number; received: number; outstanding: number };
+  companies: CoSummary[];
+  kpiHealth: { onTrack: number; atRisk: number; offTrack: number; noTarget: number };
+  topDeals: DealRow[];
+  topRisks: DealRow[];
+};
+
+const fmt = (n: number) =>
+  (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
+const badge: Record<string, string> = {
+  indigo: "bg-indigo-100 text-indigo-700", green: "bg-green-100 text-green-700", emerald: "bg-emerald-100 text-emerald-700",
+  teal: "bg-teal-100 text-teal-700", sky: "bg-sky-100 text-sky-700", violet: "bg-violet-100 text-violet-700",
+  amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700", slate: "bg-slate-100 text-slate-700",
+};
 
 export default function CEODashboard() {
-  const { data, isLoading, isError } = useQuery({
+  const ceo = useQuery({
     queryKey: ["ceo-dashboard"],
     queryFn: () => fetcher("/dashboard/ceo"),
   });
+  const exec = useQuery<Exec>({
+    queryKey: ["executive-dashboard"],
+    queryFn: () => fetcher("/dashboard/executive"),
+  });
 
-  if (isLoading)
-    return (
-      <div className="text-gray-400 p-8">Loading dashboard…</div>
-    );
-  if (isError || !data)
+  if (ceo.isLoading || exec.isLoading)
+    return <div className="text-gray-400 p-8">Loading dashboard…</div>;
+  if (ceo.isError || !ceo.data)
     return (
       <div className="text-red-400 p-8">
         Failed to load data. Make sure the server is running on port 4000.
       </div>
     );
 
-  type CompanyStats = {
-    total: number;
-    byStage: Array<{ dealStage: string; _count: { _all: number } }>;
-    byHealth: Array<{ dealHealth: string; _count: { _all: number } }>;
-    revenueReceived: number;
-    outstanding: number;
-  };
+  const data = ceo.data;
 
-  const COMPANY_META: Record<string, { label: string; slug: string; color: string }> = {
-    ALPHA_AFRICA:      { label: "Alpha Africa Consult Ltd", slug: "alpha-africa",      color: "#6366f1" },
-    FINANCE_FACTORY:   { label: "Finance Factory Limited",  slug: "finance-factory",   color: "#22c55e" },
-    COMMUNITY_FINANCE: { label: "Community Finance Ltd",    slug: "community-finance", color: "#0ea5e9" },
-    AKOTEQ:            { label: "Akoteq Ltd",               slug: "akoteq",            color: "#8b5cf6" },
-  };
-
-  const bapxStageData = (
-    data.bapx.byStage as Array<{ dealStage: string; _count: { _all: number } }>
-  ).map((s) => ({ name: s.dealStage, value: s._count._all }));
-
-  const tradelineStageData = (
-    data.tradeline.byStage as Array<{ dealStage: string; _count: { _all: number } }>
-  ).map((s) => ({ name: s.dealStage, value: s._count._all }));
-
-  const leadStatusData = (
-    data.leads.byStatus as Array<{ status: string; _count: { _all: number } }>
-  ).map((s) => ({ name: s.status, value: s._count._all }));
-
-  const bapxHealthData = (
-    data.bapx.byHealth as Array<{ dealHealth: string; _count: { _all: number } }>
-  ).map((s) => ({ name: s.dealHealth, value: s._count._all }));
-
-  const fmt = (n: number) =>
-    n.toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
+  const kpiTotal = exec.data
+    ? exec.data.kpiHealth.onTrack + exec.data.kpiHealth.atRisk + exec.data.kpiHealth.offTrack + exec.data.kpiHealth.noTarget
+    : 0;
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900">CEO Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Monday brief — live system overview</p>
+    <div className="p-4 md:p-6 space-y-5 md:space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">CEO Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Monday brief — group-wide overview
+            {exec.data ? ` across ${exec.data.companies.length} companies` : ""}
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <KpiCard label="BAPX Deals" value={data.bapx.total} icon={<TrendingUp size={20} />} color="indigo" />
-        <KpiCard label="Tradeline Deals" value={data.tradeline.total} icon={<TrendingUp size={20} />} color="emerald" />
-        <KpiCard label="Revenue Received" value={fmt(data.tradeline.revenueReceived)} icon={<DollarSign size={20} />} color="amber" />
-        <KpiCard label="Outstanding" value={fmt(data.tradeline.outstanding)} icon={<AlertTriangle size={20} />} color="red" />
-      </div>
+      {/* Group revenue headline */}
+      {exec.data && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Money label="Potential Revenue" value={fmt(exec.data.totals.potential)} tone="indigo" />
+          <Money label="Revenue Received" value={fmt(exec.data.totals.received)} tone="green" />
+          <Money label="Outstanding" value={fmt(exec.data.totals.outstanding)} tone="amber" />
+        </div>
+      )}
 
+      {/* Group deal + KPI health tiles */}
+      {exec.data && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat icon={<Building2 size={15} />} label="Total Deals" value={exec.data.totals.deals} />
+          <Stat icon={<TrendingUp size={15} />} label="Active" value={exec.data.totals.active} accent="text-blue-600" />
+          <Stat icon={<CheckCircle2 size={15} />} label="Closed Won" value={exec.data.totals.closedWon} accent="text-green-600" />
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1.5">KPI Health ({kpiTotal})</div>
+            <div className="flex items-center gap-3 text-sm font-semibold">
+              <span className="text-green-600">{exec.data.kpiHealth.onTrack} on</span>
+              <span className="text-amber-600">{exec.data.kpiHealth.atRisk} risk</span>
+              <span className="text-red-600">{exec.data.kpiHealth.offTrack} off</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operational KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <KpiCard label="Total Leads" value={data.leads.total} icon={<Users size={20} />} color="sky" />
         <KpiCard label="SMEs Tracked" value={data.smes.total} icon={<Building2 size={20} />} color="violet" />
@@ -91,165 +108,98 @@ export default function CEODashboard() {
         <KpiCard label="Grants in Flight" value={data.grants.inFlight} icon={<DollarSign size={20} />} color="orange" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <ChartCard title="BAPX Pipeline by Stage">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={bapxStageData}>
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={44} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Tradeline Pipeline by Stage">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={tradelineStageData}>
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={44} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#22c55e" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="BAPX Deal Health">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={bapxHealthData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                {bapxHealthData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Leads by Status">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={leadStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                {leadStatusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Legend />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      {/* Other Companies */}
-      <div>
-        <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <Building2 size={18} className="text-gray-400" />
-          Other Companies
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {Object.entries(COMPANY_META).map(([key, meta]) => {
-            const co = (data.companies as Record<string, CompanyStats>)[key];
-            if (!co) return null;
-            const stageData = co.byStage.map((s) => ({ name: s.dealStage, value: s._count._all }));
-            return (
-              <div key={key} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-sm text-gray-900">{meta.label}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">{co.total} deal{co.total !== 1 ? "s" : ""}</p>
-                  </div>
-                  <Link
-                    href={`/pipeline/${meta.slug}`}
-                    className="text-xs text-indigo-600 hover:underline font-medium"
-                  >
-                    View pipeline →
-                  </Link>
+      {/* By Company — dynamic across every active company */}
+      {exec.data && (
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Building2 size={18} className="text-gray-400" />
+            By Company
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {exec.data.companies.map((c) => (
+              <Link key={c.key} href={`/dashboard/${c.slug}`} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-300 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-gray-900">{c.name}</span>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${badge[c.color] ?? "bg-gray-100 text-gray-600"}`}>{c.total} deals</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-gray-50 rounded-lg p-2 text-center">
-                    <div className="text-[11px] text-gray-400">Received</div>
-                    <div className="text-sm font-bold text-green-700">{fmt(co.revenueReceived)}</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-2 text-center">
-                    <div className="text-[11px] text-gray-400">Outstanding</div>
-                    <div className="text-sm font-bold text-red-600">{fmt(co.outstanding)}</div>
-                  </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div><div className="font-bold text-indigo-700">{fmt(c.revenue.potential)}</div><div className="text-gray-400">Potential</div></div>
+                  <div><div className="font-bold text-green-700">{fmt(c.revenue.received)}</div><div className="text-gray-400">Received</div></div>
+                  <div><div className="font-bold text-gray-700">{c.active}</div><div className="text-gray-400">Active</div></div>
                 </div>
-                {stageData.length > 0 && (
-                  <ResponsiveContainer width="100%" height={100}>
-                    <BarChart data={stageData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
-                      <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" height={36} />
-                      <YAxis tick={{ fontSize: 9 }} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill={meta.color} radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-                {stageData.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-3">No deals yet — add one from the pipeline page.</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Projects section */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FolderKanban size={18} className="text-indigo-500" />
-            <h2 className="text-base font-semibold text-gray-900">Projects</h2>
-            <span className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">{data.projects.total}</span>
+              </Link>
+            ))}
           </div>
-          <Link href="/projects" className="text-xs text-indigo-600 hover:underline font-medium">
-            View all →
-          </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {(data.projects.list as ProjectItem[]).map((p) => (
-            <ProjectCard key={p.id} project={p} />
-          ))}
+      )}
+
+      {/* Top deals + risks */}
+      {exec.data && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DealList title="Top Deals" rows={exec.data.topDeals} amountLabel="Potential" emptyText="No deals yet." />
+          <DealList title="Top Risks" rows={exec.data.topRisks} amountLabel="At stake" risk emptyText="No at-risk or stale deals." />
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-type ProjectItem = {
-  id: string;
-  name: string;
-  leader: string;
-  status: string;
-  company: string;
-};
-
-const PROJECT_STATUS_COLORS: Record<string, string> = {
-  ACTIVE:    "bg-green-100 text-green-700",
-  COMPLETED: "bg-blue-100 text-blue-700",
-  ON_HOLD:   "bg-yellow-100 text-yellow-700",
-  CANCELLED: "bg-red-100 text-red-700",
-};
-
-const PROJECT_COMPANY_COLORS: Record<string, string> = {
-  BAPX:      "text-indigo-600",
-  TRADELINE: "text-emerald-600",
-  SHARED:    "text-gray-500",
-};
-
-function ProjectCard({ project }: { project: ProjectItem }) {
+function Money({ label, value, tone }: { label: string; value: string; tone: string }) {
+  const tones: Record<string, string> = {
+    indigo: "bg-indigo-50 border-indigo-200 text-indigo-700",
+    green: "bg-green-50 border-green-200 text-green-700",
+    amber: "bg-amber-50 border-amber-200 text-amber-700",
+  };
   return (
-    <Link href="/projects" className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-200 hover:shadow-sm transition-all">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span className={`text-[11px] font-semibold uppercase tracking-wide ${PROJECT_COMPANY_COLORS[project.company] ?? "text-gray-400"}`}>
-          {project.company}
-        </span>
-        <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-medium ${PROJECT_STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-500"}`}>
-          {project.status.replace("_", " ")}
-        </span>
+    <div className={`rounded-xl border p-4 ${tones[tone]}`}>
+      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</div>
+      <div className="text-2xl font-bold mt-1">{value}</div>
+    </div>
+  );
+}
+
+function Stat({ icon, label, value, accent = "text-gray-900" }: { icon: React.ReactNode; label: string; value: number; accent?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium uppercase tracking-wide">{icon} {label}</div>
+      <div className={`text-2xl font-bold mt-1 ${accent}`}>{value}</div>
+    </div>
+  );
+}
+
+function DealList({ title, rows, amountLabel, risk, emptyText }: { title: string; rows: DealRow[]; amountLabel: string; risk?: boolean; emptyText: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+        {risk && <AlertTriangle size={15} className="text-amber-500" />}
+        <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
       </div>
-      <p className="font-semibold text-sm text-gray-900 leading-snug">{project.name}</p>
-      <p className="text-xs text-gray-400 mt-1">Leader: {project.leader}</p>
-    </Link>
+      {rows.length === 0 ? (
+        <div className="p-6 text-center text-gray-400 text-sm">{emptyText}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                {["Business", "Company", risk ? "Health" : "Stage", amountLabel].map((h) => (
+                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {rows.map((d, i) => (
+                <tr key={i} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 font-medium text-gray-900 max-w-[150px] truncate">{d.businessName}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs">{d.company}</td>
+                  <td className="px-3 py-2">{risk ? <DealHealthBadge value={d.dealHealth} /> : <DealStageBadge value={d.dealStage} />}</td>
+                  <td className="px-3 py-2 font-medium text-gray-700 tabular-nums whitespace-nowrap">{fmt(d.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -281,15 +231,6 @@ function KpiCard({
         <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</div>
         <div className="text-xl font-bold text-gray-900 mt-0.5">{value}</div>
       </div>
-    </div>
-  );
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
-      {children}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { KpiAuditLog } from '../models/KpiAuditLog';
 import { User, ADMIN_ROLES } from '../models/User';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { qs, param } from '../lib/query';
+import { computeAutoFeed, AUTO_KEYS } from '../lib/kpiAutoFeed';
 
 const router = Router();
 
@@ -20,13 +21,18 @@ async function actorInfo(req: Request): Promise<{ actorId: string | null; actorE
   return { actorId: req.user?.userId ?? null, actorEmail, actorRole: req.user?.role ?? null };
 }
 
+// Best-effort: audit logging must never fail the underlying data operation.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function logAudit(req: Request, entry: any, action: string, extra: Record<string, unknown> = {}) {
-  const a = await actorInfo(req);
-  await KpiAuditLog.create({
-    entryId: entry.id, definitionId: entry.get('definitionId'),
-    ...a, action, reviewStatus: entry.get('reviewStatus'), ...extra,
-  });
+  try {
+    const a = await actorInfo(req);
+    await KpiAuditLog.create({
+      entryId: entry.id, definitionId: entry.get('definitionId'),
+      ...a, action, reviewStatus: entry.get('reviewStatus'), ...extra,
+    });
+  } catch (err) {
+    console.error('KPI audit log write failed:', err);
+  }
 }
 
 // Parse a YYYY-MM (or ISO) period into the [start, end) bounds of that month.
@@ -58,11 +64,19 @@ router.get('/definitions', async (req: Request, res: Response) => {
   }
 });
 
-// Distinct departments (with definition counts) — powers the department dashboard nav.
-router.get('/departments', async (_req: Request, res: Response) => {
+// The catalog of auto-feed metrics an AUTO KPI can be wired to (for the admin form).
+router.get('/auto-keys', (_req: Request, res: Response) => {
+  res.json(AUTO_KEYS);
+});
+
+// Distinct departments (with definition counts) — optional sub-grouping within a company.
+// Pass ?company= to list only that company's departments.
+router.get('/departments', async (req: Request, res: Response) => {
   try {
+    const match: Record<string, unknown> = { isActive: true, department: { $ne: null } };
+    const company = qs(req, 'company'); if (company) match.company = company;
     const rows = await KpiDefinition.aggregate([
-      { $match: { isActive: true, department: { $ne: null } } },
+      { $match: match },
       { $group: { _id: '$department', count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]);
@@ -106,15 +120,19 @@ router.delete('/definitions/:id', requireAuth, requireAdmin, async (req: Request
 // variance / attainment / status / trend. Filter by department, company, bdoId, scope.
 router.get('/board', async (req: Request, res: Response) => {
   try {
-    const defQuery: Record<string, unknown> = { isActive: true };
+    // A KPI belongs to a company (or the group). Company is the primary filter; department optional.
+    const company = qs(req, 'company') || 'GROUP';
+    const defQuery: Record<string, unknown> = { isActive: true, company };
     const department = qs(req, 'department'); if (department) defQuery.department = department;
-    const company = qs(req, 'company'); if (company) defQuery.company = company;
-    const scope = qs(req, 'scope'); if (scope) defQuery.scope = scope;
     const bdoId = qs(req, 'bdoId');
 
     const { start, end } = monthBounds(qs(req, 'period'));
     const defs = await KpiDefinition.find(defQuery).sort({ department: 1, order: 1, metric: 1 });
     const defIds = defs.map((d) => d.id);
+
+    // Live auto-feed for this company scope (GROUP ⇒ whole group). Only computed if any AUTO defs show.
+    const hasAuto = defs.some((d) => d.get('source') === 'AUTO' && d.get('autoKey'));
+    const feed = hasAuto ? await computeAutoFeed(company !== 'GROUP' ? company : undefined) : {};
 
     const entryMatch: Record<string, unknown> = { definitionId: { $in: defIds } };
     if (bdoId) entryMatch.bdoId = bdoId;
@@ -131,7 +149,9 @@ router.get('/board', async (req: Request, res: Response) => {
 
     const rows = defs.map((d) => {
       const e = entryByDef[d.id];
-      const current = e ? e.get('current') : null;
+      const isAuto = d.get('source') === 'AUTO' && d.get('autoKey');
+      // AUTO KPIs take their actual from the live feed; the entry only supplies the target.
+      const current = isAuto ? (feed[d.get('autoKey')] ?? null) : (e ? e.get('current') : null);
       const target = e ? e.get('target') : null;
       const hib = d.get('higherIsBetter');
       const { variance, attainment, status } = computeAttainment(current, target, hib);
