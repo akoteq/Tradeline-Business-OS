@@ -2,8 +2,9 @@ import { Router, Request, Response } from 'express';
 import { SME } from '../models/SME';
 import { TradelineDeal } from '../models/TradelineDeal';
 import { GrantLoanTracker } from '../models/GrantLoanTracker';
-import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
+import { withBdo, bdoIdsByName, bdoIdsByCompany } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
+import { requireAuth, bdoFilter, companyFilter } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,8 +21,6 @@ function addTo(map: Map<string, LinkedDeal[]>, key: string | null | undefined, e
   map.set(key, arr);
 }
 
-// Deals link to an SME either via `smeId` (going forward) or by matching business/client name
-// (legacy records that predate the smeId field).
 async function buildLinkMaps() {
   const [tradeline, grants] = await Promise.all([
     TradelineDeal.find({}, 'businessName smeId dealStage').lean(),
@@ -56,23 +55,31 @@ function linkedFor(sme: { id: string; companyName: string }, maps: Awaited<Retur
   });
 }
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const status = qs(req, 'status'), tier = qs(req, 'tier'), valueChain = qs(req, 'valueChain'), region = qs(req, 'region'), search = qs(req, 'search');
     const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId');
     const limitParam = qs(req, 'limit'), skipParam = qs(req, 'skip');
 
     const query: Record<string, unknown> = {};
+
+    const forcedBdoId = bdoFilter(req);
+    const forcedCompany = companyFilter(req);
+
+    if (forcedBdoId) {
+      query.bdoId = forcedBdoId;
+    } else if (forcedCompany) {
+      query.bdoId = { $in: await bdoIdsByCompany(forcedCompany) };
+    } else {
+      if (bdo) { query.bdoId = { $in: await bdoIdsByName(bdo) }; }
+      if (bdoId) query.bdoId = bdoId;
+    }
+
     if (status) query.status = status;
     if (tier) query.bankabilityTier = tier;
     if (valueChain) query.valueChain = { $regex: valueChain, $options: 'i' };
     if (region) query.region = { $regex: region, $options: 'i' };
     if (search) query.companyName = { $regex: search, $options: 'i' };
-    if (bdo) {
-      const ids = await bdoIdsByName(bdo);
-      query.bdoId = { $in: ids };
-    }
-    if (bdoId) query.bdoId = bdoId;
 
     const total = await SME.countDocuments(query);
     let cursor = SME.find(query).sort({ companyName: 1 });
@@ -96,7 +103,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const sme = await SME.findById(param(req, 'id'));
     if (!sme) { res.status(404).json({ error: 'Not found' }); return; }
@@ -108,7 +115,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const sme = await new SME(req.body).save();
     const [result] = await withBdo([sme]);
@@ -118,7 +125,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const sme = await SME.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
     if (!sme) { res.status(404).json({ error: 'Not found' }); return; }
@@ -129,7 +136,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     await SME.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();

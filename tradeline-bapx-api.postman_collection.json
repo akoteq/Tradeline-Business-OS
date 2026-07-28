@@ -1,0 +1,1529 @@
+{
+	"info": {
+		"name": "Tradeline & BAPX API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"tiisusharif1@gmail.com\",\n  \"password\": \"pass1234\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/auth/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/auth/me",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "me"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change Own Password",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"password\": \"newPassword123\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/auth/me/password",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "me", "password"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"temp1234\",\n  \"role\": \"BDO\",\n  \"bdoId\": null\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Onboard Team Member",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+233200000000\",\n  \"company\": \"TRADELINE\",\n  \"role\": \"Senior BDO\",\n  \"accessRole\": \"BDO\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/auth/onboard",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "onboard"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Invite Staff Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"staff@example.com\",\n  \"accessRole\": \"BDO\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/auth/bdos/:bdoId/invite",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "bdos", ":bdoId", "invite"],
+							"variable": [{ "key": "bdoId", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reset User Password",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"password\": \"newTemp123\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users/:id/password",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users", ":id", "password"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change User Role",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"role\": \"BUSINESS_CEO\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users/:id/role",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users", ":id", "role"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Link User to BDO Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"bdoId\": \"\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users/:id/bdo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users", ":id", "bdo"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/auth/users/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "auth", "users", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Staff (BDO)",
+			"item": [
+				{
+					"name": "List Staff",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bdo?company=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo"],
+							"query": [{ "key": "company", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Staff Performance Rollup",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bdo/performance",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo", "performance"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Staff Profile",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bdo/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Staff Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+233200000000\",\n  \"company\": \"TRADELINE\",\n  \"role\": \"Senior BDO\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/bdo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Staff Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"role\": \"Business Development Officer\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/bdo/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate Staff Profile",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bdo/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bdo", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "BAPX Deals",
+			"item": [
+				{
+					"name": "List BAPX Deals",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bapx?stage=&health=&priority=&bdoId=&bdo=&search=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bapx"],
+							"query": [
+								{ "key": "stage", "value": "" },
+								{ "key": "health", "value": "" },
+								{ "key": "priority", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "search", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get BAPX Deal",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bapx/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bapx", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create BAPX Deal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"priority\": \"HIGH\",\n  \"targetGhs\": 50000\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/bapx",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bapx"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update BAPX Deal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"QUALIFIED\",\n  \"dealHealth\": \"ACTIVE\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/bapx/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bapx", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete BAPX Deal",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/bapx/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "bapx", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tradeline Deals",
+			"item": [
+				{
+					"name": "List Tradeline Deals",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/tradeline?stage=&health=&tier=&priority=&bdoId=&bdo=&search=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tradeline"],
+							"query": [
+								{ "key": "stage", "value": "" },
+								{ "key": "health", "value": "" },
+								{ "key": "tier", "value": "" },
+								{ "key": "priority", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "search", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tradeline Deal",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/tradeline/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tradeline", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Tradeline Deal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"priority\": \"HIGH\",\n  \"revenuePotentialGhs\": 100000,\n  \"expectedRevenueReceivedGhs\": 80000,\n  \"revenueReceivedGhs\": 0\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/tradeline",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tradeline"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Tradeline Deal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"NEGOTIATION\",\n  \"revenueReceivedGhs\": 40000\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/tradeline/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tradeline", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Tradeline Deal",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/tradeline/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tradeline", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Company Deals",
+			"item": [
+				{
+					"name": "List Company Deals",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/company-deals?company=ALPHA_AFRICA&stage=&health=&bdoId=&search=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "company-deals"],
+							"query": [
+								{ "key": "company", "value": "ALPHA_AFRICA" },
+								{ "key": "stage", "value": "" },
+								{ "key": "health", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "search", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Company Deal",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/company-deals/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "company-deals", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Company Deal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Client Co\",\n  \"company\": \"ALPHA_AFRICA\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"revenuePotentialGhs\": 75000\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/company-deals",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "company-deals"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Company Deal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"QUALIFIED\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/company-deals/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "company-deals", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Company Deal",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/company-deals/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "company-deals", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Leads",
+			"item": [
+				{
+					"name": "Lead Stats",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/leads/stats",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads", "stats"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Leads",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/leads?status=&priority=&bdoId=&bdo=&search=&limit=100&skip=0",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads"],
+							"query": [
+								{ "key": "status", "value": "" },
+								{ "key": "priority", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "search", "value": "" },
+								{ "key": "limit", "value": "100" },
+								{ "key": "skip", "value": "0" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Lead",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/leads/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Lead",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"businessName\": \"Prospect Co\",\n  \"bdoId\": \"\",\n  \"status\": \"NEW\",\n  \"priority\": \"HIGH\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/leads",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Lead",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"status\": \"CONTACTED\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/leads/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Lead",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/leads/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "leads", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "SME / Clients",
+			"item": [
+				{
+					"name": "List Clients",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/sme?status=&tier=&region=&valueChain=&bdoId=&bdo=&search=&limit=50&skip=0",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "sme"],
+							"query": [
+								{ "key": "status", "value": "" },
+								{ "key": "tier", "value": "" },
+								{ "key": "region", "value": "" },
+								{ "key": "valueChain", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "search", "value": "" },
+								{ "key": "limit", "value": "50" },
+								{ "key": "skip", "value": "0" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Client",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/sme/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "sme", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Client",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyName\": \"Acme Ghana Ltd\",\n  \"bdoId\": \"\",\n  \"status\": \"ACTIVE\",\n  \"bankabilityTier\": \"TIER_1\",\n  \"region\": \"Greater Accra\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/sme",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "sme"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Client",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/sme/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "sme", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Client",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/sme/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "sme", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Grants and Loans",
+			"item": [
+				{
+					"name": "List Grants and Loans",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/grant-loans?status=&bdoId=&bdo=&search=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "grant-loans"],
+							"query": [
+								{ "key": "status", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "search", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Grant or Loan",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/grant-loans/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "grant-loans", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Grant or Loan",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"grantType\": \"GRANT\",\n  \"status\": \"SUBMITTED\",\n  \"amountApplied\": 50000\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/grant-loans",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "grant-loans"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Grant or Loan",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\",\n  \"amountApproved\": 45000\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/grant-loans/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "grant-loans", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Grant or Loan",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/grant-loans/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "grant-loans", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "List Tasks",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/tasks?status=&priority=&type=&year=&bdoId=&bdo=&company=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tasks"],
+							"query": [
+								{ "key": "status", "value": "" },
+								{ "key": "priority", "value": "" },
+								{ "key": "type", "value": "" },
+								{ "key": "year", "value": "" },
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" },
+								{ "key": "company", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"deliverable\": \"Prepare Q3 proposal\",\n  \"bdoId\": \"\",\n  \"status\": \"PENDING\",\n  \"priority\": \"HIGH\",\n  \"type\": \"TASK\",\n  \"targetDate\": \"2026-08-31\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/tasks",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tasks"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"status\": \"COMPLETED\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/tasks/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tasks", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/tasks/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "tasks", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Companies",
+			"item": [
+				{
+					"name": "List Companies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/companies?all=0",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "companies"],
+							"query": [{ "key": "all", "value": "0" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Company",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"New Company Ltd\",\n  \"color\": \"blue\",\n  \"order\": 10\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/companies",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "companies"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Company",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"isActive\": true\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/companies/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "companies", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Archive Company",
+					"request": {
+						"method": "DELETE",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/companies/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "companies", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboards",
+			"item": [
+				{
+					"name": "CEO Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/dashboard/ceo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "dashboard", "ceo"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Executive Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/dashboard/executive?period=2026-07",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "dashboard", "executive"],
+							"query": [{ "key": "period", "value": "2026-07" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Company Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/dashboard/company/:key",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "dashboard", "company", ":key"],
+							"variable": [{ "key": "key", "value": "BAPX" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "BDO Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/dashboard/bdo/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "dashboard", "bdo", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Senior BDO Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/dashboard/senior/:id?period=2026-07",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "dashboard", "senior", ":id"],
+							"variable": [{ "key": "id", "value": "" }],
+							"query": [{ "key": "period", "value": "2026-07" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Alerts",
+			"item": [
+				{
+					"name": "Get Alerts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/alerts?bdoId=&bdo=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "alerts"],
+							"query": [
+								{ "key": "bdoId", "value": "" },
+								{ "key": "bdo", "value": "" }
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "Email Status",
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer <TOKEN>" }],
+						"url": {
+							"raw": "http://localhost:4000/api/notifications/status",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "notifications", "status"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Test Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"to\": \"recipient@example.com\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/notifications/test",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "notifications", "test"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Custom Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"to\": [\"ceo@example.com\"],\n  \"subject\": \"Heads up\",\n  \"message\": \"Your message here.\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/notifications/send",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "notifications", "send"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "KPI Framework",
+			"item": [
+				{
+					"name": "List KPI Definitions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/kpi-framework/definitions?department=&company=&scope=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "kpi-framework", "definitions"],
+							"query": [
+								{ "key": "department", "value": "" },
+								{ "key": "company", "value": "" },
+								{ "key": "scope", "value": "" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "KPI Board",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/kpi-framework/board?company=GROUP&period=2026-07",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "kpi-framework", "board"],
+							"query": [
+								{ "key": "company", "value": "GROUP" },
+								{ "key": "period", "value": "2026-07" }
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create KPI Definition",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"metric\": \"New Clients\",\n  \"department\": \"Sales\",\n  \"company\": \"TRADELINE\",\n  \"higherIsBetter\": true,\n  \"source\": \"MANUAL\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/kpi-framework/definitions",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "kpi-framework", "definitions"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create KPI Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"definitionId\": \"\",\n  \"period\": \"2026-07-01\",\n  \"current\": 12,\n  \"target\": 20,\n  \"bdoId\": \"\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/kpi-framework/entries",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "kpi-framework", "entries"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update KPI Entry",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer <TOKEN>" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": { "mode": "raw", "raw": "{\n  \"current\": 15\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/kpi-framework/entries/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "kpi-framework", "entries", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Client Documents",
+			"item": [
+				{
+					"name": "List Documents",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/client-documents?smeId=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-documents"],
+							"query": [{ "key": "smeId", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/client-documents/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-documents", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Client Notes",
+			"item": [
+				{
+					"name": "List Notes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/client-notes?smeId=",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-notes"],
+							"query": [{ "key": "smeId", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Note",
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"smeId\": \"\",\n  \"content\": \"Meeting notes here.\",\n  \"date\": \"2026-07-28\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:4000/api/client-notes",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-notes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Note",
+					"request": {
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{\n  \"content\": \"Updated notes.\"\n}" },
+						"url": {
+							"raw": "http://localhost:4000/api/client-notes/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-notes", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Note",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:4000/api/client-notes/:id",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "4000",
+							"path": ["api", "client-notes", ":id"],
+							"variable": [{ "key": "id", "value": "" }]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/health",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "4000",
+					"path": ["health"]
+				}
+			},
+			"response": []
+		}
+	]
+}

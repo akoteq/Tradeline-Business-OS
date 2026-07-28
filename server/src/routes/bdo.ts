@@ -5,14 +5,22 @@ import { TradelineDeal } from '../models/TradelineDeal';
 import { Lead } from '../models/Lead';
 import { Task } from '../models/Task';
 import { qs, param } from '../lib/query';
+import { requireAuth, companyFilter, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const company = qs(req, 'company');
     const query: Record<string, unknown> = { isActive: true };
-    if (company) query.company = company;
+
+    const forcedCompany = companyFilter(req);
+    if (forcedCompany) {
+      query.company = forcedCompany;
+    } else if (company) {
+      query.company = company;
+    }
+
     const bdos = await BDO.find(query).sort({ name: 1 });
     res.json(bdos.map((b) => b.toJSON()));
   } catch (err) {
@@ -20,8 +28,8 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Per-BDO performance rollup (deals, leads, tasks, revenue). Must precede '/:id'.
-router.get('/performance', async (_req: Request, res: Response) => {
+// Per-BDO performance rollup. Admin/CEO only — group-wide view.
+router.get('/performance', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const bdos = await BDO.find({ isActive: true }).sort({ name: 1 });
 
@@ -82,7 +90,7 @@ router.get('/performance', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const bdo = await BDO.findById(param(req, 'id'));
     if (!bdo) { res.status(404).json({ error: 'Not found' }); return; }
@@ -92,7 +100,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const bdo = await new BDO(req.body).save();
     res.status(201).json(bdo.toJSON());
@@ -101,7 +109,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const bdo = await BDO.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
     if (!bdo) { res.status(404).json({ error: 'Not found' }); return; }
@@ -111,7 +119,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     await BDO.findByIdAndUpdate(param(req, 'id'), { isActive: false });
     res.status(204).send();

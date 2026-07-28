@@ -25,7 +25,7 @@ router.post('/login', async (req: Request, res: Response) => {
     const bdoId = rawUser.bdoId ?? null;
     const bdo = bdoId ? await BDO.findById(bdoId) : null;
     const token = jwt.sign(
-      { userId, role: rawUser.role, bdoId },
+      { userId, role: rawUser.role, bdoId, bdoCompany: bdo?.get('company') ?? null },
       JWT_SECRET,
       { expiresIn: '7d' }
     );

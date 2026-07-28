@@ -5,7 +5,8 @@ import { jsonTransform } from '../lib/jsonTransform';
 // A staff member's *job title* is a separate concept and lives on their staff profile (BDO.role).
 export const USER_ROLES = [
   'ADMIN',            // system administrator — full access
-  'CEO',              // executive — group-wide read + user management
+  'CEO',              // Group Owner — cross-company alert feed + logged drill-down
+  'BUSINESS_CEO',     // Business CEO — full control of exactly one company
   'MANAGING_PARTNER', // executive — group-wide read
   'SENIOR_PARTNER',   // executive — group-wide read
   'SENIOR_BDO',       // team lead — own + supervised team (team scoping added in v2)
@@ -16,8 +17,11 @@ export const USER_ROLES = [
 
 export type UserRole = typeof USER_ROLES[number];
 
-// Roles scoped to their own (own-profile) data. Executives/admin see everything.
+// Roles scoped to their own profile's data only.
 export const INDIVIDUAL_ROLES: UserRole[] = ['SENIOR_BDO', 'BDO', 'JUNIOR_BDO', 'INTERN'];
+
+// Roles with company-wide scope (one company, all its data).
+export const COMPANY_ROLES: UserRole[] = ['BUSINESS_CEO'];
 
 // Roles allowed to manage users and other admin actions.
 export const ADMIN_ROLES: UserRole[] = ['ADMIN', 'CEO'];

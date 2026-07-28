@@ -3,28 +3,38 @@ import { CompanyDeal } from '../models/CompanyDeal';
 import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
 import { backfillSmeRegion } from '../lib/smeSync';
+import { requireAuth, bdoFilter, companyFilter } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/company-deals?company=ALPHA_AFRICA&stage=...&health=...
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const company = qs(req, 'company');
     const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId');
     const stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority');
     const search = qs(req, 'search');
+    const query: Record<string, unknown> = {};
 
-    // company is required unless filtering by bdoId (BDO dashboard fetches across all companies).
-    // Company keys are now dynamic (from the Company collection), so we no longer whitelist them here.
-    if (!company && !bdoId) {
-      res.status(400).json({ error: 'Provide ?company= or ?bdoId=' });
-      return;
+    const forcedBdoId = bdoFilter(req);
+    const forcedCompany = companyFilter(req);
+
+    if (forcedBdoId) {
+      // Individual BDO — scope by their own bdoId
+      query.bdoId = forcedBdoId;
+    } else if (forcedCompany) {
+      // Business CEO — scope directly by company key (CompanyDeal has company field)
+      query.company = forcedCompany;
+    } else {
+      // Group Owner / Admin — company or bdoId required to prevent full-table scans
+      if (!company && !bdoId) {
+        res.status(400).json({ error: 'Provide ?company= or ?bdoId=' });
+        return;
+      }
+      if (company) query.company = company;
+      if (bdo) { const ids = await bdoIdsByName(bdo); query.bdoId = { $in: ids }; }
+      if (bdoId) query.bdoId = bdoId;
     }
 
-    const query: Record<string, unknown> = {};
-    if (company) query.company = company;
-    if (bdo) { const ids = await bdoIdsByName(bdo); query.bdoId = { $in: ids }; }
-    if (bdoId) query.bdoId = bdoId;
     if (stage) query.dealStage = stage;
     if (health) query.dealHealth = health;
     if (priority) query.priority = priority;
@@ -37,7 +47,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const deal = await CompanyDeal.findById(param(req, 'id'));
     if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
@@ -48,7 +58,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const deal = await new CompanyDeal(req.body).save();
     await backfillSmeRegion(req.body.smeId, req.body.region).catch(() => {});
@@ -58,7 +68,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const deal = await CompanyDeal.findByIdAndUpdate(
       param(req, 'id'), req.body, { new: true, runValidators: true },
@@ -71,7 +81,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     await CompanyDeal.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();

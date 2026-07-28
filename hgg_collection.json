@@ -1,0 +1,976 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Tradeline & BAPX API",
+    "description": "Tradeline Holdings Business Operating System API. Set baseUrl variable (default: http://localhost:4000/api). Run Login first to auto-save the token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api", "type": "string" },
+    { "key": "token", "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["const r = pm.response.json(); if (r.token) pm.collectionVariables.set('token', r.token);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"tiisusharif1@gmail.com\",\n  \"password\": \"pass1234\"\n}" }
+          }
+        },
+        {
+          "name": "Get Current User (me)",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        },
+        {
+          "name": "Change Own Password",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/me/password", "host": ["{{baseUrl}}"], "path": ["auth", "me", "password"] },
+            "body": { "mode": "raw", "raw": "{\n  \"password\": \"newPassword123\"\n}" }
+          }
+        },
+        {
+          "name": "List Users [ADMIN/CEO]",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/users", "host": ["{{baseUrl}}"], "path": ["auth", "users"] }
+          }
+        },
+        {
+          "name": "Create User [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/users", "host": ["{{baseUrl}}"], "path": ["auth", "users"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"temp1234\",\n  \"role\": \"BDO\",\n  \"bdoId\": null\n}" }
+          }
+        },
+        {
+          "name": "Onboard Team Member [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/onboard", "host": ["{{baseUrl}}"], "path": ["auth", "onboard"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+233200000000\",\n  \"company\": \"TRADELINE\",\n  \"role\": \"Senior BDO\",\n  \"accessRole\": \"BDO\"\n}" }
+          }
+        },
+        {
+          "name": "Invite Existing Staff Profile [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/bdos/:bdoId/invite", "host": ["{{baseUrl}}"], "path": ["auth", "bdos", ":bdoId", "invite"], "variable": [{ "key": "bdoId", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"staff@example.com\",\n  \"accessRole\": \"BDO\"\n}" }
+          }
+        },
+        {
+          "name": "Resend Invite [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/users/:id/resend-invite", "host": ["{{baseUrl}}"], "path": ["auth", "users", ":id", "resend-invite"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Reset User Password [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/users/:id/password", "host": ["{{baseUrl}}"], "path": ["auth", "users", ":id", "password"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"password\": \"newTemp123\"\n}" }
+          }
+        },
+        {
+          "name": "Change User Role [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/users/:id/role", "host": ["{{baseUrl}}"], "path": ["auth", "users", ":id", "role"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"BUSINESS_CEO\"\n}" }
+          }
+        },
+        {
+          "name": "Link User to BDO Profile [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/users/:id/bdo", "host": ["{{baseUrl}}"], "path": ["auth", "users", ":id", "bdo"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"bdoId\": \"<bdo-profile-id>\"\n}" }
+          }
+        },
+        {
+          "name": "Delete User [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/users/:id", "host": ["{{baseUrl}}"], "path": ["auth", "users", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Staff Profiles (BDO)",
+      "description": "Staff profile management. GET list is scoped: BUSINESS_CEO sees own company only; individual BDOs see all (for dropdowns). POST/PUT/DELETE require ADMIN/CEO.",
+      "item": [
+        {
+          "name": "List Staff",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bdo?company=TRADELINE", "host": ["{{baseUrl}}"], "path": ["bdo"], "query": [{ "key": "company", "value": "TRADELINE", "description": "BAPX | TRADELINE | ALPHA_AFRICA | FINANCE_FACTORY | COMMUNITY_FINANCE | AKOTEQ" }] }
+          }
+        },
+        {
+          "name": "Staff Performance Rollup [ADMIN/CEO only]",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bdo/performance", "host": ["{{baseUrl}}"], "path": ["bdo", "performance"] }
+          }
+        },
+        {
+          "name": "Get Staff Profile",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bdo/:id", "host": ["{{baseUrl}}"], "path": ["bdo", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Staff Profile [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/bdo", "host": ["{{baseUrl}}"], "path": ["bdo"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+233200000000\",\n  \"company\": \"TRADELINE\",\n  \"role\": \"Senior BDO\"\n}" }
+          }
+        },
+        {
+          "name": "Update Staff Profile [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/bdo/:id", "host": ["{{baseUrl}}"], "path": ["bdo", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"Business Development Officer\"\n}" }
+          }
+        },
+        {
+          "name": "Deactivate Staff Profile [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bdo/:id", "host": ["{{baseUrl}}"], "path": ["bdo", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "BAPX Deals",
+      "description": "Scoped: BUSINESS_CEO sees BAPX-company deals only; individual BDOs see own deals only; ADMIN/CEO see all.",
+      "item": [
+        {
+          "name": "List BAPX Deals",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bapx?stage=&health=&priority=&bdoId=&bdo=&search=", "host": ["{{baseUrl}}"], "path": ["bapx"],
+              "query": [
+                { "key": "stage", "value": "", "description": "PROSPECTING | QUALIFIED | PROPOSAL | NEGOTIATION | CLOSED_WON | CLOSED_LOST" },
+                { "key": "health", "value": "", "description": "ACTIVE | AT_RISK | STALE | CLOSED_WON | CLOSED_LOST" },
+                { "key": "priority", "value": "", "description": "HIGH | MEDIUM | LOW" },
+                { "key": "bdoId", "value": "" },
+                { "key": "bdo", "value": "", "description": "BDO name search" },
+                { "key": "search", "value": "", "description": "Business name search" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get BAPX Deal",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bapx/:id", "host": ["{{baseUrl}}"], "path": ["bapx", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create BAPX Deal",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/bapx", "host": ["{{baseUrl}}"], "path": ["bapx"] },
+            "body": { "mode": "raw", "raw": "{\n  \"businessName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"priority\": \"HIGH\",\n  \"targetGhs\": 50000\n}" }
+          }
+        },
+        {
+          "name": "Update BAPX Deal",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/bapx/:id", "host": ["{{baseUrl}}"], "path": ["bapx", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"QUALIFIED\",\n  \"dealHealth\": \"ACTIVE\"\n}" }
+          }
+        },
+        {
+          "name": "Delete BAPX Deal",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/bapx/:id", "host": ["{{baseUrl}}"], "path": ["bapx", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Tradeline Deals",
+      "description": "Scoped by role. BUSINESS_CEO for TRADELINE sees all Tradeline deals; individual BDOs see own only.",
+      "item": [
+        {
+          "name": "List Tradeline Deals",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/tradeline?stage=&health=&tier=&priority=&bdoId=&bdo=&search=", "host": ["{{baseUrl}}"], "path": ["tradeline"],
+              "query": [
+                { "key": "stage", "value": "" },
+                { "key": "health", "value": "" },
+                { "key": "tier", "value": "", "description": "TIER_1 | TIER_2 | TIER_3" },
+                { "key": "priority", "value": "" },
+                { "key": "bdoId", "value": "" },
+                { "key": "bdo", "value": "" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Tradeline Deal",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/tradeline/:id", "host": ["{{baseUrl}}"], "path": ["tradeline", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Tradeline Deal",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tradeline", "host": ["{{baseUrl}}"], "path": ["tradeline"] },
+            "body": { "mode": "raw", "raw": "{\n  \"businessName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"priority\": \"HIGH\",\n  \"revenuePotentialGhs\": 100000,\n  \"expectedRevenueReceivedGhs\": 80000,\n  \"revenueReceivedGhs\": 0\n}" }
+          }
+        },
+        {
+          "name": "Update Tradeline Deal",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tradeline/:id", "host": ["{{baseUrl}}"], "path": ["tradeline", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"NEGOTIATION\",\n  \"revenueReceivedGhs\": 40000\n}" }
+          }
+        },
+        {
+          "name": "Delete Tradeline Deal",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/tradeline/:id", "host": ["{{baseUrl}}"], "path": ["tradeline", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Company Deals",
+      "description": "Deals for Alpha Africa, Finance Factory, Community Finance, Akoteq. BUSINESS_CEO is auto-scoped to their company — no need to pass ?company=. ADMIN/CEO must pass ?company= or ?bdoId=.",
+      "item": [
+        {
+          "name": "List Company Deals",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/company-deals?company=ALPHA_AFRICA&stage=&health=&bdoId=&search=", "host": ["{{baseUrl}}"], "path": ["company-deals"],
+              "query": [
+                { "key": "company", "value": "ALPHA_AFRICA", "description": "ALPHA_AFRICA | FINANCE_FACTORY | COMMUNITY_FINANCE | AKOTEQ — required for ADMIN/CEO" },
+                { "key": "stage", "value": "" },
+                { "key": "health", "value": "" },
+                { "key": "bdoId", "value": "" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Company Deal",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/company-deals/:id", "host": ["{{baseUrl}}"], "path": ["company-deals", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Company Deal",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/company-deals", "host": ["{{baseUrl}}"], "path": ["company-deals"] },
+            "body": { "mode": "raw", "raw": "{\n  \"businessName\": \"Client Co\",\n  \"company\": \"ALPHA_AFRICA\",\n  \"bdoId\": \"\",\n  \"dealStage\": \"PROSPECTING\",\n  \"dealHealth\": \"ACTIVE\",\n  \"revenuePotentialGhs\": 75000\n}" }
+          }
+        },
+        {
+          "name": "Update Company Deal",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/company-deals/:id", "host": ["{{baseUrl}}"], "path": ["company-deals", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"dealStage\": \"QUALIFIED\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Company Deal",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/company-deals/:id", "host": ["{{baseUrl}}"], "path": ["company-deals", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Leads",
+      "description": "Scoped by role. Lead privacy model: staff see own; BUSINESS_CEO sees company leads; ADMIN/CEO sees all.",
+      "item": [
+        {
+          "name": "Lead Stats",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/leads/stats", "host": ["{{baseUrl}}"], "path": ["leads", "stats"] }
+          }
+        },
+        {
+          "name": "List Leads",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/leads?status=&priority=&bdoId=&bdo=&search=&limit=100&skip=0", "host": ["{{baseUrl}}"], "path": ["leads"],
+              "query": [
+                { "key": "status", "value": "" },
+                { "key": "priority", "value": "" },
+                { "key": "bdoId", "value": "" },
+                { "key": "bdo", "value": "" },
+                { "key": "search", "value": "" },
+                { "key": "limit", "value": "100" },
+                { "key": "skip", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Lead",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/leads/:id", "host": ["{{baseUrl}}"], "path": ["leads", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Lead",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leads", "host": ["{{baseUrl}}"], "path": ["leads"] },
+            "body": { "mode": "raw", "raw": "{\n  \"businessName\": \"Prospect Co\",\n  \"bdoId\": \"\",\n  \"status\": \"NEW\",\n  \"priority\": \"HIGH\"\n}" }
+          }
+        },
+        {
+          "name": "Update Lead",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/leads/:id", "host": ["{{baseUrl}}"], "path": ["leads", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CONTACTED\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Lead",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/leads/:id", "host": ["{{baseUrl}}"], "path": ["leads", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "SME / Clients",
+      "description": "Scoped by role. BUSINESS_CEO sees clients assigned to their company's BDOs.",
+      "item": [
+        {
+          "name": "List Clients",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/sme?status=&tier=&region=&valueChain=&bdoId=&bdo=&search=&limit=50&skip=0", "host": ["{{baseUrl}}"], "path": ["sme"],
+              "query": [
+                { "key": "status", "value": "" },
+                { "key": "tier", "value": "" },
+                { "key": "region", "value": "" },
+                { "key": "valueChain", "value": "" },
+                { "key": "bdoId", "value": "" },
+                { "key": "bdo", "value": "" },
+                { "key": "search", "value": "" },
+                { "key": "limit", "value": "50" },
+                { "key": "skip", "value": "0" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Client",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/sme/:id", "host": ["{{baseUrl}}"], "path": ["sme", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/sme", "host": ["{{baseUrl}}"], "path": ["sme"] },
+            "body": { "mode": "raw", "raw": "{\n  \"companyName\": \"Acme Ghana Ltd\",\n  \"bdoId\": \"\",\n  \"status\": \"ACTIVE\",\n  \"bankabilityTier\": \"TIER_1\",\n  \"region\": \"Greater Accra\"\n}" }
+          }
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/sme/:id", "host": ["{{baseUrl}}"], "path": ["sme", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Client",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/sme/:id", "host": ["{{baseUrl}}"], "path": ["sme", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Grants & Loans",
+      "description": "Scoped by role.",
+      "item": [
+        {
+          "name": "List Grants & Loans",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/grant-loans?status=&bdoId=&bdo=&search=", "host": ["{{baseUrl}}"], "path": ["grant-loans"],
+              "query": [{ "key": "status", "value": "" }, { "key": "bdoId", "value": "" }, { "key": "bdo", "value": "" }, { "key": "search", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get Grant/Loan",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/grant-loans/:id", "host": ["{{baseUrl}}"], "path": ["grant-loans", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Grant/Loan",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/grant-loans", "host": ["{{baseUrl}}"], "path": ["grant-loans"] },
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"Acme Ltd\",\n  \"bdoId\": \"\",\n  \"grantType\": \"GRANT\",\n  \"status\": \"SUBMITTED\",\n  \"amountApplied\": 50000\n}" }
+          }
+        },
+        {
+          "name": "Update Grant/Loan",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/grant-loans/:id", "host": ["{{baseUrl}}"], "path": ["grant-loans", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\",\n  \"amountApproved\": 45000\n}" }
+          }
+        },
+        {
+          "name": "Delete Grant/Loan",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/grant-loans/:id", "host": ["{{baseUrl}}"], "path": ["grant-loans", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Tasks",
+      "description": "Scoped by role. BUSINESS_CEO sees all tasks for their company's BDOs.",
+      "item": [
+        {
+          "name": "List Tasks",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/tasks?status=&priority=&type=&year=&bdoId=&bdo=&company=", "host": ["{{baseUrl}}"], "path": ["tasks"],
+              "query": [
+                { "key": "status", "value": "", "description": "PENDING | IN_PROGRESS | COMPLETED | OVERDUE | CANCELLED" },
+                { "key": "priority", "value": "", "description": "HIGH | MEDIUM | LOW" },
+                { "key": "type", "value": "", "description": "TASK | PROPOSAL" },
+                { "key": "year", "value": "" },
+                { "key": "bdoId", "value": "" },
+                { "key": "bdo", "value": "" },
+                { "key": "company", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tasks", "host": ["{{baseUrl}}"], "path": ["tasks"] },
+            "body": { "mode": "raw", "raw": "{\n  \"deliverable\": \"Prepare Q3 proposal\",\n  \"bdoId\": \"\",\n  \"status\": \"PENDING\",\n  \"priority\": \"HIGH\",\n  \"type\": \"TASK\",\n  \"targetDate\": \"2026-08-31\"\n}" }
+          }
+        },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/tasks/:id", "host": ["{{baseUrl}}"], "path": ["tasks", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"COMPLETED\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/tasks/:id", "host": ["{{baseUrl}}"], "path": ["tasks", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "List Companies",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/companies?all=0", "host": ["{{baseUrl}}"], "path": ["companies"], "query": [{ "key": "all", "value": "0", "description": "Pass 1 to include archived companies" }] }
+          }
+        },
+        {
+          "name": "Create Company [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/companies", "host": ["{{baseUrl}}"], "path": ["companies"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Company Ltd\",\n  \"color\": \"blue\",\n  \"order\": 10\n}" }
+          }
+        },
+        {
+          "name": "Update Company [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/companies/:id", "host": ["{{baseUrl}}"], "path": ["companies", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"color\": \"green\",\n  \"isActive\": true\n}" }
+          }
+        },
+        {
+          "name": "Archive Company [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/companies/:id", "host": ["{{baseUrl}}"], "path": ["companies", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/projects", "host": ["{{baseUrl}}"], "path": ["projects"] }
+          }
+        },
+        {
+          "name": "Get Project",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/projects/:id", "host": ["{{baseUrl}}"], "path": ["projects", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Project [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/projects", "host": ["{{baseUrl}}"], "path": ["projects"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Q3 Expansion\",\n  \"status\": \"IN_PROGRESS\",\n  \"description\": \"Expand to Kumasi region\"\n}" }
+          }
+        },
+        {
+          "name": "Update Project [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/projects/:id", "host": ["{{baseUrl}}"], "path": ["projects", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"COMPLETED\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Project [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/projects/:id", "host": ["{{baseUrl}}"], "path": ["projects", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Partnerships",
+      "item": [
+        {
+          "name": "List Partnerships",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/partnerships?status=&country=&search=", "host": ["{{baseUrl}}"], "path": ["partnerships"],
+              "query": [{ "key": "status", "value": "" }, { "key": "country", "value": "" }, { "key": "search", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get Partnership",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/partnerships/:id", "host": ["{{baseUrl}}"], "path": ["partnerships", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Partnership",
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/partnerships", "host": ["{{baseUrl}}"], "path": ["partnerships"] },
+            "body": { "mode": "raw", "raw": "{\n  \"partnerOrganisation\": \"Partner NGO\",\n  \"status\": \"ACTIVE\",\n  \"country\": \"Ghana\"\n}" }
+          }
+        },
+        {
+          "name": "Update Partnership",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/partnerships/:id", "host": ["{{baseUrl}}"], "path": ["partnerships", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"INACTIVE\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Partnership",
+          "request": {
+            "method": "DELETE", "header": [],
+            "url": { "raw": "{{baseUrl}}/partnerships/:id", "host": ["{{baseUrl}}"], "path": ["partnerships", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Referrals",
+      "item": [
+        {
+          "name": "List Referrals",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/referrals?status=&fromCompany=&toCompany=&bdoId=&search=", "host": ["{{baseUrl}}"], "path": ["referrals"],
+              "query": [{ "key": "status", "value": "" }, { "key": "fromCompany", "value": "" }, { "key": "toCompany", "value": "" }, { "key": "bdoId", "value": "" }, { "key": "search", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Create Referral",
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/referrals", "host": ["{{baseUrl}}"], "path": ["referrals"] },
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"Referred Client\",\n  \"fromCompany\": \"TRADELINE\",\n  \"toCompany\": \"BAPX\",\n  \"bdoId\": \"\",\n  \"status\": \"PENDING\"\n}" }
+          }
+        },
+        {
+          "name": "Update Referral",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/referrals/:id", "host": ["{{baseUrl}}"], "path": ["referrals", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CONVERTED\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Referral",
+          "request": {
+            "method": "DELETE", "header": [],
+            "url": { "raw": "{{baseUrl}}/referrals/:id", "host": ["{{baseUrl}}"], "path": ["referrals", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "KPI Framework",
+      "item": [
+        {
+          "name": "List KPI Definitions",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/definitions?department=&company=&scope=", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "definitions"],
+              "query": [{ "key": "department", "value": "" }, { "key": "company", "value": "" }, { "key": "scope", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get Auto-feed Keys",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/auto-keys", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "auto-keys"] }
+          }
+        },
+        {
+          "name": "List Departments",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/departments?company=", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "departments"], "query": [{ "key": "company", "value": "" }] }
+          }
+        },
+        {
+          "name": "KPI Board",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/board?company=GROUP&department=&bdoId=&period=2026-07", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "board"],
+              "query": [{ "key": "company", "value": "GROUP" }, { "key": "department", "value": "" }, { "key": "bdoId", "value": "" }, { "key": "period", "value": "2026-07", "description": "YYYY-MM" }]
+            }
+          }
+        },
+        {
+          "name": "Create KPI Definition [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/definitions", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "definitions"] },
+            "body": { "mode": "raw", "raw": "{\n  \"metric\": \"New Clients\",\n  \"department\": \"Sales\",\n  \"company\": \"TRADELINE\",\n  \"higherIsBetter\": true,\n  \"source\": \"MANUAL\"\n}" }
+          }
+        },
+        {
+          "name": "Update KPI Definition [ADMIN/CEO]",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/definitions/:id", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "definitions", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"metric\": \"Updated Metric Name\"\n}" }
+          }
+        },
+        {
+          "name": "Archive KPI Definition [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/definitions/:id", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "definitions", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create KPI Entry",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/entries", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "entries"] },
+            "body": { "mode": "raw", "raw": "{\n  \"definitionId\": \"\",\n  \"period\": \"2026-07-01\",\n  \"current\": 12,\n  \"target\": 20,\n  \"bdoId\": \"\"\n}" }
+          }
+        },
+        {
+          "name": "Update KPI Entry",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/entries/:id", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "entries", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"current\": 15\n}" }
+          }
+        },
+        {
+          "name": "KPI Entry Transition (workflow)",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/entries/:id/transition", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "entries", ":id", "transition"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"action\": \"submit_actual\",\n  \"note\": \"Submitting July actuals\"\n}", "options": { "raw": { "language": "json" } } },
+            "description": "Actions: submit_target | submit_actual | verify | lock | reopen"
+          }
+        },
+        {
+          "name": "Get KPI Entry Audit Log",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/entries/:id/audit", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "entries", ":id", "audit"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Delete KPI Entry [ADMIN/CEO]",
+          "request": {
+            "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/kpi-framework/entries/:id", "host": ["{{baseUrl}}"], "path": ["kpi-framework", "entries", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Dashboards",
+      "item": [
+        {
+          "name": "CEO Dashboard",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/dashboard/ceo", "host": ["{{baseUrl}}"], "path": ["dashboard", "ceo"] }
+          }
+        },
+        {
+          "name": "Executive / All Companies",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/dashboard/executive?period=2026-07", "host": ["{{baseUrl}}"], "path": ["dashboard", "executive"], "query": [{ "key": "period", "value": "2026-07" }] }
+          }
+        },
+        {
+          "name": "Company Dashboard",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/dashboard/company/:key", "host": ["{{baseUrl}}"], "path": ["dashboard", "company", ":key"],
+              "variable": [{ "key": "key", "value": "BAPX", "description": "BAPX | TRADELINE | ALPHA_AFRICA | FINANCE_FACTORY | COMMUNITY_FINANCE | AKOTEQ" }]
+            }
+          }
+        },
+        {
+          "name": "BDO Dashboard",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/dashboard/bdo/:id", "host": ["{{baseUrl}}"], "path": ["dashboard", "bdo", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Senior BDO Team Dashboard",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/dashboard/senior/:id?period=2026-07", "host": ["{{baseUrl}}"], "path": ["dashboard", "senior", ":id"], "variable": [{ "key": "id", "value": "" }], "query": [{ "key": "period", "value": "2026-07" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Get Alerts",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/alerts?bdoId=&bdo=", "host": ["{{baseUrl}}"], "path": ["alerts"],
+              "query": [{ "key": "bdoId", "value": "" }, { "key": "bdo", "value": "" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Notifications (Email)",
+      "item": [
+        {
+          "name": "Email Status",
+          "request": {
+            "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/notifications/status", "host": ["{{baseUrl}}"], "path": ["notifications", "status"] }
+          }
+        },
+        {
+          "name": "Send Test Email [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/notifications/test", "host": ["{{baseUrl}}"], "path": ["notifications", "test"] },
+            "body": { "mode": "raw", "raw": "{\n  \"to\": \"recipient@example.com\"\n}" }
+          }
+        },
+        {
+          "name": "Send Custom Notification [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/notifications/send", "host": ["{{baseUrl}}"], "path": ["notifications", "send"] },
+            "body": { "mode": "raw", "raw": "{\n  \"to\": [\"ceo@example.com\"],\n  \"subject\": \"Heads up\",\n  \"message\": \"Your message here.\"\n}" }
+          }
+        },
+        {
+          "name": "Send Alerts Digest [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/notifications/alerts-digest", "host": ["{{baseUrl}}"], "path": ["notifications", "alerts-digest"] },
+            "body": { "mode": "raw", "raw": "{\n  \"to\": []\n}" }
+          }
+        },
+        {
+          "name": "Trigger Daily Digests [ADMIN/CEO]",
+          "request": {
+            "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/notifications/run-digests", "host": ["{{baseUrl}}"], "path": ["notifications", "run-digests"] },
+            "body": { "mode": "raw", "raw": "{\n  \"timeOfDay\": \"morning\"\n}" }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Client Documents",
+      "item": [
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/client-documents?smeId=", "host": ["{{baseUrl}}"], "path": ["client-documents"], "query": [{ "key": "smeId", "value": "" }] }
+          }
+        },
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST", "header": [],
+            "url": { "raw": "{{baseUrl}}/client-documents", "host": ["{{baseUrl}}"], "path": ["client-documents"] },
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file" }, { "key": "smeId", "value": "", "type": "text" }, { "key": "uploadedBy", "value": "", "type": "text" }] }
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE", "header": [],
+            "url": { "raw": "{{baseUrl}}/client-documents/:id", "host": ["{{baseUrl}}"], "path": ["client-documents", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Client Notes",
+      "item": [
+        {
+          "name": "List Notes",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/client-notes?smeId=", "host": ["{{baseUrl}}"], "path": ["client-notes"], "query": [{ "key": "smeId", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/client-notes", "host": ["{{baseUrl}}"], "path": ["client-notes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"smeId\": \"\",\n  \"content\": \"Meeting notes here.\",\n  \"date\": \"2026-07-28\"\n}" }
+          }
+        },
+        {
+          "name": "Update Note",
+          "request": {
+            "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/client-notes/:id", "host": ["{{baseUrl}}"], "path": ["client-notes", ":id"], "variable": [{ "key": "id", "value": "" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Updated notes.\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Note",
+          "request": {
+            "method": "DELETE", "header": [],
+            "url": { "raw": "{{baseUrl}}/client-notes/:id", "host": ["{{baseUrl}}"], "path": ["client-notes", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Server Health",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "http://localhost:4000/health", "host": ["localhost"], "port": "4000", "path": ["health"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}

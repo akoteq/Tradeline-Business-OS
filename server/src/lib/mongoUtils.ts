@@ -20,3 +20,8 @@ export async function bdoIdsByName(name: string): Promise<string[]> {
   const bdos = await BDO.find({ name: { $regex: name, $options: 'i' } }, '_id');
   return bdos.map((b) => b.id as string);
 }
+
+export async function bdoIdsByCompany(company: string): Promise<string[]> {
+  const bdos = await BDO.find({ company }, '_id');
+  return bdos.map((b) => b.id as string);
+}

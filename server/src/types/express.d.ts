@@ -7,6 +7,7 @@ declare global {
         userId: string;
         role: UserRole;
         bdoId: string | null;
+        bdoCompany: string | null;
       };
     }
   }

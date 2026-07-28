@@ -1,22 +1,31 @@
 import { Router, Request, Response } from 'express';
 import { Task } from '../models/Task';
-import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
+import { withBdo, bdoIdsByName, bdoIdsByCompany } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
+import { requireAuth, bdoFilter, companyFilter } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), priority = qs(req, 'priority'), status = qs(req, 'status'), company = qs(req, 'company'), year = qs(req, 'year'), type = qs(req, 'type');
     const query: Record<string, unknown> = {};
-    if (bdo) {
-      const ids = await bdoIdsByName(bdo);
-      query.bdoId = { $in: ids };
+
+    const forcedBdoId = bdoFilter(req);
+    const forcedCompany = companyFilter(req);
+
+    if (forcedBdoId) {
+      query.bdoId = forcedBdoId;
+    } else if (forcedCompany) {
+      query.bdoId = { $in: await bdoIdsByCompany(forcedCompany) };
+    } else {
+      if (bdo) { query.bdoId = { $in: await bdoIdsByName(bdo) }; }
+      if (bdoId) query.bdoId = bdoId;
+      if (company) query.company = company;
     }
-    if (bdoId) query.bdoId = bdoId;
+
     if (priority) query.priority = priority;
     if (status) query.status = status;
-    if (company) query.company = company;
     if (year) query.year = parseInt(year);
     if (type) query.type = type;
     const tasks = await Task.find(query).sort({ createdAt: -1 });
@@ -26,7 +35,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const task = await new Task(req.body).save();
     res.status(201).json(task.toJSON());
@@ -35,7 +44,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const task = await Task.findByIdAndUpdate(param(req, 'id'), req.body, { new: true, runValidators: true });
     if (!task) { res.status(404).json({ error: 'Not found' }); return; }
@@ -45,7 +54,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     await Task.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();

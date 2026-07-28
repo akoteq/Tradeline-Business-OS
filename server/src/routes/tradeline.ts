@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { TradelineDeal } from '../models/TradelineDeal';
-import { withBdo, bdoIdsByName } from '../lib/mongoUtils';
+import { withBdo, bdoIdsByName, bdoIdsByCompany } from '../lib/mongoUtils';
 import { qs, param } from '../lib/query';
+import { requireAuth, bdoFilter, companyFilter } from '../middleware/auth';
 
 const router = Router();
 
@@ -24,15 +25,23 @@ function validateRevenue(potential: unknown, expected: unknown, received: unknow
   return null;
 }
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const bdo = qs(req, 'bdo'), bdoId = qs(req, 'bdoId'), tier = qs(req, 'tier'), stage = qs(req, 'stage'), health = qs(req, 'health'), priority = qs(req, 'priority'), search = qs(req, 'search');
     const query: Record<string, unknown> = {};
-    if (bdo) {
-      const ids = await bdoIdsByName(bdo);
-      query.bdoId = { $in: ids };
+
+    const forcedBdoId = bdoFilter(req);
+    const forcedCompany = companyFilter(req);
+
+    if (forcedBdoId) {
+      query.bdoId = forcedBdoId;
+    } else if (forcedCompany) {
+      query.bdoId = { $in: await bdoIdsByCompany(forcedCompany) };
+    } else {
+      if (bdo) { query.bdoId = { $in: await bdoIdsByName(bdo) }; }
+      if (bdoId) query.bdoId = bdoId;
     }
-    if (bdoId) query.bdoId = bdoId;
+
     if (tier) query.tier = tier;
     if (stage) query.dealStage = stage;
     if (health) query.dealHealth = health;
@@ -45,7 +54,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const deal = await TradelineDeal.findById(param(req, 'id'));
     if (!deal) { res.status(404).json({ error: 'Not found' }); return; }
@@ -56,7 +65,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const validationError = validateRevenue(req.body.revenuePotentialGhs, req.body.expectedRevenueReceivedGhs, req.body.revenueReceivedGhs);
     if (validationError) { res.status(400).json({ error: validationError }); return; }
@@ -68,7 +77,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const existing = await TradelineDeal.findById(param(req, 'id'));
     if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
@@ -85,7 +94,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     await TradelineDeal.findByIdAndDelete(param(req, 'id'));
     res.status(204).send();
