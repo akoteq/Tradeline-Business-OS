@@ -3,7 +3,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-
 import { connectDB } from './lib/db';
 import { ensureCompaniesSeeded } from './models/Company';
 import bapxRouter from './routes/bapx';
@@ -33,10 +32,21 @@ import { startScheduler } from './lib/scheduler';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-const allowedOrigins = (process.env.CLIENT_URL || 'https://afrca-osss-client-w9vb.vercel.app')
+// Default origins always allowed, even if CLIENT_URL env var is missing/incomplete.
+// Add any additional deployed frontend URLs to CLIENT_URL on Railway as a
+// comma-separated list, e.g.:
+// CLIENT_URL=https://afrca-osss-client-w9vb.vercel.app,http://localhost:3000
+const DEFAULT_ORIGINS = [
+  'https://afrca-osss-client-w9vb.vercel.app',
+  'http://localhost:3000',
+];
+
+const envOrigins = (process.env.CLIENT_URL || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...DEFAULT_ORIGINS, ...envOrigins]));
 
 console.log('Allowed CORS origins:', allowedOrigins);
 
