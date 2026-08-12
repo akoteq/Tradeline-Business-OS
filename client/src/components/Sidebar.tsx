@@ -41,7 +41,9 @@ import { useCompanies, companyHref } from "@/lib/companies";
 const GROUP_OWNER_ROLES = ["ADMIN", "CEO"];
 const ROLE = {
   BUSINESS_CEO: "BUSINESS_CEO",
-  STAFF: "STAFF",
+  // No STAFF role exists on the backend (see User.ts USER_ROLES), so comparing
+  // against it is a type error. Commented out until the real role is confirmed.
+  // STAFF: "STAFF",
   BDO: "BDO",
 } as const;
 
@@ -87,7 +89,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   const isGroupOwner = GROUP_OWNER_ROLES.includes(user.role);
   const isBusinessCeo = user.role === ROLE.BUSINESS_CEO;
-  const isStaff = user.role === ROLE.STAFF || user.role === ROLE.BDO;
+  const isStaff = /* user.role === ROLE.STAFF || */ user.role === ROLE.BDO;
 
   // ---- Role-scoped nav content -------------------------------------------------
 
