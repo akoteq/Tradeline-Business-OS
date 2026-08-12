@@ -9,7 +9,7 @@ import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } fr
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
 
 // ─── Config per company ────────────────────────────────────────────────────────
 
@@ -28,6 +28,10 @@ const SLUG_TO_KEY: Record<string, string> = {
 };
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+// Note: this is the post-conversion deal pipeline (stage / health / invoice),
+// distinct from the Tradeline SQD's `Lead` entity (pre-conversion prospect,
+// FR-8–13). Nothing here maps to Lead/KPI/Investment, so no fields were added
+// or removed against that spec — just restyled to the shared design system.
 
 type Deal = {
   id: string;
@@ -81,6 +85,11 @@ const fmt = (n: number | null | undefined) =>
     ? n.toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 })
     : "—";
 
+const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30";
+const labelCls = "text-xs font-medium text-muted block mb-1";
+const selectCls = "text-sm rounded-lg border border-border bg-background px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30";
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CompanyPipelinePage({ params }: { params: Promise<{ company: string }> }) {
@@ -131,7 +140,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
     {
       key: "businessName", label: "Business", sortable: true,
       render: (r: Deal) => (
-        <button onClick={() => setDetail(r)} className="text-left font-semibold text-indigo-700 hover:underline truncate max-w-[180px] block">
+        <button onClick={() => setDetail(r)} className="block max-w-[180px] truncate text-left font-semibold text-accent hover:underline">
           {r.businessName}
         </button>
       ),
@@ -143,84 +152,98 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
     { key: "priority",   label: "Priority", sortable: true, render: (r: Deal) => <PriorityBadge  value={r.priority} /> },
     {
       key: "revenueReceivedGhs", label: "Received",
-      render: (r: Deal) => <span className="font-medium text-green-700">{fmt(r.revenueReceivedGhs)}</span>,
+      render: (r: Deal) => <span className="font-medium tabular-nums text-foreground">{fmt(r.revenueReceivedGhs)}</span>,
     },
     {
       key: "balanceGhs", label: "Balance",
-      render: (r: Deal) => <span className={r.balanceGhs && r.balanceGhs > 0 ? "text-red-600" : "text-gray-500"}>{fmt(r.balanceGhs)}</span>,
+      render: (r: Deal) => (
+        <span className={`tabular-nums ${r.balanceGhs && r.balanceGhs > 0 ? "font-medium text-accent" : "text-muted"}`}>
+          {fmt(r.balanceGhs)}
+        </span>
+      ),
     },
     { key: "invoiceStatus", label: "Invoice", sortable: true, render: (r: Deal) => <InvoiceStatusBadge value={r.invoiceStatus ?? "NOT_INVOICED"} /> },
     { key: "bdo", label: "BDO", render: (r: Deal) => r.bdo?.name ?? "—" },
   ];
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{label}</h1>
-        <p className="text-sm text-gray-500 mt-1">Deal pipeline</p>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <div className="border-b border-dashed border-border pb-5">
+          <h1 className="font-serif text-[1.75rem] leading-[1.15] text-foreground md:text-[2rem]">{label}</h1>
+          <p className="mt-1 text-sm text-muted">Deal pipeline</p>
+        </div>
+
+        {/* Summary KPI row */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">
+          <KpiTile icon={Layers} label="Total deals" value={deals.length} />
+          <KpiTile icon={CircleDollarSign} label="Revenue received" value={fmt(totalRevenue)} />
+          <KpiTile icon={Wallet} label="Revenue potential" value={fmt(totalPotential)} />
+          <KpiTile icon={TrendingUp} label="Active" value={deals.filter((d) => d.dealHealth === "ACTIVE").length} />
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface">
+          <DataTable
+            columns={columns}
+            data={deals}
+            isLoading={isLoading}
+            title={`${deals.length} deal${deals.length !== 1 ? "s" : ""}`}
+            onAdd={() => { setEditing(null); setShowForm(true); }}
+            onEdit={(row) => { setEditing(row); setShowForm(true); }}
+            onDelete={(row) => {
+              if (confirm(`Delete deal "${row.businessName}"?`)) deleteMutation.mutate(row.id);
+            }}
+            filterBar={
+              <div className="flex flex-wrap gap-2">
+                <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className={selectCls}>
+                  <option value="">All stages</option>
+                  {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+                </select>
+                <select value={filterHealth} onChange={(e) => setFilterHealth(e.target.value)} className={selectCls}>
+                  <option value="">All health</option>
+                  {HEALTH_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+                </select>
+              </div>
+            }
+          />
+        </div>
+
+        {showForm && (
+          <DealFormModal
+            deal={editing}
+            companyKey={companyKey}
+            bdos={bdos}
+            clients={clients}
+            onClose={() => setShowForm(false)}
+            onSaved={() => { setShowForm(false); invalidate(); }}
+          />
+        )}
+
+        {detail && (
+          <DetailDrawer
+            deal={detail}
+            onClose={() => setDetail(null)}
+            onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }}
+          />
+        )}
       </div>
-
-      {/* Summary KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiTile label="Total Deals"      value={deals.length} />
-        <KpiTile label="Revenue Received" value={fmt(totalRevenue)} />
-        <KpiTile label="Revenue Potential" value={fmt(totalPotential)} />
-        <KpiTile label="Active"           value={deals.filter((d) => d.dealHealth === "ACTIVE").length} />
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={deals}
-        isLoading={isLoading}
-        title={`${deals.length} deal${deals.length !== 1 ? "s" : ""}`}
-        onAdd={() => { setEditing(null); setShowForm(true); }}
-        onEdit={(row) => { setEditing(row); setShowForm(true); }}
-        onDelete={(row) => {
-          if (confirm(`Delete deal "${row.businessName}"?`)) deleteMutation.mutate(row.id);
-        }}
-        filterBar={
-          <div className="flex gap-2 flex-wrap">
-            <select value={filterStage}  onChange={(e) => setFilterStage(e.target.value)}  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              <option value="">All Stages</option>
-              {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-            </select>
-            <select value={filterHealth} onChange={(e) => setFilterHealth(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              <option value="">All Health</option>
-              {HEALTH_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-            </select>
-          </div>
-        }
-      />
-
-      {showForm && (
-        <DealFormModal
-          deal={editing}
-          companyKey={companyKey}
-          bdos={bdos}
-          clients={clients}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); invalidate(); }}
-        />
-      )}
-
-      {detail && (
-        <DetailDrawer
-          deal={detail}
-          onClose={() => setDetail(null)}
-          onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }}
-        />
-      )}
     </div>
   );
 }
 
 // ─── KPI tile ──────────────────────────────────────────────────────────────────
+// Matches the StatTile/MoneyTile pattern from the Company Dashboard page.
 
-function KpiTile({ label, value }: { label: string; value: string | number }) {
+function KpiTile({ icon: Icon, label, value }: { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; value: string | number }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-bold text-gray-900 mt-1">{value}</div>
+    <div className="rounded-2xl border border-border bg-surface px-5 py-5">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+          <Icon size={13} strokeWidth={2.25} />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted">{label}</span>
+      </div>
+      <div className="mt-2.5 font-serif text-xl leading-none tabular-nums text-foreground md:text-2xl">{value}</div>
     </div>
   );
 }
@@ -314,15 +337,15 @@ function DealFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-gray-900">{deal ? "Edit Deal" : "Add Deal"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{deal ? "Edit deal" : "Add deal"}</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-4 overflow-y-auto p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="col-span-2">
               <ClientSelect
                 label="Client *"
@@ -343,11 +366,11 @@ function DealFormModal({
                   }));
                 }}
               />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
+              <p className="mt-1 text-[11px] text-muted">
+                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add in Client Overview first →</Link>
               </p>
             </div>
-            <Field label="Client Contact"  value={form.clientName}   onChange={(v) => set("clientName", v)} />
+            <Field label="Client contact"  value={form.clientName}   onChange={(v) => set("clientName", v)} />
             <Field label="Industry"        value={form.industry}     onChange={(v) => set("industry", v)} />
             <Field label="Email"           value={form.email}        onChange={(v) => set("email", v)} type="email" />
             <Field label="Telephone"       value={form.telephone}    onChange={(v) => set("telephone", v)} />
@@ -356,34 +379,34 @@ function DealFormModal({
               {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
               {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </SelectField>
-            <Field label="Value Chain"     value={form.valueChain}   onChange={(v) => set("valueChain", v)} />
+            <Field label="Value chain"     value={form.valueChain}   onChange={(v) => set("valueChain", v)} />
             <Field label="Product"         value={form.product}      onChange={(v) => set("product", v)} />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SelectField label="Assigned BDO" value={form.bdoId} onChange={(v) => set("bdoId", v)}>
               <option value="">— Unassigned —</option>
               {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
             </SelectField>
-            <SelectField label="Deal Stage"     value={form.dealStage}     onChange={(v) => set("dealStage", v)}>
+            <SelectField label="Deal stage"     value={form.dealStage}     onChange={(v) => set("dealStage", v)}>
               {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>
-            <SelectField label="Deal Health"    value={form.dealHealth}    onChange={(v) => set("dealHealth", v)}>
+            <SelectField label="Deal health"    value={form.dealHealth}    onChange={(v) => set("dealHealth", v)}>
               {HEALTH_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>
             <SelectField label="Priority"       value={form.priority}      onChange={(v) => set("priority", v)}>
               {["HIGH", "MEDIUM", "LOW"].map((s) => <option key={s} value={s}>{s}</option>)}
             </SelectField>
-            <SelectField label="Payment Status" value={form.paymentStatus} onChange={(v) => set("paymentStatus", v)}>
+            <SelectField label="Payment status" value={form.paymentStatus} onChange={(v) => set("paymentStatus", v)}>
               {PAY_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}
             </SelectField>
-            <SelectField label="Invoice Status" value={form.invoiceStatus} onChange={(v) => set("invoiceStatus", v)}>
+            <SelectField label="Invoice status" value={form.invoiceStatus} onChange={(v) => set("invoiceStatus", v)}>
               {INVOICE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>
-            <Field label="Next Call Date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
+            <Field label="Next call date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SelectField label="Currency" value={form.currency} onChange={(v) => set("currency", v)}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </SelectField>
@@ -391,31 +414,37 @@ function DealFormModal({
               <Field label={`Exchange rate (1 ${form.currency} = ? GHS)`} value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} type="number" />
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label={`Revenue Potential (${form.currency})`} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
-            <Field label={`Revenue Received (${form.currency})`}  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label={`Revenue potential (${form.currency})`} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
+            <Field label={`Revenue received (${form.currency})`}  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
             <Field label={`Balance (${form.currency})`}           value={form.balanceGhs}          onChange={(v) => set("balanceGhs", v)}          type="number" />
           </div>
           {form.currency !== "GHS" && form.exchangeRate && (
-            <p className="text-[11px] text-gray-400">Entered in {form.currency}, stored as GHS at 1 {form.currency} = {form.exchangeRate} GHS.</p>
+            <p className="text-[11px] text-muted">Entered in {form.currency}, stored as GHS at 1 {form.currency} = {form.exchangeRate} GHS.</p>
           )}
 
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Next Steps</label>
-            <textarea value={form.nextSteps} onChange={(e) => set("nextSteps", e.target.value)} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <label className={labelCls}>Next steps</label>
+            <textarea value={form.nextSteps} onChange={(e) => set("nextSteps", e.target.value)} rows={2} className={`${inputCls} resize-none`} />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <label className={labelCls}>Notes</label>
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className={`${inputCls} resize-none`} />
           </div>
 
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {error && (
+            <p className="rounded-lg border border-accent/25 bg-accent/[0.08] px-3 py-2 text-sm text-accent">{error}</p>
+          )}
         </div>
 
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? "Saving…" : deal ? "Update Deal" : "Add Deal"}
+        <div className="flex shrink-0 justify-end gap-2 border-t border-border px-5 py-3">
+          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-muted hover:bg-background">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : deal ? "Update deal" : "Add deal"}
           </button>
         </div>
       </div>
@@ -428,47 +457,47 @@ function DealFormModal({
 function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => void; onEdit: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-md h-full overflow-y-auto shadow-2xl flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div className="absolute inset-0 bg-foreground/30" onClick={onClose} />
+      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-surface shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="font-semibold text-gray-900">{deal.businessName}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{deal.clientName ?? "No client name"}</p>
+            <h2 className="font-serif text-lg text-foreground">{deal.businessName}</h2>
+            <p className="mt-0.5 text-xs text-muted">{deal.clientName ?? "No client name"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <button onClick={onEdit} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground hover:opacity-90">Edit</button>
+            <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
           </div>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="space-y-4 p-5">
           <div className="flex flex-wrap gap-2">
             <DealStageBadge  value={deal.dealStage} />
             <DealHealthBadge value={deal.dealHealth} />
             <PriorityBadge   value={deal.priority} />
           </div>
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <DItem label="Email"            value={deal.email} />
             <DItem label="Telephone"        value={deal.telephone} />
             <DItem label="Region"           value={deal.region} />
             <DItem label="Industry"         value={deal.industry} />
             <DItem label="BDO"              value={deal.bdo?.name} />
-            <DItem label="Payment Status"   value={deal.paymentStatus} />
-            <DItem label="Invoice Status"   value={deal.invoiceStatus ? deal.invoiceStatus.replace(/_/g, " ") : null} />
-            <DItem label="Entered In"       value={deal.currency && deal.currency !== "GHS" ? `${deal.currency} @ ${deal.exchangeRate} GHS` : "GHS"} />
-            <DItem label="Revenue Received" value={fmt(deal.revenueReceivedGhs)} />
+            <DItem label="Payment status"   value={deal.paymentStatus} />
+            <DItem label="Invoice status"   value={deal.invoiceStatus ? deal.invoiceStatus.replace(/_/g, " ") : null} />
+            <DItem label="Entered in"       value={deal.currency && deal.currency !== "GHS" ? `${deal.currency} @ ${deal.exchangeRate} GHS` : "GHS"} />
+            <DItem label="Revenue received" value={fmt(deal.revenueReceivedGhs)} />
             <DItem label="Balance"          value={fmt(deal.balanceGhs)} />
-            <DItem label="Next Call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />
+            <DItem label="Next call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />
           </dl>
           {deal.nextSteps && (
             <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Next Steps</p>
-              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{deal.nextSteps}</p>
+              <p className="mb-1.5 text-xs font-semibold text-muted">Next steps</p>
+              <p className="rounded-lg bg-background p-3 text-sm text-foreground">{deal.nextSteps}</p>
             </div>
           )}
           {deal.notes && (
             <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Notes</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{deal.notes}</p>
+              <p className="mb-1.5 text-xs font-semibold text-muted">Notes</p>
+              <p className="whitespace-pre-wrap rounded-lg bg-background p-3 text-sm text-foreground">{deal.notes}</p>
             </div>
           )}
         </div>
@@ -482,8 +511,8 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
 function Field({ label, value, onChange, type = "text", span }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number }) {
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <label className={labelCls}>{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={inputCls} />
     </div>
   );
 }
@@ -491,8 +520,8 @@ function Field({ label, value, onChange, type = "text", span }: { label: string;
 function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <label className={labelCls}>{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
         {children}
       </select>
     </div>
@@ -502,8 +531,8 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
 function DItem({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs text-gray-400 font-medium">{label}</dt>
-      <dd className="text-gray-800 mt-0.5">{value ?? "—"}</dd>
+      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dd className="mt-0.5 text-foreground">{value ?? "—"}</dd>
     </div>
   );
 }

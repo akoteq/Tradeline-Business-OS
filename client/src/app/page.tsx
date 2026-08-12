@@ -1,22 +1,82 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { fetcher } from "@/lib/api";
 import {
-  TrendingUp,
-  Users,
-  Building2,
-  Handshake,
-  DollarSign,
   AlertTriangle,
+  Building2,
   CheckCircle2,
+  ChevronRight,
+  Clock,
+  Flag,
+  Gauge,
+  Layers,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { DealHealthBadge, DealStageBadge } from "@/components/Badges";
+import { BrandLoader } from "@/components/BrandLoader";
 
-// ---- Executive (group-wide) types, served by /dashboard/executive ----
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const tabFade = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+};
+
+// ---- Types ------------------------------------------------------------
+
+type Urgency = "overdue" | "today" | "1day" | "3days" | "week";
+
+type Deadline = {
+  id: string;
+  type: "TRADELINE" | "TASK";
+  subtype?: string;
+  businessName: string;
+  dueDate: string;
+  daysUntil: number;
+  urgency: Urgency;
+  bdo: { id: string; name: string } | null;
+};
+
+type StaleDeal = {
+  id: string;
+  type: "BAPX" | "TRADELINE" | "COMPANY";
+  businessName: string;
+  dealHealth: string;
+  lastUpdated: string;
+  daysSinceUpdate: number;
+  bdo: { id: string; name: string } | null;
+};
+
+/**
+ * FinancialFlag isn't returned by /alerts yet — your spec (FR-19) calls for
+ * auto-flags on profit decline, discretionary spend spikes, and burn
+ * acceleration, on top of the overdue-task flags already wired below.
+ * Typed as optional so this compiles and renders nothing until the
+ * accounting engine ships it — flip it required once the field is real.
+ */
+type FinancialFlag = {
+  id: string;
+  kind: "profit_decline" | "discretionary_spike" | "burn_acceleration";
+  businessName: string;
+  message: string;
+};
+
+type AlertsResponse = { deadlines: Deadline[]; stale: StaleDeal[]; flags?: FinancialFlag[] };
+
 type CoSummary = {
-  key: string; name: string; slug: string; color: string; dealSource: string;
+  key: string; name: string; slug: string;
   total: number; active: number; closedWon: number;
   revenue: { potential: number; received: number; outstanding: number };
 };
@@ -29,208 +89,678 @@ type Exec = {
   topRisks: DealRow[];
 };
 
+type ExecutiveSummary = { summary: string; generatedAt: string };
+
 const fmt = (n: number) =>
   (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
-const badge: Record<string, string> = {
-  indigo: "bg-indigo-100 text-indigo-700", green: "bg-green-100 text-green-700", emerald: "bg-emerald-100 text-emerald-700",
-  teal: "bg-teal-100 text-teal-700", sky: "bg-sky-100 text-sky-700", violet: "bg-violet-100 text-violet-700",
-  amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700", slate: "bg-slate-100 text-slate-700",
+const fmtCompact = (n: number) =>
+  (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", notation: "compact", maximumFractionDigits: 1 });
+
+const URGENCY_RANK: Record<Urgency, number> = { overdue: 0, today: 1, "1day": 2, "3days": 3, week: 4 };
+const URGENCY_URGENT: Urgency[] = ["overdue", "today", "1day"];
+
+function urgencyLabel(u: Urgency, daysUntil: number) {
+  switch (u) {
+    case "overdue": return `${Math.abs(daysUntil)}d overdue`;
+    case "today": return "Due today";
+    case "1day": return "1 day left";
+    default: return `${daysUntil}d left`;
+  }
+}
+
+function timeAgo(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+const FLAG_LABEL: Record<FinancialFlag["kind"], string> = {
+  profit_decline: "Profit decline",
+  discretionary_spike: "Discretionary spend spike",
+  burn_acceleration: "Burn accelerating",
 };
 
+const PIPELINE_HREF: Partial<Record<StaleDeal["type"], string>> = {
+  BAPX: "/bapx/pipeline",
+  TRADELINE: "/tradeline/pipeline",
+};
+
+function deadlineLink(d: Deadline) {
+  if (d.type === "TASK") return d.bdo?.name ? `/tasks?bdo=${encodeURIComponent(d.bdo.name)}` : "/tasks";
+  return d.bdo?.name ? `${PIPELINE_HREF.TRADELINE}?bdo=${encodeURIComponent(d.bdo.name)}` : PIPELINE_HREF.TRADELINE ?? "/tasks";
+}
+
+/** Collapse individual stale deals into one line per (type, owner) — the signal
+ * that matters is "this book has gone quiet," not each business name in it. */
+function groupStale(stale: StaleDeal[]) {
+  const groups = new Map<string, { type: StaleDeal["type"]; bdoName: string | null; count: number; maxDays: number }>();
+  for (const d of stale) {
+    const key = `${d.type}|${d.bdo?.name ?? "—"}`;
+    const g = groups.get(key);
+    if (g) {
+      g.count += 1;
+      g.maxDays = Math.max(g.maxDays, d.daysSinceUpdate);
+    } else {
+      groups.set(key, { type: d.type, bdoName: d.bdo?.name ?? null, count: 1, maxDays: d.daysSinceUpdate });
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+}
+
+const RISK_WORDS = ["risk", "overdue", "off"];
+
+function formatLabel(v: string) {
+  return v.replace(/_/g, " ").toLowerCase();
+}
+
+function isRiskValue(v: string) {
+  const lower = v.toLowerCase();
+  return RISK_WORDS.some((w) => lower.includes(w));
+}
+
+function Tag({ value }: { value: string }) {
+  const flagged = isRiskValue(value);
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        flagged ? "border-accent/25 bg-accent/[0.08] text-accent" : "border-border bg-background text-muted"
+      }`}
+    >
+      {formatLabel(value)}
+    </span>
+  );
+}
+
+function SectionHeader({
+  icon: Icon,
+  label,
+  cta,
+  aside,
+}: {
+  icon: LucideIcon;
+  label: string;
+  cta?: { label: string; href: string };
+  aside?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+          <Icon size={13} strokeWidth={2.25} />
+        </span>
+        <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+      </div>
+      {cta ? (
+        <Link
+          href={cta.href}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent/25 bg-accent/[0.08] px-3 py-1 text-xs font-semibold text-accent transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          {cta.label}
+          <ChevronRight size={12} />
+        </Link>
+      ) : aside ? (
+        <span className="shrink-0 text-xs text-muted">{aside}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function todayStamp() {
+  return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ---- Quick nav (tab switcher, not a scroll anchor) -------------------------
+
+type NavItem = { id: string; label: string; icon: LucideIcon };
+
+function QuickNav({
+  items,
+  activeId,
+  onSelect,
+}: {
+  items: NavItem[];
+  activeId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <nav aria-label="Dashboard sections" className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/85 px-5 backdrop-blur-md md:-mx-8 md:px-8">
+      <ul className="flex gap-1 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {items.map((item) => {
+          const active = item.id === activeId;
+          return (
+            <li key={item.id} className="shrink-0">
+              <button
+                type="button"
+                onClick={() => onSelect(item.id)}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  active ? "bg-accent text-accent-foreground" : "text-muted hover:bg-surface hover:text-foreground"
+                }`}
+              >
+                <item.icon size={13} />
+                {item.label}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+// ---- AI summary ------------------------------------------------------------
+
+function AiSummaryCard({ query }: { query: ReturnType<typeof useQuery<ExecutiveSummary>> }) {
+  const { data, isLoading, isError, refetch, isFetching } = query;
+  return (
+    <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
+            <Sparkles size={13} strokeWidth={2.25} />
+          </span>
+          <h2 className="text-sm font-semibold text-foreground">AI summary</h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {data?.generatedAt && <span className="text-[11px] text-muted">Updated {timeAgo(data.generatedAt)}</span>}
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="text-[11px] font-semibold text-accent hover:underline disabled:opacity-50"
+          >
+            {isFetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="mt-3 space-y-2">
+          <div className="h-3 w-full animate-pulse rounded-full bg-accent/10" />
+          <div className="h-3 w-5/6 animate-pulse rounded-full bg-accent/10" />
+          <div className="h-3 w-2/3 animate-pulse rounded-full bg-accent/10" />
+        </div>
+      ) : isError || !data?.summary ? (
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          No summary available right now — check back once today&apos;s numbers are in.
+        </p>
+      ) : (
+        <p className="mt-3 text-sm leading-relaxed text-foreground/90">{data.summary}</p>
+      )}
+    </div>
+  );
+}
+
+// ---- Page ---------------------------------------------------------------
+
 export default function CEODashboard() {
-  const ceo = useQuery({
-    queryKey: ["ceo-dashboard"],
-    queryFn: () => fetcher("/dashboard/ceo"),
-  });
-  const exec = useQuery<Exec>({
-    queryKey: ["executive-dashboard"],
-    queryFn: () => fetcher("/dashboard/executive"),
+  const alerts = useQuery<AlertsResponse>({ queryKey: ["alerts"], queryFn: () => fetcher("/alerts") });
+  const exec = useQuery<Exec>({ queryKey: ["executive-dashboard"], queryFn: () => fetcher("/dashboard/executive") });
+  const summary = useQuery<ExecutiveSummary>({
+    queryKey: ["executive-summary"],
+    queryFn: () => fetcher("/dashboard/executive/summary"),
   });
 
-  if (ceo.isLoading || exec.isLoading)
-    return <div className="text-gray-400 p-8">Loading dashboard…</div>;
-  if (ceo.isError || !ceo.data)
+  const [activeId, setActiveId] = useState("overview");
+
+  const data = exec.data;
+
+  const deadlines = useMemo(
+    () =>
+      [...(alerts.data?.deadlines ?? [])].sort(
+        (a, b) => URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency] || a.daysUntil - b.daysUntil
+      ),
+    [alerts.data?.deadlines]
+  );
+  const stale = alerts.data?.stale ?? [];
+  const staleGroups = useMemo(() => groupStale(stale), [stale]);
+  const financialFlags = alerts.data?.flags ?? [];
+
+  const urgentCount = deadlines.filter((d) => URGENCY_URGENT.includes(d.urgency)).length;
+  const visibleDeadlines = deadlines.slice(0, 4);
+  const visibleStaleGroups = staleGroups.slice(0, 3);
+  const visibleFlags = financialFlags.slice(0, 4);
+
+  const activeCompanies = useMemo(
+    () => (data ? [...data.companies].sort((a, b) => b.active - a.active) : []),
+    [data]
+  );
+
+  const kpiTotal = data
+    ? data.kpiHealth.onTrack + data.kpiHealth.atRisk + data.kpiHealth.offTrack + data.kpiHealth.noTarget
+    : 0;
+
+  const hasAttention = deadlines.length > 0 || staleGroups.length > 0 || visibleFlags.length > 0;
+
+  const navItems = useMemo<NavItem[]>(
+    () =>
+      [
+        { id: "overview", label: "Overview", icon: Layers },
+        { id: "team-performance", label: "Team", icon: Gauge },
+        hasAttention ? { id: "attention", label: "Attention", icon: AlertTriangle } : null,
+        { id: "company-health", label: "Companies", icon: Building2 },
+        { id: "deal-ledgers", label: "Deals", icon: Target },
+      ].filter((x): x is NavItem => x !== null),
+    [hasAttention]
+  );
+
+  if (exec.isLoading) return <BrandLoader fullScreen={false} label="Loading dashboard" />;
+  if (exec.isError || !data)
     return (
-      <div className="text-red-400 p-8">
-        Failed to load data. Make sure the server is running on port 4000.
+      <div className="mx-auto max-w-md p-12 text-center">
+        <p className="text-xl font-semibold text-foreground">Couldn&apos;t load the dashboard</p>
+        <p className="mt-2 text-sm text-muted">Make sure the server is reachable, then refresh.</p>
       </div>
     );
 
-  const data = ceo.data;
-
-  const kpiTotal = exec.data
-    ? exec.data.kpiHealth.onTrack + exec.data.kpiHealth.atRisk + exec.data.kpiHealth.offTrack + exec.data.kpiHealth.noTarget
-    : 0;
-
   return (
-    <div className="p-4 md:p-6 space-y-5 md:space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">CEO Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monday brief — group-wide overview
-            {exec.data ? ` across ${exec.data.companies.length} companies` : ""}
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl space-y-8 px-5 py-10 md:px-8 md:py-14">
+        {/* ---- Masthead --------------------------------------------------- */}
+        <motion.header
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="space-y-4"
+        >
+          <p className="text-[11px] uppercase tracking-[0.15em] text-muted tabular-nums">{todayStamp()}</p>
+
+          <h1 className="text-[2rem] font-semibold leading-[1.15] tracking-tight text-foreground md:text-[2.75rem]">
+            {urgentCount > 0 ? (
+              <>
+                <span className="italic text-accent">{urgentCount}</span> deadline{urgentCount === 1 ? "" : "s"} overdue or due today
+              </>
+            ) : deadlines.length > 0 ? (
+              <>
+                <span className="italic text-accent">{deadlines.length}</span> deadline{deadlines.length === 1 ? "" : "s"} this week
+              </>
+            ) : (
+              "Everything's on track"
+            )}
+          </h1>
+
+          <p className="max-w-xl text-sm leading-relaxed text-muted">
+            Across {data.companies.length} companies.
+            {stale.length > 0 && (
+              <> Also, {stale.length} deal{stale.length === 1 ? "" : "s"} across the group haven&apos;t been touched in 14+ days.</>
+            )}
           </p>
-        </div>
-      </div>
 
-      {/* Group revenue headline */}
-      {exec.data && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Money label="Potential Revenue" value={fmt(exec.data.totals.potential)} tone="indigo" />
-          <Money label="Revenue Received" value={fmt(exec.data.totals.received)} tone="green" />
-          <Money label="Outstanding" value={fmt(exec.data.totals.outstanding)} tone="amber" />
-        </div>
-      )}
+          <div className="border-t border-dashed border-border" />
+        </motion.header>
 
-      {/* Group deal + KPI health tiles */}
-      {exec.data && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat icon={<Building2 size={15} />} label="Total Deals" value={exec.data.totals.deals} />
-          <Stat icon={<TrendingUp size={15} />} label="Active" value={exec.data.totals.active} accent="text-blue-600" />
-          <Stat icon={<CheckCircle2 size={15} />} label="Closed Won" value={exec.data.totals.closedWon} accent="text-green-600" />
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1.5">KPI Health ({kpiTotal})</div>
-            <div className="flex items-center gap-3 text-sm font-semibold">
-              <span className="text-green-600">{exec.data.kpiHealth.onTrack} on</span>
-              <span className="text-amber-600">{exec.data.kpiHealth.atRisk} risk</span>
-              <span className="text-red-600">{exec.data.kpiHealth.offTrack} off</span>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* ---- AI summary — always visible regardless of tab ------------------ */}
+        <motion.section
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+        >
+          <AiSummaryCard query={summary} />
+        </motion.section>
 
-      {/* Operational KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <KpiCard label="Total Leads" value={data.leads.total} icon={<Users size={20} />} color="sky" />
-        <KpiCard label="SMEs Tracked" value={data.smes.total} icon={<Building2 size={20} />} color="violet" />
-        <KpiCard label="Active Partnerships" value={data.partnerships.active} icon={<Handshake size={20} />} color="teal" />
-        <KpiCard label="Grants in Flight" value={data.grants.inFlight} icon={<DollarSign size={20} />} color="orange" />
-      </div>
+        {/* ---- Tab switcher ----------------------------------------------- */}
+        <QuickNav items={navItems} activeId={activeId} onSelect={setActiveId} />
 
-      {/* By Company — dynamic across every active company */}
-      {exec.data && (
-        <div>
-          <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Building2 size={18} className="text-gray-400" />
-            By Company
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {exec.data.companies.map((c) => (
-              <Link key={c.key} href={`/dashboard/${c.slug}`} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-300 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-900">{c.name}</span>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${badge[c.color] ?? "bg-gray-100 text-gray-600"}`}>{c.total} deals</span>
+        {/* ---- Tab content: one section at a time, crossfaded -------------- */}
+        <AnimatePresence mode="wait">
+          {activeId === "overview" && (
+            <motion.section
+              key="overview"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={tabFade}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4"
+            >
+              <Stat icon={Layers} label="Deals" value={data.totals.deals} raw={data.totals.deals} />
+              <Stat icon={TrendingUp} label="Active" value={data.totals.active} raw={data.totals.active} />
+              <Stat icon={CheckCircle2} label="Closed won" value={data.totals.closedWon} raw={data.totals.closedWon} />
+              <Stat
+                icon={TrendingDown}
+                label="Outstanding"
+                value={fmtCompact(data.totals.outstanding)}
+                raw={data.totals.outstanding}
+                flag={data.totals.outstanding > 0}
+              />
+            </motion.section>
+          )}
+
+          {activeId === "team-performance" && (
+            <motion.section
+              key="team-performance"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={tabFade}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SectionHeader icon={Gauge} label="Team performance" aside={kpiTotal > 0 ? `${kpiTotal} KPIs tracked` : undefined} />
+              {kpiTotal === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted">
+                  No staff KPIs set yet. Once your team adds targets, their standing shows up here.
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div><div className="font-bold text-indigo-700">{fmt(c.revenue.potential)}</div><div className="text-gray-400">Potential</div></div>
-                  <div><div className="font-bold text-green-700">{fmt(c.revenue.received)}</div><div className="text-gray-400">Received</div></div>
-                  <div><div className="font-bold text-gray-700">{c.active}</div><div className="text-gray-400">Active</div></div>
+              ) : (
+                <div className="rounded-2xl border border-border bg-surface p-5">
+                  <div className="flex h-2 w-full overflow-hidden rounded-full bg-background">
+                    {data.kpiHealth.onTrack > 0 && (
+                      <div style={{ width: `${(data.kpiHealth.onTrack / kpiTotal) * 100}%` }} className="bg-foreground/70" />
+                    )}
+                    {data.kpiHealth.atRisk > 0 && (
+                      <div style={{ width: `${(data.kpiHealth.atRisk / kpiTotal) * 100}%` }} className="bg-accent/50" />
+                    )}
+                    {data.kpiHealth.offTrack > 0 && (
+                      <div style={{ width: `${(data.kpiHealth.offTrack / kpiTotal) * 100}%` }} className="bg-accent" />
+                    )}
+                    {data.kpiHealth.noTarget > 0 && (
+                      <div style={{ width: `${(data.kpiHealth.noTarget / kpiTotal) * 100}%` }} className="bg-border" />
+                    )}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <KpiStat label="On track" value={data.kpiHealth.onTrack} dotClass="bg-foreground/70" />
+                    <KpiStat label="At risk" value={data.kpiHealth.atRisk} dotClass="bg-accent/50" />
+                    <KpiStat label="Off track" value={data.kpiHealth.offTrack} dotClass="bg-accent" />
+                    <KpiStat label="No target set" value={data.kpiHealth.noTarget} dotClass="bg-border" />
+                  </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+              )}
+            </motion.section>
+          )}
 
-      {/* Top deals + risks */}
-      {exec.data && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <DealList title="Top Deals" rows={exec.data.topDeals} amountLabel="Potential" emptyText="No deals yet." />
-          <DealList title="Top Risks" rows={exec.data.topRisks} amountLabel="At stake" risk emptyText="No at-risk or stale deals." />
-        </div>
-      )}
-    </div>
-  );
-}
+          {activeId === "attention" && hasAttention && (
+            <motion.section
+              key="attention"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={tabFade}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3"
+            >
+              {visibleDeadlines.length > 0 && (
+                <div>
+                  <SectionHeader
+                    icon={Clock}
+                    label="Deadlines"
+                    cta={
+                      deadlines.length > visibleDeadlines.length
+                        ? { label: `View all ${deadlines.length}`, href: "/tasks" }
+                        : undefined
+                    }
+                  />
+                  <ul className="divide-y divide-dashed divide-border">
+                    {visibleDeadlines.map((d) => {
+                      const urgent = URGENCY_URGENT.includes(d.urgency);
+                      return (
+                        <li key={d.id}>
+                          <Link
+                            href={deadlineLink(d)}
+                            className="group flex items-center gap-3 py-3 text-sm transition-colors hover:bg-surface/60"
+                          >
+                            <span
+                              className={`h-full w-[3px] self-stretch rounded-full ${urgent ? "bg-accent" : "bg-border"}`}
+                              aria-hidden
+                            />
+                            <Clock size={14} className={urgent ? "shrink-0 text-accent" : "shrink-0 text-muted"} />
+                            <span className="min-w-0 flex-1 truncate text-foreground">{d.businessName}</span>
+                            <span className={`shrink-0 text-xs font-medium tabular-nums ${urgent ? "text-accent" : "text-muted"}`}>
+                              {urgencyLabel(d.urgency, d.daysUntil)}
+                            </span>
+                            <ChevronRight size={14} className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
 
-function Money({ label, value, tone }: { label: string; value: string; tone: string }) {
-  const tones: Record<string, string> = {
-    indigo: "bg-indigo-50 border-indigo-200 text-indigo-700",
-    green: "bg-green-50 border-green-200 text-green-700",
-    amber: "bg-amber-50 border-amber-200 text-amber-700",
-  };
-  return (
-    <div className={`rounded-xl border p-4 ${tones[tone]}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
-    </div>
-  );
-}
+              {visibleStaleGroups.length > 0 && (
+                <div>
+                  <SectionHeader
+                    icon={AlertTriangle}
+                    label="Gone quiet"
+                    aside={
+                      staleGroups.length > visibleStaleGroups.length
+                        ? `+${staleGroups.length - visibleStaleGroups.length} more owners`
+                        : undefined
+                    }
+                  />
+                  <ul className="divide-y divide-dashed divide-border">
+                    {visibleStaleGroups.map((g, i) => {
+                      const href = PIPELINE_HREF[g.type];
+                      const content = (
+                        <div className="group flex items-center gap-3 py-3 text-sm transition-colors hover:bg-surface/60">
+                          <span className="h-full w-[3px] self-stretch rounded-full bg-border" aria-hidden />
+                          <AlertTriangle size={14} className="shrink-0 text-muted" />
+                          <span className="min-w-0 flex-1 text-foreground">
+                            {g.count} {g.type} deal{g.count === 1 ? "" : "s"}
+                            {g.bdoName ? <span className="text-muted"> · {g.bdoName}</span> : ""}
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums text-muted">{g.maxDays}d+ silent</span>
+                          <ChevronRight size={14} className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+                        </div>
+                      );
+                      return (
+                        <li key={i}>
+                          {href ? (
+                            <Link href={g.bdoName ? `${href}?bdo=${encodeURIComponent(g.bdoName)}` : href}>{content}</Link>
+                          ) : (
+                            content
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
 
-function Stat({ icon, label, value, accent = "text-gray-900" }: { icon: React.ReactNode; label: string; value: number; accent?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium uppercase tracking-wide">{icon} {label}</div>
-      <div className={`text-2xl font-bold mt-1 ${accent}`}>{value}</div>
-    </div>
-  );
-}
+              {/* Renders only once /alerts actually returns flags — see the
+                  FinancialFlag type note above. Nothing to configure here. */}
+              {visibleFlags.length > 0 && (
+                <div>
+                  <SectionHeader
+                    icon={Flag}
+                    label="Financial flags"
+                    aside={financialFlags.length > visibleFlags.length ? `+${financialFlags.length - visibleFlags.length} more` : undefined}
+                  />
+                  <ul className="divide-y divide-dashed divide-border">
+                    {visibleFlags.map((f) => (
+                      <li key={f.id} className="flex items-center gap-3 py-3 text-sm">
+                        <span className="h-full w-[3px] self-stretch rounded-full bg-accent" aria-hidden />
+                        <Flag size={14} className="shrink-0 text-accent" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-foreground">{f.businessName}</p>
+                          <p className="truncate text-xs text-muted">{FLAG_LABEL[f.kind]}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </motion.section>
+          )}
 
-function DealList({ title, rows, amountLabel, risk, emptyText }: { title: string; rows: DealRow[]; amountLabel: string; risk?: boolean; emptyText: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        {risk && <AlertTriangle size={15} className="text-amber-500" />}
-        <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
+          {activeId === "company-health" && (
+            <motion.section
+              key="company-health"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={tabFade}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SectionHeader icon={Building2} label="Company health" />
+              <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-dashed border-border">
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">Company</th>
+                      <th className="hidden px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted sm:table-cell">Active</th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Received</th>
+                      <th className="hidden px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted md:table-cell">Outstanding</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dashed divide-border">
+                    {activeCompanies.map((c) => {
+                      const dormant = c.active === 0 && c.revenue.received === 0;
+                      const netOutstanding = c.revenue.outstanding > c.revenue.received * 0.4 && c.revenue.outstanding > 0;
+                      return (
+                        <tr key={c.key} className={dormant ? "opacity-45" : ""}>
+                          <td className="p-0">
+                            <Link href={`/dashboard/${c.slug}`} className="flex items-center gap-2 px-5 py-3.5 text-foreground hover:text-accent">
+                              <span className="truncate font-medium">{c.name}</span>
+                            </Link>
+                          </td>
+                          <td className="hidden px-5 py-3.5 text-right tabular-nums text-muted sm:table-cell">{c.active}</td>
+                          <td className="px-5 py-3.5 text-right font-medium tabular-nums text-foreground">
+                            {dormant ? <span className="text-muted">—</span> : fmtCompact(c.revenue.received)}
+                          </td>
+                          <td className="hidden px-5 py-3.5 text-right tabular-nums md:table-cell">
+                            {netOutstanding ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-accent">
+                                <TrendingDown size={12} />
+                                {fmtCompact(c.revenue.outstanding)}
+                              </span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3.5">
+                            <Link href={`/dashboard/${c.slug}`}>
+                              <ChevronRight size={15} className="text-muted" />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </motion.section>
+          )}
+
+          {activeId === "deal-ledgers" && (
+            <motion.section
+              key="deal-ledgers"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={tabFade}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="grid grid-cols-1 gap-10 lg:grid-cols-2"
+            >
+              <DealList
+                title="Top deals"
+                icon={Target}
+                rows={data.topDeals}
+                amountLabel="Potential"
+                emptyText="No deals yet."
+              />
+              <DealList
+                title="Top risks"
+                icon={ShieldAlert}
+                rows={data.topRisks}
+                amountLabel="At stake"
+                risk
+                emptyText="Nothing at risk right now."
+              />
+            </motion.section>
+          )}
+        </AnimatePresence>
       </div>
-      {rows.length === 0 ? (
-        <div className="p-6 text-center text-gray-400 text-sm">{emptyText}</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {["Business", "Company", risk ? "Health" : "Stage", amountLabel].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((d, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-900 max-w-[150px] truncate">{d.businessName}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{d.company}</td>
-                  <td className="px-3 py-2">{risk ? <DealHealthBadge value={d.dealHealth} /> : <DealStageBadge value={d.dealStage} />}</td>
-                  <td className="px-3 py-2 font-medium text-gray-700 tabular-nums whitespace-nowrap">{fmt(d.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
 
-function KpiCard({
+// ---- Subcomponents --------------------------------------------------------
+
+function Stat({
+  icon: Icon,
   label,
   value,
-  icon,
-  color,
+  raw,
+  flag = false,
 }: {
+  icon: LucideIcon;
   label: string;
   value: string | number;
-  icon: React.ReactNode;
-  color: string;
+  raw: number;
+  flag?: boolean;
 }) {
-  const colors: Record<string, string> = {
-    indigo: "bg-indigo-50 text-indigo-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    red: "bg-red-50 text-red-600",
-    sky: "bg-sky-50 text-sky-600",
-    violet: "bg-violet-50 text-violet-600",
-    teal: "bg-teal-50 text-teal-600",
-    orange: "bg-orange-50 text-orange-600",
-  };
+  const empty = raw === 0 && !flag;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
-      <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
-      <div>
-        <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</div>
-        <div className="text-xl font-bold text-gray-900 mt-0.5">{value}</div>
+    <div className="relative rounded-2xl border border-border bg-surface px-5 py-5">
+      {flag && <span className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+          <Icon size={13} strokeWidth={2.25} />
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted">{label}</span>
       </div>
+      <div
+        className={`mt-2.5 text-2xl font-bold leading-none tracking-tight tabular-nums md:text-[1.75rem] ${
+          flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function KpiStat({ label, value, dotClass }: { label: string; value: number; dotClass: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} aria-hidden />
+      <span className="text-sm font-semibold tabular-nums text-foreground">{value}</span>
+      <span className="text-xs text-muted">{label}</span>
+    </div>
+  );
+}
+
+function DealList({
+  title,
+  icon,
+  rows,
+  amountLabel,
+  risk,
+  emptyText,
+}: {
+  title: string;
+  icon: LucideIcon;
+  rows: DealRow[];
+  amountLabel: string;
+  risk?: boolean;
+  emptyText: string;
+}) {
+  return (
+    <div>
+      <SectionHeader icon={icon} label={title} aside={amountLabel} />
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted">{emptyText}</div>
+      ) : (
+        <ul className="divide-y divide-dashed divide-border rounded-2xl border border-border bg-surface">
+          {rows.map((d, i) => (
+            <li key={i} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-background/50">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-foreground">{d.businessName}</p>
+                <p className="truncate text-xs text-muted">{d.company}</p>
+              </div>
+              <Tag value={risk ? d.dealHealth : d.dealStage} />
+              <span className="w-24 shrink-0 whitespace-nowrap text-right font-medium tabular-nums text-foreground">
+                {fmt(d.amount)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

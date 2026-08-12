@@ -96,10 +96,12 @@ export function Alerts() {
   const stale = data?.stale ?? [];
   const totalCount = deadlines.length + stale.length;
 
-  // Auto-open as a popup once per session as soon as alerts are known
+  // The dashboard is now the primary alert surface (see CEODashboard), so this
+  // no longer force-opens a full-screen modal every session — it starts as a
+  // quiet collapsed banner instead. Users can still tap "View all" for the modal.
   useEffect(() => {
     if (!autoShown && data && totalCount > 0) {
-      setView("popup");
+      setView("banner");
       setAutoShown(true);
     }
   }, [data, totalCount, autoShown]);
