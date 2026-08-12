@@ -3,3 +3,6 @@ node_modules
 dist
 .env
 *.env.local
+
+# The API lives in its own repository — this repo tracks the client only.
+server/
