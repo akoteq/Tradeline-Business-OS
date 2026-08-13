@@ -26,6 +26,7 @@ import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { useCompanies, companyHref } from "@/lib/companies";
+import { AskTranqoTrigger, TranqoAssistant, type Scope } from "@/components/TranqoAssistant";
 
 /**
  * ROLE STRINGS — confirmed with backend: ADMIN, CEO, BUSINESS_CEO, BDO.
@@ -77,6 +78,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { user, loading, logout } = useAuth();
   const { companies } = useCompanies();
   const [open, setOpen] = useState<string[]>(["Companies"]);
+  const [askOpen, setAskOpen] = useState(false);
 
   if (AUTH_PATHS.includes(pathname)) return null;
   if (loading) return <aside className="hidden md:flex w-64 min-h-screen bg-surface shrink-0" />;
@@ -88,6 +90,24 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const isGroupOwner = GROUP_OWNER_ROLES.includes(user.role);
   const isBusinessCeo = user.role === ROLE.BUSINESS_CEO;
   const isStaff = user.role === ROLE.STAFF || user.role === ROLE.BDO;
+
+  // ---- Ask Tranqo scope ---------------------------------------------------
+  // Group Owner: group-wide by default, auto-scoped to a company the moment
+  // they're already sitting on that company's dashboard — no need to say
+  // "for Finance Factory" out loud when the page already says it.
+  // Business CEO / Staff: always their own company. Their `companies` list
+  // is already backend-scoped to just that one business (FR-1 data
+  // isolation), so companies[0] is safe to treat as "mine," not a guess.
+  const activeCompany = companies.find((c) => pathname === `/dashboard/${c.slug}`);
+  const scope: Scope = isGroupOwner
+    ? activeCompany
+      ? { level: "company", companyKey: activeCompany.key, companyName: activeCompany.name }
+      : { level: "group" }
+    : companies[0]
+    ? { level: "company", companyKey: companies[0].key, companyName: companies[0].name }
+    : { level: "group" };
+
+  const scopeHint = scope.level === "company" ? `Scoped to ${scope.companyName}` : "Scoped to the whole group";
 
   // ---- Role-scoped nav content -------------------------------------------------
 
@@ -202,6 +222,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       <aside className={asideClass}>
         <Brand portalLabel={portalLabel} onClose={onClose} />
 
+        {/* Pinned above the scrollable nav on purpose — this is a flagship
+            entry point, not just another row that can scroll out of view. */}
+        <div className="px-2.5 pt-3">
+          <AskTranqoTrigger onClick={() => setAskOpen(true)} scopeHint={scopeHint} />
+        </div>
+
         <nav className="no-scrollbar flex-1 overflow-y-auto py-3 px-2.5">
           {nav.map((section, i) => (
             <div key={section.title ?? `s${i}`} className={clsx(i > 0 && "mt-4")}>
@@ -240,6 +266,8 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
         <UserFooter name={user.email} meta={portalLabel} onLogout={logout} />
       </aside>
+
+      <TranqoAssistant scope={scope} open={askOpen} onClose={() => setAskOpen(false)} />
 
       {/* Scrollbar hidden but still scrollable (wheel/touch/keyboard all still work) */}
       <style jsx global>{`
