@@ -109,6 +109,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         { href: "/leads", label: "All Leads", icon: Users, status: "live" },
         { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
         { href: "/consolidated", label: "Group Financials", icon: Database, status: "live" },
+        { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
       ],
     },
     {
