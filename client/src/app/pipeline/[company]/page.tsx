@@ -11,22 +11,6 @@ import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
 
-// ─── Config per company ────────────────────────────────────────────────────────
-
-const COMPANY_META: Record<string, { label: string; color: string }> = {
-  ALPHA_AFRICA:      { label: "Alpha Africa Consult Ltd",  color: "indigo" },
-  FINANCE_FACTORY:   { label: "Finance Factory Limited",   color: "emerald" },
-  COMMUNITY_FINANCE: { label: "Community Finance Ltd",     color: "sky" },
-  AKOTEQ:            { label: "Akoteq Ltd",                color: "violet" },
-};
-
-const SLUG_TO_KEY: Record<string, string> = {
-  "alpha-africa":      "ALPHA_AFRICA",
-  "finance-factory":   "FINANCE_FACTORY",
-  "community-finance": "COMMUNITY_FINANCE",
-  "akoteq":            "AKOTEQ",
-};
-
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // Note: this is the post-conversion deal pipeline (stage / health / invoice),
 // distinct from the Tradeline SQD's `Lead` entity (pre-conversion prospect,
@@ -94,10 +78,12 @@ const selectCls = "text-sm rounded-lg border border-border bg-background px-2.5 
 
 export default function CompanyPipelinePage({ params }: { params: Promise<{ company: string }> }) {
   const { company: slug } = use(params);
+  // The company comes from the live list, so any company added in the admin screen gets a
+  // pipeline here. Built-ins resolve instantly from the static fallback; added ones once loaded.
   const { bySlug } = useCompanies();
   const co = bySlug[slug];
-  const companyKey = co?.key ?? SLUG_TO_KEY[slug] ?? slug.toUpperCase();
-  const label = co?.name ?? COMPANY_META[companyKey]?.label ?? companyKey;
+  const companyKey = co?.key ?? "";
+  const label = co?.name ?? "Pipeline";
 
   const qc = useQueryClient();
   const [filterStage, setFilterStage]   = useState("");
@@ -124,6 +110,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
   const { data: deals = [], isLoading } = useQuery<Deal[]>({
     queryKey: ["company-deals", companyKey, filterStage, filterHealth],
     queryFn: () => fetcher(`/company-deals?${qp}`),
+    enabled: !!companyKey,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["company-deals", companyKey] });

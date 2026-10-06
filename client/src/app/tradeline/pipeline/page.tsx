@@ -6,6 +6,7 @@ import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { useAuth } from "@/components/AuthProvider";
+import { isStaff } from "@/lib/auth";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import Link from "next/link";
 import { X } from "lucide-react";
@@ -62,7 +63,7 @@ const fmt = (n: number) => n.toLocaleString();
 
 export default function TradelinePipelinePage() {
   const { user } = useAuth();
-  const isBdoRole = user?.role === "BDO";
+  const isBdoRole = isStaff(user);
   const [filters, setFilters] = useState({ bdo: "", tier: "", stage: "", health: "", priority: "" });
   const [editing, setEditing] = useState<TradelineDeal | null>(null);
   const [showForm, setShowForm] = useState(false);

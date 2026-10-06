@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
+import { isGroupOwner } from "@/lib/auth";
+import { useCompanies, companyBadgeClass } from "@/lib/companies";
 import { X } from "lucide-react";
 
 type Project = {
@@ -26,23 +28,29 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-700",
 };
 
-const COMPANY_COLORS: Record<string, string> = {
-  BAPX:      "bg-indigo-100 text-indigo-700",
-  TRADELINE: "bg-emerald-100 text-emerald-700",
-  SHARED:    "bg-gray-100 text-gray-700",
-};
 
 const STATUS_LIST  = ["ACTIVE", "COMPLETED", "ON_HOLD", "CANCELLED"] as const;
-const COMPANY_LIST = ["BAPX", "TRADELINE", "SHARED"] as const;
 
 const EMPTY_FORM = {
   name: "", leader: "", status: "ACTIVE", company: "SHARED",
   description: "", startDate: "", endDate: "", notes: "",
 };
 
+// A project belongs to one company, or is SHARED across the group.
+function CompanyBadge({ value }: { value: string }) {
+  const { byKey } = useCompanies();
+  const co = byKey[value];
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${co ? companyBadgeClass(co.color) : "bg-gray-100 text-gray-700"}`}>
+      {co?.name ?? (value === "SHARED" ? "Shared" : value)}
+    </span>
+  );
+}
+
 export default function ProjectsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN" || user?.role === "CEO";
+  const { companies } = useCompanies();
+  const isAdmin = isGroupOwner(user);
   const qc = useQueryClient();
   const [editing, setEditing]   = useState<Project | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -97,9 +105,7 @@ export default function ProjectsPage() {
     {
       key: "company", label: "Company",
       render: (r: Project) => (
-        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${COMPANY_COLORS[r.company] ?? "bg-gray-100 text-gray-500"}`}>
-          {r.company}
-        </span>
+        <CompanyBadge value={r.company} />
       ),
     },
     {
@@ -169,7 +175,8 @@ export default function ProjectsPage() {
               className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="">All Companies</option>
-              {COMPANY_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="SHARED">Shared</option>
+              {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
             </select>
           </div>
         }
@@ -203,6 +210,7 @@ function ProjectFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { companies } = useCompanies();
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(project ? {
@@ -268,9 +276,8 @@ function ProjectFormModal({
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Company</label>
               <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                <option value="SHARED">SHARED</option>
-                <option value="BAPX">BAPX</option>
-                <option value="TRADELINE">TRADELINE</option>
+                <option value="SHARED">Shared</option>
+                {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
               </select>
             </div>
 
@@ -335,9 +342,7 @@ function DetailDrawer({
             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-500"}`}>
               {project.status.replace("_", " ")}
             </span>
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${COMPANY_COLORS[project.company] ?? "bg-gray-100 text-gray-500"}`}>
-              {project.company}
-            </span>
+            <CompanyBadge value={project.company} />
           </div>
 
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">

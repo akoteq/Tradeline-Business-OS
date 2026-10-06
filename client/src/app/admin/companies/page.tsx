@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
-import type { Company } from "@/lib/companies";
-import { Building2, Plus, Pencil, Archive, RotateCcw, X } from "lucide-react";
+import { DEFAULT_COMPANIES, type Company } from "@/lib/companies";
+import { Building2, Plus, Pencil, Archive, RotateCcw, Trash2, X } from "lucide-react";
+
+// The built-in companies are re-seeded on server start, so they can be archived but not deleted.
+const BUILT_IN_KEYS = new Set(DEFAULT_COMPANIES.map((c) => c.key));
 
 const COLOR_OPTS = ["indigo", "green", "emerald", "teal", "sky", "violet", "amber", "rose", "slate"];
 
@@ -42,6 +45,12 @@ export default function ManageCompaniesPage() {
   const restoreMutation = useMutation({
     mutationFn: (id: string) => api.put(`/companies/${id}`, { isActive: true }),
     onSuccess: invalidate,
+  });
+  // Only archived companies with no deals, staff, leads, tasks or KPIs — the server explains otherwise.
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/companies/${id}/permanent`),
+    onSuccess: invalidate,
+    onError: (err) => alert((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to delete company."),
   });
 
   return (
@@ -115,12 +124,23 @@ export default function ManageCompaniesPage() {
                               <Archive size={12} /> Archive
                             </button>
                           ) : (
-                            <button
-                              onClick={() => restoreMutation.mutate(c.id)}
-                              className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-background"
-                            >
-                              <RotateCcw size={12} /> Restore
-                            </button>
+                            <>
+                              <button
+                                onClick={() => restoreMutation.mutate(c.id)}
+                                className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-background"
+                              >
+                                <RotateCcw size={12} /> Restore
+                              </button>
+                              {!BUILT_IN_KEYS.has(c.key) && (
+                                <button
+                                  onClick={() => { if (confirm(`Permanently delete ${c.name}? This can't be undone.`)) deleteMutation.mutate(c.id); }}
+                                  disabled={deleteMutation.isPending}
+                                  className="flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 transition-colors hover:bg-red-500/[0.06] disabled:opacity-50"
+                                >
+                                  <Trash2 size={12} /> Delete
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

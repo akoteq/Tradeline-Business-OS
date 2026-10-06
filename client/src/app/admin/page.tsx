@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 import { UserPlus, Trash2, CheckCircle, Clock, ShieldCheck } from "lucide-react";
 
 type BdoOption = { id: string; name: string; company: string };
@@ -161,13 +162,13 @@ export default function AdminPage() {
                     <td className="px-4 py-2.5 text-gray-800">{u.email}</td>
                     <td className="px-4 py-2.5">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        u.role === "CEO"
+                        accessLevel(u.role) === "GROUP_OWNER"
                           ? "bg-indigo-50 text-indigo-700"
-                          : u.role === "BDO"
+                          : accessLevel(u.role) === "STAFF"
                           ? "bg-emerald-50 text-emerald-700"
                           : "bg-gray-100 text-gray-600"
                       }`}>
-                        {u.role}
+                        {ACCESS_LEVEL_LABEL[accessLevel(u.role)]}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">

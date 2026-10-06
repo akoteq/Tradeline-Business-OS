@@ -8,6 +8,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { fetcher } from "@/lib/api";
+import { useCompanies, companyHref, companyBadgeClass } from "@/lib/companies";
 
 type BDO = { id: string; name: string; email: string | null; company: string; role: string | null };
 type BapxDeal = { id: string; dealStage: string; dealHealth: string; priority: string; targetGhs: number | null };
@@ -25,22 +26,6 @@ const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6"];
 
-// Companies whose deals live in the shared CompanyDeal collection
-const COMPANY_KEYS = ["ALPHA_AFRICA", "FINANCE_FACTORY", "COMMUNITY_FINANCE", "AKOTEQ"];
-const COMPANY_LABELS: Record<string, string> = {
-  BAPX: "BAPX",
-  TRADELINE: "Tradeline",
-  ALPHA_AFRICA: "Alpha Africa Consult Ltd",
-  FINANCE_FACTORY: "Finance Factory Limited",
-  COMMUNITY_FINANCE: "Community Finance Ltd",
-  AKOTEQ: "Akoteq Ltd",
-};
-const COMPANY_SLUGS: Record<string, string> = {
-  ALPHA_AFRICA: "alpha-africa",
-  FINANCE_FACTORY: "finance-factory",
-  COMMUNITY_FINANCE: "community-finance",
-  AKOTEQ: "akoteq",
-};
 
 const isClosedWon = (d: { dealStage: string; dealHealth: string }) => d.dealStage === "CLOSED_WON" || d.dealHealth === "CLOSED_WON";
 const OPEN_TASK_STATUSES = ["PENDING", "IN_PROGRESS", "OVERDUE"];
@@ -48,6 +33,7 @@ const CLOSED_LEAD_STATUSES = ["CONVERTED", "LOST"];
 
 export default function BdoDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { byKey } = useCompanies();
 
   const { data: bdo, isLoading: bdoLoading } = useQuery<BDO>({ queryKey: ["bdo", id], queryFn: () => fetcher(`/bdo/${id}`) });
   const { data: bapxDeals = [] } = useQuery<BapxDeal[]>({ queryKey: ["bapx", { bdoId: id }], queryFn: () => fetcher(`/bapx?bdoId=${id}`) });
@@ -63,8 +49,10 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
   if (bdoLoading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Loading…</div>;
   if (!bdo) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">BDO not found.</div>;
 
-  const isBapx = bdo.company === "BAPX";
-  const isCompany = COMPANY_KEYS.includes(bdo.company);
+  // Which pipeline body to show follows the company's deal source, so added companies just work.
+  const source = byKey[bdo.company]?.dealSource;
+  const isBapx = source === "BAPX";
+  const isCompany = source === "COMPANY";
 
   // Task rollup (shared)
   const openTasks = tasks.filter((t) => OPEN_TASK_STATUSES.includes(t.status)).length;
@@ -128,12 +116,14 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
 // ── Header ─────────────────────────────────────────────────────────────────────
 
 function Header({ bdo, totalDeals, completedDeals }: { bdo: BDO; totalDeals: number; completedDeals: number }) {
+  const { byKey } = useCompanies();
+  const co = byKey[bdo.company];
   return (
     <div className="flex items-start justify-between flex-wrap gap-3">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${bdo.company === "BAPX" ? "bg-green-100 text-green-700" : bdo.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>
-            {COMPANY_LABELS[bdo.company] ?? bdo.company}
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${companyBadgeClass(co?.color)}`}>
+            {co?.name ?? bdo.company}
           </span>
           {bdo.role && <span className="text-xs text-gray-500">{bdo.role}</span>}
         </div>
@@ -305,6 +295,7 @@ function CompanyBody({
   completedTasks: number;
   totalTasks: number;
 }) {
+  const { byKey } = useCompanies();
   const activeDeals = deals.filter((d) => d.dealHealth === "ACTIVE").length;
   const wonDeals = deals.filter(isClosedWon).length;
   const potential = deals.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
@@ -313,9 +304,9 @@ function CompanyBody({
 
   const { stageData, healthData } = pipelineData(deals);
 
-  const slug = COMPANY_SLUGS[bdo.company] ?? "";
-  const label = COMPANY_LABELS[bdo.company] ?? bdo.company;
-  const pipelineHref = slug ? `/pipeline/${slug}?bdo=${encodeURIComponent(bdo.name)}` : "#";
+  const co = byKey[bdo.company];
+  const label = co?.name ?? bdo.company;
+  const pipelineHref = co ? `${companyHref(co)}?bdo=${encodeURIComponent(bdo.name)}` : "#";
 
   return (
     <>

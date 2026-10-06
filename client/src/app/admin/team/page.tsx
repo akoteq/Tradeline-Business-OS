@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { useCompanies } from "@/lib/companies";
-import { UserPlus, Mail, KeyRound, ShieldCheck, Pencil, Trash2, X } from "lucide-react";
+import { UserPlus, Mail, KeyRound, ShieldCheck, Pencil, Trash2, X, Link2 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type BdoPerf = {
@@ -19,22 +19,29 @@ type Credentials = { email: string; password: string; emailSent: boolean; emailE
 // Combined row: a person (staff profile) with their optional login, or a standalone login.
 type TeamRow = { key: string; kind: "member" | "account"; perf?: BdoPerf; user?: UserRow };
 
-const ROLE_OPTIONS = [
-  { value: "ADMIN", label: "Admin" },
-  { value: "CEO", label: "CEO" },
-  { value: "MANAGING_PARTNER", label: "Managing Partner" },
-  { value: "SENIOR_PARTNER", label: "Senior Partner / Consultant" },
-  { value: "SENIOR_BDO", label: "Senior BDO" },
-  { value: "BDO", label: "BDO" },
-  { value: "JUNIOR_BDO", label: "Junior BDO" },
-  { value: "INTERN", label: "Intern" },
+// The three access levels the app is built around (see Sidebar.tsx). Mirrors ASSIGNABLE_ROLES
+// in server/src/models/User.ts — the server rejects anything else. Seniority ("Senior BDO",
+// "Intern") is a job title on the profile, not an access level.
+const ACCESS_LEVELS = [
+  { value: "CEO", label: "Group Owner", description: "Sees every company and can invite, remove and change access for anyone." },
+  { value: "BUSINESS_CEO", label: "Business CEO", description: "Runs one company: its pipeline, team, tasks and KPIs." },
+  { value: "BDO", label: "Staff", description: "Sees their own leads, tasks and KPIs." },
 ];
-const ROLE_LABELS: Record<string, string> = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
+// Labels for roles still on older accounts — ADMIN is a Group Owner; the rest are retired.
+const ROLE_LABELS: Record<string, string> = {
+  ...Object.fromEntries(ACCESS_LEVELS.map((r) => [r.value, r.label])),
+  ADMIN: "Group Owner",
+  MANAGING_PARTNER: "Managing Partner (retired)",
+  SENIOR_PARTNER: "Senior Partner (retired)",
+  SENIOR_BDO: "Senior BDO (retired)",
+  JUNIOR_BDO: "Junior BDO (retired)",
+  INTERN: "Intern (retired)",
+};
 function roleColor(role: string) {
-  if (role === "ADMIN") return "bg-purple-100 text-purple-700";
-  if (["CEO", "MANAGING_PARTNER", "SENIOR_PARTNER"].includes(role)) return "bg-amber-100 text-amber-700";
-  if (role === "SENIOR_BDO") return "bg-teal-100 text-teal-700";
-  return "bg-blue-100 text-blue-700";
+  if (role === "ADMIN" || role === "CEO") return "bg-purple-100 text-purple-700";
+  if (role === "BUSINESS_CEO") return "bg-amber-100 text-amber-700";
+  if (role === "BDO") return "bg-blue-100 text-blue-700";
+  return "bg-gray-100 text-gray-500";
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -46,6 +53,7 @@ export default function ManageTeamPage() {
   const [editProfile, setEditProfile] = useState<BdoPerf | null>(null);
   const [inviteTarget, setInviteTarget] = useState<BdoPerf | null>(null);
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null);
+  const [linkTarget, setLinkTarget] = useState<UserRow | null>(null);
   const [creds, setCreds] = useState<Credentials | null>(null);
 
   const { data: perf = [], isLoading } = useQuery<BdoPerf[]>({ queryKey: ["bdo-performance"], queryFn: () => fetcher("/bdo/performance") });
@@ -79,6 +87,11 @@ export default function ManageTeamPage() {
     mutationFn: (userId: string) => api.delete(`/auth/users/${userId}`),
     onSuccess: refresh,
   });
+
+  const companyOfUser = (u: UserRow) => {
+    const p = perf.find((x) => x.bdo.id === u.bdoId);
+    return p ? (byKey[p.bdo.company]?.name ?? p.bdo.company) : undefined;
+  };
 
   const memberCount = rows.filter((r) => r.kind === "member").length;
   const noLoginCount = rows.filter((r) => r.kind === "member" && !r.user).length;
@@ -152,6 +165,9 @@ export default function ManageTeamPage() {
                         {u && (
                           <ActionBtn title="Change access role" onClick={() => setRoleTarget(u)} icon={<ShieldCheck size={14} />} />
                         )}
+                        {u && !p && (
+                          <ActionBtn title="Link to a staff profile" onClick={() => setLinkTarget(u)} icon={<Link2 size={14} />} accent />
+                        )}
                         {p && (
                           <ActionBtn title="Edit profile" onClick={() => setEditProfile(p)} icon={<Pencil size={14} />} />
                         )}
@@ -177,7 +193,15 @@ export default function ManageTeamPage() {
       {showOnboard && <OnboardModal onClose={() => setShowOnboard(false)} onDone={(c) => { setShowOnboard(false); setCreds(c); refresh(); }} />}
       {editProfile && <EditProfileModal perf={editProfile} onClose={() => setEditProfile(null)} onSaved={() => { setEditProfile(null); refresh(); }} />}
       {inviteTarget && <InviteExistingModal perf={inviteTarget} onClose={() => setInviteTarget(null)} onDone={(c) => { setInviteTarget(null); setCreds(c); refresh(); }} />}
-      {roleTarget && <ChangeRoleModal user={roleTarget} onClose={() => setRoleTarget(null)} onSaved={() => { setRoleTarget(null); refresh(); }} />}
+      {linkTarget && (
+        <LinkProfileModal
+          user={linkTarget}
+          profiles={perf.filter((x) => !userByBdo[x.bdo.id]).map((x) => ({ id: x.bdo.id, name: x.bdo.name, company: byKey[x.bdo.company]?.name ?? x.bdo.company }))}
+          onClose={() => setLinkTarget(null)}
+          onSaved={() => { setLinkTarget(null); refresh(); }}
+        />
+      )}
+      {roleTarget && <ChangeRoleModal user={roleTarget} companyName={companyOfUser(roleTarget)} onClose={() => setRoleTarget(null)} onSaved={() => { setRoleTarget(null); refresh(); }} />}
     </div>
   );
 }
@@ -208,11 +232,17 @@ function CredentialsBanner({ creds, onClose }: { creds: Credentials; onClose: ()
   );
 }
 
+// Tranqo design tokens for the popups — same as the KPI pages.
+const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
+const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
+const inputClass = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-60";
+const labelClass = "text-xs font-medium text-muted block mb-1";
+const errorClass = "text-red-600 text-sm bg-red-500/5 border border-red-200 px-3 py-2 rounded-lg";
+
 // ─── Onboard (add + invite in one) ──────────────────────────────────────────
 function OnboardModal({ onClose, onDone }: { onClose: () => void; onDone: (c: Credentials) => void }) {
   const { companies } = useCompanies();
-  const { data: staff = [] } = useQuery<{ id: string; name: string; role: string | null }[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
-  const [form, setForm] = useState({ name: "", email: "", phone: "", company: companies[0]?.key ?? "BAPX", role: "", accessRole: "BDO", managerId: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", company: companies[0]?.key ?? "BAPX", role: "", accessRole: "BDO" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -221,7 +251,7 @@ function OnboardModal({ onClose, onDone }: { onClose: () => void; onDone: (c: Cr
     if (!form.name.trim() || !form.email.trim()) { setError("Name and email are required."); return; }
     setSaving(true); setError("");
     try {
-      const res = await api.post("/auth/onboard", { ...form, managerId: form.managerId || undefined });
+      const res = await api.post("/auth/onboard", form);
       onDone({ email: form.email, password: res.data.tempPassword, emailSent: res.data.emailSent, emailError: res.data.emailError });
     } catch (err: unknown) {
       setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to add team member.");
@@ -231,32 +261,29 @@ function OnboardModal({ onClose, onDone }: { onClose: () => void; onDone: (c: Cr
   return (
     <ModalShell title="Add team member" onClose={onClose} footer={
       <>
-        <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-        <button onClick={save} disabled={saving || !form.name.trim() || !form.email.trim()} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">
+        <button onClick={onClose} className={btnSecondary}>Cancel</button>
+        <button onClick={save} disabled={saving || !form.name.trim() || !form.email.trim()} className={btnPrimary}>
           {saving ? "Adding…" : "Add & send invite"}
         </button>
       </>
     }>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
-      <p className="text-xs text-gray-500 -mt-1">Creates their profile and login, then emails an invite with a temporary password and the dashboard link.</p>
+      {error && <div className={errorClass}>{error}</div>}
+      <p className="text-xs text-muted -mt-1">Creates their profile and login, then emails an invite with a temporary password and the dashboard link.</p>
       <Field label="Full name *" value={form.name} onChange={(v) => set("name", v)} />
       <Field label="Email *" type="email" value={form.email} onChange={(v) => set("email", v)} placeholder="name@example.com" />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Phone" value={form.phone} onChange={(v) => set("phone", v)} />
         <Field label="Job title" value={form.role} onChange={(v) => set("role", v)} placeholder="e.g. Senior BDO" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Select label="Company" value={form.company} onChange={(v) => set("company", v)} options={companies.map((c) => ({ value: c.key, label: c.name }))} />
-        <Select label="Access level" value={form.accessRole} onChange={(v) => set("accessRole", v)} options={ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))} />
-      </div>
-      <Select label="Reports to (manager)" value={form.managerId} onChange={(v) => set("managerId", v)}
-        options={[{ value: "", label: "— None —" }, ...staff.map((s) => ({ value: s.id, label: s.name + (s.role ? ` · ${s.role}` : "") }))]} />
+      <Select label="Company" value={form.company} onChange={(v) => set("company", v)} options={companies.map((c) => ({ value: c.key, label: c.name }))} />
+      <AccessPicker value={form.accessRole} onChange={(v) => set("accessRole", v)} companyName={companies.find((c) => c.key === form.company)?.name} />
     </ModalShell>
   );
 }
 
 // ─── Invite an existing profile ─────────────────────────────────────────────
 function InviteExistingModal({ perf, onClose, onDone }: { perf: BdoPerf; onClose: () => void; onDone: (c: Credentials) => void }) {
+  const { byKey } = useCompanies();
   const [email, setEmail] = useState(perf.bdo.email ?? "");
   const [accessRole, setAccessRole] = useState("BDO");
   const [saving, setSaving] = useState(false);
@@ -276,14 +303,14 @@ function InviteExistingModal({ perf, onClose, onDone }: { perf: BdoPerf; onClose
   return (
     <ModalShell title={`Invite ${perf.bdo.name}`} onClose={onClose} footer={
       <>
-        <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-        <button onClick={save} disabled={saving || !email.trim()} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">{saving ? "Sending…" : "Send invite"}</button>
+        <button onClick={onClose} className={btnSecondary}>Cancel</button>
+        <button onClick={save} disabled={saving || !email.trim()} className={btnPrimary}>{saving ? "Sending…" : "Send invite"}</button>
       </>
     }>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
-      <p className="text-xs text-gray-500 -mt-1">Creates a login for this existing profile and emails the invite.</p>
+      {error && <div className={errorClass}>{error}</div>}
+      <p className="text-xs text-muted -mt-1">Creates a login for this existing profile and emails the invite.</p>
       <Field label="Email *" type="email" value={email} onChange={setEmail} placeholder="name@example.com" />
-      <Select label="Access level" value={accessRole} onChange={setAccessRole} options={ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))} />
+      <AccessPicker value={accessRole} onChange={setAccessRole} companyName={byKey[perf.bdo.company]?.name ?? perf.bdo.company} />
     </ModalShell>
   );
 }
@@ -291,9 +318,8 @@ function InviteExistingModal({ perf, onClose, onDone }: { perf: BdoPerf; onClose
 // ─── Edit profile ───────────────────────────────────────────────────────────
 function EditProfileModal({ perf, onClose, onSaved }: { perf: BdoPerf; onClose: () => void; onSaved: () => void }) {
   const { companies } = useCompanies();
-  const { data: staff = [] } = useQuery<{ id: string; name: string; role: string | null }[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
   const b = perf.bdo;
-  const [form, setForm] = useState({ name: b.name, phone: b.phone ?? "", company: b.company, role: b.role ?? "", managerId: b.managerId ?? "" });
+  const [form, setForm] = useState({ name: b.name, phone: b.phone ?? "", company: b.company, role: b.role ?? "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -302,7 +328,7 @@ function EditProfileModal({ perf, onClose, onSaved }: { perf: BdoPerf; onClose: 
     if (!form.name.trim()) { setError("Name is required."); return; }
     setSaving(true); setError("");
     try {
-      await api.put(`/bdo/${b.id}`, { ...form, phone: form.phone || null, role: form.role || null, managerId: form.managerId || null });
+      await api.put(`/bdo/${b.id}`, { ...form, phone: form.phone || null, role: form.role || null });
       onSaved();
     } catch { setError("Failed to save."); } finally { setSaving(false); }
   };
@@ -310,52 +336,123 @@ function EditProfileModal({ perf, onClose, onSaved }: { perf: BdoPerf; onClose: 
   return (
     <ModalShell title={`Edit ${b.name}`} onClose={onClose} footer={
       <>
-        <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-        <button onClick={save} disabled={saving || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+        <button onClick={onClose} className={btnSecondary}>Cancel</button>
+        <button onClick={save} disabled={saving || !form.name.trim()} className={btnPrimary}>{saving ? "Saving…" : "Save"}</button>
       </>
     }>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
+      {error && <div className={errorClass}>{error}</div>}
       <Field label="Full name *" value={form.name} onChange={(v) => set("name", v)} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Phone" value={form.phone} onChange={(v) => set("phone", v)} />
         <Field label="Job title" value={form.role} onChange={(v) => set("role", v)} />
       </div>
       <Select label="Company" value={form.company} onChange={(v) => set("company", v)} options={companies.map((c) => ({ value: c.key, label: c.name }))} />
-      <Select label="Reports to (manager)" value={form.managerId} onChange={(v) => set("managerId", v)}
-        options={[{ value: "", label: "— None —" }, ...staff.filter((s) => s.id !== b.id).map((s) => ({ value: s.id, label: s.name + (s.role ? ` · ${s.role}` : "") }))]} />
+    </ModalShell>
+  );
+}
+
+// ─── Link a login to a staff profile ────────────────────────────────────────
+// A login needs a profile for anything personal (My KPIs, own leads/tasks) and,
+// for a Business CEO, to know which company they run.
+function LinkProfileModal({ user, profiles, onClose, onSaved }: {
+  user: UserRow; profiles: { id: string; name: string; company: string }[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [bdoId, setBdoId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true); setError("");
+    try { await api.put(`/auth/users/${user.id}/bdo`, { bdoId }); onSaved(); }
+    catch (err: unknown) { setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to link profile."); }
+    finally { setSaving(false); }
+  };
+  return (
+    <ModalShell title="Link to a staff profile" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className={btnSecondary}>Cancel</button>
+        <button onClick={save} disabled={saving || !bdoId} className={btnPrimary}>{saving ? "Linking…" : "Link"}</button>
+      </>
+    }>
+      {error && <div className={errorClass}>{error}</div>}
+      <p className="text-sm text-foreground/80">
+        Link <strong>{user.email}</strong> to the person they are. They&apos;ll see that person&apos;s KPIs, leads and tasks.
+      </p>
+      {profiles.length ? (
+        <Select label="Staff profile" value={bdoId} onChange={setBdoId}
+          options={[{ value: "", label: "— Choose a person —" }, ...profiles.map((x) => ({ value: x.id, label: `${x.name} · ${x.company}` }))]} />
+      ) : (
+        <p className="text-xs text-muted">Every staff profile already has a login. Add the person with &quot;Add team member&quot; first.</p>
+      )}
     </ModalShell>
   );
 }
 
 // ─── Change access role ─────────────────────────────────────────────────────
-function ChangeRoleModal({ user, onClose, onSaved }: { user: UserRow; onClose: () => void; onSaved: () => void }) {
-  const [role, setRole] = useState(user.role);
+function ChangeRoleModal({ user, companyName, onClose, onSaved }: { user: UserRow; companyName?: string; onClose: () => void; onSaved: () => void }) {
+  // Admins show as Group Owner; retired roles start unselected so a level must be picked.
+  const current = user.role === "ADMIN" ? "CEO" : user.role;
+  const [role, setRole] = useState(ACCESS_LEVELS.some((l) => l.value === current) ? current : "");
   const [saving, setSaving] = useState(false);
-  const save = async () => { setSaving(true); try { await api.put(`/auth/users/${user.id}/role`, { role }); onSaved(); } finally { setSaving(false); } };
+  const [error, setError] = useState("");
+  const unchanged = role === current;
+  const save = async () => {
+    setSaving(true); setError("");
+    try { await api.put(`/auth/users/${user.id}/role`, { role }); onSaved(); }
+    catch (err: unknown) { setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to update access."); }
+    finally { setSaving(false); }
+  };
   return (
     <ModalShell title="Change access role" onClose={onClose} footer={
       <>
-        <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-        <button onClick={save} disabled={saving || role === user.role} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Update"}</button>
+        <button onClick={onClose} className={btnSecondary}>Cancel</button>
+        <button onClick={save} disabled={saving || !role || unchanged} className={btnPrimary}>{saving ? "Saving…" : "Update"}</button>
       </>
     }>
-      <p className="text-sm text-gray-600">Changing role for <strong>{user.email}</strong>.</p>
-      <Select label="Access level" value={role} onChange={setRole} options={ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))} />
+      {error && <div className={errorClass}>{error}</div>}
+      <p className="text-sm text-foreground/80">
+        Changing access for <strong>{user.email}</strong>
+        {!ACCESS_LEVELS.some((l) => l.value === current) && <> (currently <em>{ROLE_LABELS[user.role] ?? user.role}</em>, which is no longer used)</>}.
+      </p>
+      <AccessPicker value={role} onChange={setRole} companyName={companyName} businessCeoDisabled={!user.bdoId} />
     </ModalShell>
   );
 }
 
 // ─── Shared UI ──────────────────────────────────────────────────────────────
+function AccessPicker({ value, onChange, companyName, businessCeoDisabled }: {
+  value: string; onChange: (v: string) => void; companyName?: string; businessCeoDisabled?: boolean;
+}) {
+  const selected = ACCESS_LEVELS.find((l) => l.value === value);
+  return (
+    <div>
+      <label className={labelClass}>Access level</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+        {!selected && <option value="" disabled>— Choose an access level —</option>}
+        {ACCESS_LEVELS.map((l) => (
+          <option key={l.value} value={l.value} disabled={l.value === "BUSINESS_CEO" && businessCeoDisabled}>
+            {l.label}{l.value === "BUSINESS_CEO" && businessCeoDisabled ? " (needs a staff profile)" : ""}
+          </option>
+        ))}
+      </select>
+      {selected && (
+        <p className="text-xs text-muted mt-1">
+          {selected.value === "BUSINESS_CEO" && companyName ? `Runs ${companyName}: its pipeline, team, tasks and KPIs.` : selected.description}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ModalShell({ title, children, footer, onClose }: { title: string; children: React.ReactNode; footer: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[92vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+    <div className="fixed inset-0 bg-primary/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-border rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 shrink-0">
+          <h2 className="font-serif text-lg text-foreground">{title}</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors" aria-label="Close"><X size={18} /></button>
         </div>
-        <div className="p-5 space-y-3">{children}</div>
-        <div className="px-5 py-3 border-t flex justify-end gap-2">{footer}</div>
+        <div className="p-5 space-y-3 overflow-y-auto">{children}</div>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">{footer}</div>
       </div>
     </div>
   );
@@ -363,16 +460,16 @@ function ModalShell({ title, children, footer, onClose }: { title: string; child
 function Field({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <label className={labelClass}>{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
     </div>
   );
 }
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
     <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <label className={labelClass}>{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>

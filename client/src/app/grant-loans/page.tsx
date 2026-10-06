@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
+import { isStaff } from "@/lib/auth";
 import { X } from "lucide-react";
 
 type GrantLoan = {
@@ -51,7 +52,7 @@ const fmt = (n: number) => `GHS ${n.toLocaleString()}`;
 
 export default function GrantLoansPage() {
   const { user } = useAuth();
-  const isBdoRole = user?.role === "BDO";
+  const isBdoRole = isStaff(user);
   const [filters, setFilters] = useState({ status: "", bdo: "" });
   const [editing, setEditing] = useState<GrantLoan | null>(null);
   const [showForm, setShowForm] = useState(false);

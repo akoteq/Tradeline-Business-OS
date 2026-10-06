@@ -38,6 +38,8 @@ type Props<T extends { id: string }> = {
   onAdd?: () => void;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
+  /** Hides the edit/delete buttons on rows the viewer can only read. Defaults to every row. */
+  canEditRow?: (row: T) => boolean;
   filterBar?: React.ReactNode;
   title?: string;
   /** Initial rows per page. Defaults to 25. */
@@ -51,6 +53,7 @@ export function DataTable<T extends { id: string }>({
   onAdd,
   onEdit,
   onDelete,
+  canEditRow,
   filterBar,
   title,
   pageSize: initialPageSize = 25,
@@ -198,6 +201,7 @@ export function DataTable<T extends { id: string }>({
                   {(onEdit || onDelete) && (
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
+                        {canEditRow && !canEditRow(row) ? null : <>
                         {onEdit && (
                           <button
                             onClick={() => onEdit(row)}
@@ -214,6 +218,7 @@ export function DataTable<T extends { id: string }>({
                             <Trash2 size={13} />
                           </button>
                         )}
+                        </>}
                       </div>
                     </td>
                   )}

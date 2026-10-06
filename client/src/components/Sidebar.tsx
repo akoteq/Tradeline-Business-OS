@@ -21,31 +21,18 @@ import {
   FolderKanban,
   UsersRound,
   HelpCircle,
+  Target,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { useCompanies, companyHref } from "@/lib/companies";
+import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 
 /**
- * ROLE STRINGS — confirmed with backend: ADMIN, CEO, BUSINESS_CEO, BDO.
- * Backend confirmed ADMIN and CEO both land on the Group Owner dashboard,
- * so both map to the same nav below.
- *
- * STILL UNCONFIRMED: what BDO should see. It isn't one of the three roles
- * in the spec doc (Group Owner / Business CEO / Staff) at all, so for now
- * it's routed to the same nav as Staff (own tasks/leads/KPIs) as the
- * closest safe default — flag me the real answer and I'll give it its
- * own nav if it needs one.
+ * One nav per spec role (Group Owner / Business CEO / Staff). Stored roles fold into these via
+ * accessLevel(): ADMIN and CEO are Group Owners; BDO and the retired titles are Staff.
  */
-const GROUP_OWNER_ROLES = ["ADMIN", "CEO"];
-const ROLE = {
-  BUSINESS_CEO: "BUSINESS_CEO",
-  // No STAFF role exists on the backend (see User.ts USER_ROLES), so comparing
-  // against it is a type error. Commented out until the real role is confirmed.
-  // STAFF: "STAFF",
-  BDO: "BDO",
-} as const;
 
 /**
  * status: "live"  -> route + API already wired, safe to ship
@@ -87,9 +74,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const toggle = (label: string) =>
     setOpen((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
 
-  const isGroupOwner = GROUP_OWNER_ROLES.includes(user.role);
-  const isBusinessCeo = user.role === ROLE.BUSINESS_CEO;
-  const isStaff = /* user.role === ROLE.STAFF || */ user.role === ROLE.BDO;
+  const level = accessLevel(user.role);
 
   // ---- Role-scoped nav content -------------------------------------------------
 
@@ -110,6 +95,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
         { href: "/consolidated", label: "Group Financials", icon: Database, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
       ],
     },
     {
@@ -125,10 +111,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     },
   ];
 
+  // A Business CEO's dashboard is their own company's, not the group view.
+  const ownCompany = companies.find((c) => c.key === user.bdoCompany);
   const businessCeoNav: NavSection[] = [
     {
       items: [
-        { href: "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
+        { href: ownCompany ? `/dashboard/${ownCompany.slug}` : "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
         { href: "/alerts", label: "Alerts", icon: Bell, status: "soon" },
       ],
     },
@@ -152,6 +140,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         { href: "/leads", label: "Leads", icon: Users, status: "live" },
         { href: "/team", label: "Team", icon: UsersRound, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
         { href: "/partnerships", label: "Partnerships", icon: Handshake, status: "live" },
       ],
     },
@@ -163,27 +152,18 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const staffNav: NavSection[] = [
     {
       items: [
-        { href: "/", label: "My Tasks", icon: ListChecks, status: "live" },
+        { href: "/overview", label: "Overview", icon: LayoutDashboard, status: "live" },
+        { href: "/tasks", label: "My Tasks", icon: ListChecks, status: "live" },
         { href: "/leads", label: "My Leads", icon: Users, status: "live" },
-        { href: "/kpi-framework", label: "My KPIs", icon: BarChart3, status: "live" },
+        { href: "/my-kpis", label: "My KPIs", icon: Target, status: "live" },
         { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
       ],
     },
   ];
 
-  // Lightweight fallback in case a role isn't mapped yet — no BDO baggage.
-  const fallbackNav: NavSection[] = [
-    {
-      items: [
-        { href: "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
-        { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
-      ],
-    },
-  ];
+  const nav = level === "GROUP_OWNER" ? groupOwnerNav : level === "BUSINESS_CEO" ? businessCeoNav : staffNav;
 
-  const nav = isGroupOwner ? groupOwnerNav : isBusinessCeo ? businessCeoNav : isStaff ? staffNav : fallbackNav;
-
-  const portalLabel = isGroupOwner ? "Group Owner" : isBusinessCeo ? "Business CEO" : isStaff ? "Staff" : "Portal";
+  const portalLabel = ACCESS_LEVEL_LABEL[level];
 
   const asideClass = clsx(
     "w-64 bg-surface text-foreground flex flex-col shrink-0 z-40 border-r border-border h-screen",
@@ -310,6 +290,20 @@ function NavLink({
   active: boolean;
   onClick?: () => void;
 }) {
+  // "Soon" pages aren't built yet — show the item, but don't link to a 404.
+  if (status === "soon") {
+    return (
+      <span
+        aria-disabled="true"
+        title={`${label} is coming soon`}
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm border-l-2 border-transparent text-foreground/40 cursor-not-allowed select-none"
+      >
+        {Icon && <Icon size={16} strokeWidth={1.75} className="shrink-0" />}
+        <span className="flex-1 truncate">{label}</span>
+        <StatusBadge status={status} />
+      </span>
+    );
+  }
   return (
     <Link
       href={href}
@@ -372,6 +366,17 @@ function CompanyBranchGroup({
             return (
               <div key={child.href} className="relative">
                 <span className="absolute -left-4 top-1/2 -translate-y-1/2 w-3 h-px bg-border" />
+                {child.status === "soon" ? (
+                  <span
+                    aria-disabled="true"
+                    title={`${child.label} is coming soon`}
+                    className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-[13px] text-foreground/40 cursor-not-allowed select-none"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-border" />
+                    <span className="flex-1 truncate">{child.label}</span>
+                    <StatusBadge status={child.status} />
+                  </span>
+                ) : (
                 <Link
                   href={child.href}
                   onClick={onNavigate}
@@ -386,6 +391,7 @@ function CompanyBranchGroup({
                   <span className="flex-1 truncate">{child.label}</span>
                   <StatusBadge status={child.status} />
                 </Link>
+                )}
               </div>
             );
           })}
