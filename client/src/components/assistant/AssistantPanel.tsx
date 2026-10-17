@@ -75,6 +75,12 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+// Opens the assistant from anywhere (e.g. the sidebar's "Ask Tranqo" button).
+const OPEN_EVENT = "assistant:open";
+export function openAssistant() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
 export function AssistantLauncher() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -84,8 +90,10 @@ export function AssistantLauncher() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setOpen((o) => !o); }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener(OPEN_EVENT, onOpen); };
   }, []);
 
   if (!isManager(user)) return null;
@@ -94,11 +102,11 @@ export function AssistantLauncher() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Open the assistant"
+          aria-label="Ask Tranqo"
           className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           <Sparkles size={16} className="text-accent" />
-          <span className="hidden sm:inline">Ask the assistant</span>
+          <span className="hidden sm:inline">Ask Tranqo</span>
         </button>
       )}
       {open && <AssistantPanel onClose={() => setOpen(false)} />}

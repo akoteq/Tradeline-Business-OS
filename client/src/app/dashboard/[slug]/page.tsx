@@ -26,6 +26,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/**
+ * TYPE SYSTEM — matches the group dashboard: Manrope (--font-sans, the
+ * <body> default) carries every number that gets scanned — stat tiles,
+ * money tiles, task counts. Instrument Serif (--font-serif) is spent once
+ * per page, on the company name in the masthead, the same way the group
+ * dashboard spends it once on the hero deadline count. Numbers you're
+ * meant to read fast stay sans/bold/tabular; the one thing you're meant
+ * to recognize, not read, gets the serif.
+ */
+
 // ---- Types ------------------------------------------------------------
 
 type CompanyDash = {
@@ -135,19 +145,21 @@ function SectionHeader({ icon: Icon, label, hint }: { icon: LucideIcon; label: s
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
           <Icon size={13} strokeWidth={2.25} />
         </span>
-        <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+        <h2 className="text-sm font-semibold tracking-tight text-foreground">{label}</h2>
       </div>
       {hint && <p className="mt-1 pl-8 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
 
-type TabItem = { id: string; label: string; icon: LucideIcon };
+// ---- Tab switcher — underline + count, matching the group dashboard ------
+
+type TabItem = { id: string; label: string; icon: LucideIcon; count?: number };
 
 function TabSwitcher({ items, activeId, onSelect }: { items: TabItem[]; activeId: string; onSelect: (id: string) => void }) {
   return (
     <nav aria-label="Company dashboard sections" className="sticky top-0 z-20 -mx-6 border-b border-border bg-background/85 px-6 backdrop-blur-md md:-mx-10 md:px-10">
-      <ul className="flex gap-1 overflow-x-auto py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <ul className="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((item) => {
           const active = item.id === activeId;
           return (
@@ -156,12 +168,15 @@ function TabSwitcher({ items, activeId, onSelect }: { items: TabItem[]; activeId
                 type="button"
                 onClick={() => onSelect(item.id)}
                 aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  active ? "bg-accent text-accent-foreground" : "text-muted hover:bg-surface hover:text-foreground"
+                className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 py-3 text-xs font-semibold tracking-tight transition-colors ${
+                  active ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"
                 }`}
               >
-                <item.icon size={13} />
+                <item.icon size={13} className={active ? "text-accent" : undefined} />
                 {item.label}
+                {typeof item.count === "number" && item.count > 0 && (
+                  <span className={`tabular-nums ${active ? "text-accent" : "text-muted/70"}`}>{item.count}</span>
+                )}
               </button>
             </li>
           );
@@ -226,13 +241,17 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
 
   // Reading order follows the money: results (Overview) → what's driving
   // them (Finance, Deals) → what's coming next (Leads) → execution (Tasks).
-  const tabs: TabItem[] = [
-    { id: "overview", label: "Overview", icon: Layers },
-    { id: "finance", label: "Finance", icon: Landmark },
-    { id: "deals", label: "Deals", icon: Target },
-    { id: "leads", label: "Leads", icon: Users },
-    { id: "tasks", label: "Tasks", icon: ClipboardList },
-  ];
+  // Counts on Finance/Deals/Leads/Tasks mirror the group dashboard's tab
+  // badges — the same "does the count agree with the section" discipline.
+  const tabs: TabItem[] = data
+    ? [
+        { id: "overview", label: "Overview", icon: Layers },
+        { id: "finance", label: "Finance", icon: Landmark },
+        { id: "deals", label: "Deals", icon: Target, count: data.total },
+        { id: "leads", label: "Leads", icon: Users, count: leads.length },
+        { id: "tasks", label: "Tasks", icon: ClipboardList, count: data.tasks.overdue },
+      ]
+    : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -266,7 +285,7 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
             )}
           </div>
 
-          {data && <AiSummaryCard endpoint={`/dashboard/company/${data.company.key}/summary`} fallback={buildSummary(data)} />}
+          {data && <AiSummaryCard endpoint={`/dashboard/company/${data.company.key}/summary`} fallback={buildSummary(data)} variant="strip" />}
         </motion.header>
 
         {isLoading || !data ? (
@@ -555,7 +574,7 @@ function StatTile({ icon: Icon, label, value, flag = false }: { icon: LucideIcon
         <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted">{label}</span>
       </div>
       <div
-        className={`mt-2.5 font-serif text-2xl leading-none tabular-nums md:text-[1.75rem] ${
+        className={`mt-2.5 text-2xl font-bold leading-none tracking-tight tabular-nums md:text-[1.75rem] ${
           flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
         }`}
       >
@@ -591,7 +610,7 @@ function MoneyTile({
         <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted">{label}</span>
       </div>
       <div
-        className={`mt-2.5 font-serif text-xl leading-none tabular-nums md:text-2xl ${
+        className={`mt-2.5 text-xl font-bold leading-none tracking-tight tabular-nums md:text-2xl ${
           flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
         }`}
       >
@@ -607,7 +626,7 @@ function MiniStat({ label, value, flag = false }: { label: string; value: number
   return (
     <div className="px-5 py-5 text-center">
       <div
-        className={`font-serif text-2xl leading-none tabular-nums ${
+        className={`text-2xl font-bold leading-none tracking-tight tabular-nums ${
           flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
         }`}
       >

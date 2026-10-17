@@ -19,7 +19,8 @@ function timeAgo(iso: string) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-export function AiSummaryCard({ endpoint, fallback }: { endpoint: string; fallback?: string }) {
+// variant "strip": the slim margin-note look used under the dashboard headers.
+export function AiSummaryCard({ endpoint, fallback, variant = "card" }: { endpoint: string; fallback?: string; variant?: "card" | "strip" }) {
   const qc = useQueryClient();
   const key = ["ai-summary", endpoint];
   const { data, isLoading, isError } = useQuery<Summary>({ queryKey: key, queryFn: () => fetcher(endpoint), staleTime: 5 * 60_000 });
@@ -35,6 +36,40 @@ export function AiSummaryCard({ endpoint, fallback }: { endpoint: string; fallba
   };
 
   const text = data?.summary ?? (isError ? fallback : undefined);
+
+  if (variant === "strip") {
+    return (
+      <div className={`flex gap-3 border-l-2 py-1 pl-4 ${text ? "border-accent" : "border-border"}`}>
+        <span className="mt-0.5 shrink-0 text-accent">
+          <Sparkles size={13} strokeWidth={2.25} />
+        </span>
+        <div className="min-w-0 flex-1">
+          {isLoading || refreshing ? (
+            <div className="space-y-1.5 py-0.5">
+              <div className="h-3 w-5/6 animate-pulse rounded-full bg-accent/10" />
+              <div className="h-3 w-1/2 animate-pulse rounded-full bg-accent/10" />
+            </div>
+          ) : text ? (
+            <p className="text-sm leading-relaxed text-foreground/90">{text}</p>
+          ) : (
+            <p className="text-sm leading-relaxed text-muted">
+              Tonight&apos;s snapshot hasn&apos;t run yet — the summary lands once it does.
+            </p>
+          )}
+          <div className="mt-1 flex items-center gap-3">
+            {data?.generatedAt && data.source === "ai" && <span className="text-[11px] text-muted">Updated {timeAgo(data.generatedAt)}</span>}
+            <button
+              onClick={refresh}
+              disabled={refreshing || isLoading}
+              className="text-[11px] font-semibold text-accent hover:underline disabled:opacity-50"
+            >
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
