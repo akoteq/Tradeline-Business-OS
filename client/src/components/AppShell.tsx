@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { Alerts } from "./Alerts";
+import { AssistantLauncher } from "./assistant/AssistantPanel";
 
 const NO_SHELL = ["/login", "/change-password"];
 
@@ -42,6 +43,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Alerts />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
+
+      <AssistantLauncher />
     </div>
   );
 }

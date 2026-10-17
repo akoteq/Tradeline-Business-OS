@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
+import { X } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { useAuth } from "@/components/AuthProvider";
-import { useCompanies } from "@/lib/companies";
+import { isStaff, isGroupOwner } from "@/lib/auth";
+import { useCompanies, companyBadgeClass } from "@/lib/companies";
 
 type Task = {
   id: string;
@@ -61,10 +63,14 @@ const OutcomeBadge = ({ value }: { value: string }) => (
 
 export default function TasksPage() {
   const { user } = useAuth();
-  const isBdo = user?.role === "BDO";
+  const isBdo = isStaff(user);
+  // Staff and Business CEOs only ever work inside one company, so company pickers and
+  // the company column are for the Group Owner alone.
+  const oneCompany = !isGroupOwner(user);
   const myBdoId = user?.bdoId ?? null;
 
   const { companies, byKey } = useCompanies();
+  const scopeName = oneCompany && user?.bdoCompany ? (byKey[user.bdoCompany]?.name ?? user.bdoCompany) : "the group";
   const [view, setView] = useState<"" | "TASK" | "PROPOSAL">("");
   const [filters, setFilters] = useState({ priority: "", status: "", year: "", company: "", bdoId: "" });
   const [editing, setEditing] = useState<Task | null>(null);
@@ -128,7 +134,8 @@ export default function TasksPage() {
       exportValue: (r: Task) => r.targetDate ?? "",
     },
     ...(isBdo ? [] : [{ key: "bdo", label: "BDO", render: (r: Task) => r.bdo?.name ?? "—" }]),
-    { key: "company", label: "Company", render: (r: Task) => r.company ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.company === "BAPX" ? "bg-green-100 text-green-700" : r.company === "TRADELINE" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{byKey[r.company]?.name ?? r.company}</span> : "—" },
+    // Staff only ever see their own company's tasks, so the company column is for managers.
+    ...(oneCompany ? [] : [{ key: "company", label: "Company", render: (r: Task) => r.company ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${companyBadgeClass(byKey[r.company]?.color)}`}>{byKey[r.company]?.name ?? r.company}</span> : "—" }]),
     { key: "status", label: "Status", render: (r: Task) => <TaskStatusBadge value={r.status} />, sortable: true },
     { key: "notes", label: "Notes" },
   ];
@@ -151,8 +158,8 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold text-gray-900">{isBdo ? "My Scheme of Work" : "Scheme of Work"}</h1>
           <p className="text-sm text-gray-500">
             {isProposalView
-              ? (isBdo ? "Your client proposals" : "Client proposals across Tradeline & BAPX")
-              : (isBdo ? "Your tasks and deliverables" : "All tasks and deliverables across Tradeline & BAPX")}
+              ? (isBdo ? "Your client proposals" : `Client proposals across ${scopeName}`)
+              : (isBdo ? "Your tasks and deliverables" : `All tasks and deliverables across ${scopeName}`)}
           </p>
         </div>
         <div className="flex gap-3">
@@ -179,7 +186,7 @@ export default function TasksPage() {
             onClick={() => setView(val)}
             className={clsx(
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-              view === val ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"
+              view === val ? "border-accent text-accent" : "border-transparent text-gray-500 hover:text-gray-700"
             )}
           >
             {label}
@@ -200,10 +207,12 @@ export default function TasksPage() {
             <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
               {["","PENDING","IN_PROGRESS","COMPLETED","OVERDUE","CANCELLED"].map((s) => <option key={s} value={s}>{s || "All Statuses"}</option>)}
             </select>
-            <select value={filters.company} onChange={(e) => setFilters((f) => ({ ...f, company: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
-              <option value="">All Companies</option>
-              {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-            </select>
+            {!oneCompany && (
+              <select value={filters.company} onChange={(e) => setFilters((f) => ({ ...f, company: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
+                <option value="">All Companies</option>
+                {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+              </select>
+            )}
             {!isBdo && (
               <select value={filters.bdoId} onChange={(e) => setFilters((f) => ({ ...f, bdoId: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
                 <option value="">All BDOs</option>
@@ -219,6 +228,7 @@ export default function TasksPage() {
           bdos={bdos}
           clients={clients}
           isBdo={!!isBdo}
+          oneCompany={oneCompany}
           myBdoId={myBdoId}
           defaultType={view === "PROPOSAL" ? "PROPOSAL" : "TASK"}
           onClose={() => setShowForm(false)}
@@ -244,24 +254,32 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "gre
   );
 }
 
-function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClose, onSaved }: {
+// Trunqo design tokens for the task popup — same as the KPI and Team & Access popups.
+const inputClass = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
+const labelClass = "text-xs font-medium text-muted block mb-1";
+
+function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaultType, onClose, onSaved }: {
   task: Task | null;
   bdos: Bdo[];
   clients: ClientOption[];
   isBdo: boolean;
+  oneCompany: boolean;
   myBdoId: string | null;
   defaultType: "TASK" | "PROPOSAL";
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { companies } = useCompanies();
+  const { user } = useAuth();
+  // Staff always work in their own company — the server enforces it, so the form doesn't offer a choice.
+  const ownCompany = oneCompany ? (user?.bdoCompany ?? null) : null;
   const [form, setForm] = useState({
     year: task?.year ?? new Date().getFullYear(),
     priority: task?.priority ?? "MEDIUM",
     deliverable: task?.deliverable ?? "",
     targetDate: task?.targetDate ? task.targetDate.slice(0, 10) : "",
     status: task?.status ?? "PENDING",
-    company: task?.company ?? "TRADELINE",
+    company: task?.company ?? ownCompany ?? "TRADELINE",
     bdoId: task?.bdoId ?? "",
     notes: task?.notes ?? "",
     type: task?.type ?? defaultType,
@@ -304,22 +322,26 @@ function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClo
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b flex items-center justify-between"><h2 className="font-semibold">{task ? "Edit" : "Add"} {isProposal ? "Proposal" : "Task"}</h2><button onClick={onClose}>&times;</button></div>
-        <div className="p-5 space-y-3">
+    <div className="fixed inset-0 bg-primary/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-border rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 shrink-0">
+          <h2 className="font-serif text-lg text-foreground">{task ? "Edit" : "Add"} {isProposal ? "proposal" : "task"}</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors" aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-3 overflow-y-auto">
           {/* Type toggle */}
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Type</label>
-            <div className="flex gap-2">
-              {(["TASK", "PROPOSAL"] as const).map((t) => (
+            <label className={labelClass}>Type</label>
+            <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+              {(["TASK", "PROPOSAL"] as const).map((t, i) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => set("type", t)}
                   className={clsx(
-                    "flex-1 px-3 py-2 text-sm rounded-lg border transition-colors",
-                    form.type === t ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    "flex-1 px-3 py-2 transition-colors",
+                    i > 0 && "border-l border-border",
+                    form.type === t ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5",
                   )}
                 >
                   {t === "TASK" ? "Task" : "Proposal"}
@@ -328,7 +350,7 @@ function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClo
             </div>
           </div>
 
-          <div><label className="text-xs font-medium text-gray-600 block mb-1">{isProposal ? "Proposal Title" : "Task / Deliverable"}</label><textarea value={form.deliverable} onChange={(e) => set("deliverable", e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" /></div>
+          <div><label className={labelClass}>{isProposal ? "Proposal title" : "Task / deliverable"}</label><textarea value={form.deliverable} onChange={(e) => set("deliverable", e.target.value)} rows={2} className={inputClass + " resize-none"} /></div>
 
           {/* Proposal-only fields */}
           {isProposal && (
@@ -344,26 +366,32 @@ function TaskFormModal({ task, bdos, clients, isBdo, myBdoId, defaultType, onClo
                 }}
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600 block mb-1">Proposal Value (GHS)</label><input type="number" min="0" value={form.proposalValueGhs} onChange={(e) => set("proposalValueGhs", e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></div>
-                <div><label className="text-xs font-medium text-gray-600 block mb-1">Outcome</label><select value={form.outcome} onChange={(e) => set("outcome", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{OUTCOME_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></div>
+                <div><label className={labelClass}>Proposal value (GHS)</label><input type="number" min="0" value={form.proposalValueGhs} onChange={(e) => set("proposalValueGhs", e.target.value)} className={inputClass} /></div>
+                <div><label className={labelClass}>Outcome</label><select value={form.outcome} onChange={(e) => set("outcome", e.target.value)} className={inputClass}>{OUTCOME_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></div>
               </div>
             </>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Year</label><input type="number" value={form.year} onChange={(e) => set("year", parseInt(e.target.value))} className="w-full border rounded-lg px-3 py-2 text-sm" /></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">{isProposal ? "Due / Sent Date" : "Target Date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" /></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Priority</label><select value={form.priority} onChange={(e) => set("priority", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{["HIGH","MEDIUM","LOW"].map((s) => <option key={s}>{s}</option>)}</select></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Status</label><select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{["PENDING","IN_PROGRESS","COMPLETED","OVERDUE","CANCELLED"].map((s) => <option key={s}>{s}</option>)}</select></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Company</label><select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm">{companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></div>
+            <div><label className={labelClass}>Year</label><input type="number" value={form.year} onChange={(e) => set("year", parseInt(e.target.value))} className={inputClass} /></div>
+            <div><label className={labelClass}>{isProposal ? "Due / sent date" : "Target date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>Priority</label><select value={form.priority} onChange={(e) => set("priority", e.target.value)} className={inputClass}>{["HIGH","MEDIUM","LOW"].map((s) => <option key={s}>{s}</option>)}</select></div>
+            <div><label className={labelClass}>Status</label><select value={form.status} onChange={(e) => set("status", e.target.value)} className={inputClass}>{["PENDING","IN_PROGRESS","COMPLETED","OVERDUE","CANCELLED"].map((s) => <option key={s}>{s}</option>)}</select></div>
+            {/* Staff and Business CEOs always work in their own company, so they aren't asked. */}
+            {!oneCompany && (
+              <div><label className={labelClass}>Company</label><select value={form.company} onChange={(e) => set("company", e.target.value)} className={inputClass}>{companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></div>
+            )}
             {!isBdo && (
-              <div><label className="text-xs font-medium text-gray-600 block mb-1">BDO</label><select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border rounded-lg px-2 py-2 text-sm"><option value="">— Unassigned —</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}</select></div>
+              <div><label className={labelClass}>BDO</label><select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className={inputClass}><option value="">— Unassigned —</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}</select></div>
             )}
           </div>
-          <div><label className="text-xs font-medium text-gray-600 block mb-1">Notes</label><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className="w-full border rounded-lg px-3 py-2 text-sm" /></div>
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          <div><label className={labelClass}>Notes</label><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className={inputClass + " resize-none"} /></div>
+          {error && <p className="text-red-600 text-sm bg-red-500/5 border border-red-200 px-3 py-2 rounded-lg">{error}</p>}
         </div>
-        <div className="px-5 py-3 border-t flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button><button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save"}</button></div>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity">{saving ? "Saving…" : "Save"}</button>
+        </div>
       </div>
     </div>
   );

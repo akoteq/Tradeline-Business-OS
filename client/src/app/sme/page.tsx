@@ -6,8 +6,11 @@ import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { GHANA_REGIONS } from "@/lib/regions";
+import { useCompanies, companyBadgeClass } from "@/lib/companies";
+import { accessLevel } from "@/lib/auth";
+import { EngagementSection, ClientComplianceSection, ClientContactsSection } from "@/components/ClientModules";
 import Link from "next/link";
-import { X, FileText, Trash2 } from "lucide-react";
+import { X, FileText, Trash2, Share2 } from "lucide-react";
 
 const PAGE_SIZE = 100;
 
@@ -29,7 +32,7 @@ type SME = {
   status: string;
   followUpDate: string | null;
   investorReadinessScore: number | null;
-  bankabilityTier: string;
+  bankabilityTier?: string;
   collateralStatus: string | null;
   dateOfIncorporation: string | null;
   yearsInOperation: number | null;
@@ -43,6 +46,11 @@ type SME = {
   tradelineCount?: number;
   grantCount?: number;
   linkedDeals?: LinkedDeal[];
+  activities?: string[];
+  // Shared clients: which companies serve the client, and what this viewer may do with it.
+  servedBy?: string[];
+  canEdit?: boolean;
+  fullAccess?: boolean;
 };
 
 type BdoOption = { id: string; name: string; company: string };
@@ -77,13 +85,14 @@ const EMPTY_FORM = {
   investorReadinessScore: "", followUpDate: "", notes: "",
   dateOfIncorporation: "", yearsInOperation: "",
   revenueGhs2023: "", revenueGhs2024: "", revenueGhs2025: "", revenueGhs2026: "",
-  bdoId: "",
+  bdoId: "", activities: "",
 };
 
 function fmt(n: number) {
   return `GHS ${n.toLocaleString()}`;
 }
 
+const CORE_CHECKS = 7;
 const COMPLETENESS_CHECKS: [string, (s: SME) => boolean][] = [
   ["Contact Person", (s) => !!s.contactName],
   ["Phone", (s) => !!s.phone],
@@ -92,15 +101,17 @@ const COMPLETENESS_CHECKS: [string, (s: SME) => boolean][] = [
   ["Value Chain", (s) => !!s.valueChain],
   ["Date of Incorporation", (s) => !!s.dateOfIncorporation],
   ["Years in Operation", (s) => s.yearsInOperation != null],
-  ["Revenue Data", (s) => [s.revenueGhs2023, s.revenueGhs2024, s.revenueGhs2025, s.revenueGhs2026].some((v) => v != null)],
   ["Assigned BDO", (s) => !!s.bdoId],
+  ["Revenue Data", (s) => [s.revenueGhs2023, s.revenueGhs2024, s.revenueGhs2025, s.revenueGhs2026].some((v) => v != null)],
   ["Bankability Assessed", (s) => s.bankabilityTier !== "UNSCORED"],
   ["Collateral Status", (s) => !!s.collateralStatus],
 ];
 
+// Tradeline's financing fields only count for viewers who can see them.
 function completeness(sme: SME) {
-  const missing = COMPLETENESS_CHECKS.filter(([, check]) => !check(sme)).map(([label]) => label);
-  const percent = Math.round(((COMPLETENESS_CHECKS.length - missing.length) / COMPLETENESS_CHECKS.length) * 100);
+  const checks = "bankabilityTier" in sme ? COMPLETENESS_CHECKS : COMPLETENESS_CHECKS.slice(0, CORE_CHECKS);
+  const missing = checks.filter(([, check]) => !check(sme)).map(([label]) => label);
+  const percent = Math.round(((checks.length - missing.length) / checks.length) * 100);
   return { percent, missing };
 }
 
@@ -124,6 +135,12 @@ export default function SmePage() {
   const [showForm, setShowForm] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const { companies, byKey } = useCompanies();
+  const tradelineKey = companies.find((c) => c.dealSource === "TRADELINE")?.key;
+  // Tradeline's financing fields and deal links are Tradeline's own (decided 2026-10-14).
+  const tradelineView = !!user && (accessLevel(user.role) === "GROUP_OWNER" || user.bdoCompany === tradelineKey);
+  const [mine, setMine] = useState(false);
 
   const setFilter = (key: string, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -140,12 +157,13 @@ export default function SmePage() {
 
   const queryParams = new URLSearchParams({
     ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
+    ...(mine ? { mine: "1" } : {}),
     limit: String(PAGE_SIZE),
     skip: String(page * PAGE_SIZE),
   });
 
   const { data: res, isLoading } = useQuery<{ data: SME[]; total: number }>({
-    queryKey: ["sme", filters, page],
+    queryKey: ["sme", filters, page, mine],
     queryFn: () => fetcher(`/sme?${queryParams}`),
   });
 
@@ -168,7 +186,7 @@ export default function SmePage() {
     {
       key: "companyName", label: "Company", sortable: true,
       render: (r: SME) => (
-        <button onClick={() => setDetailId(r.id)} className="text-left font-medium text-indigo-700 hover:underline truncate max-w-[180px] block">
+        <button onClick={() => setDetailId(r.id)} className="text-left font-medium text-accent hover:underline truncate max-w-[180px] block">
           {r.companyName}
         </button>
       ),
@@ -177,7 +195,16 @@ export default function SmePage() {
     { key: "phone", label: "Phone", render: (r: SME) => r.phone ?? "—" },
     { key: "valueChain", label: "Value Chain", sortable: true, render: (r: SME) => r.valueChain ?? "—" },
     { key: "region", label: "Region", sortable: true, render: (r: SME) => r.region ?? "—" },
-    { key: "bdo", label: "BDO", render: (r: SME) => r.bdo?.name ?? "—" },
+    { key: "bdo", label: "Owner", render: (r: SME) => r.bdo?.name ?? "—" },
+    {
+      key: "servedBy", label: "Served by",
+      render: (r: SME) => (r.servedBy?.length ? (
+        <div className="flex flex-wrap gap-1">
+          {r.servedBy.map((k) => <span key={k} className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${companyBadgeClass(byKey[k]?.color)}`}>{byKey[k]?.name ?? k}</span>)}
+        </div>
+      ) : <span className="text-xs text-gray-400">—</span>),
+      exportValue: (r: SME) => (r.servedBy ?? []).map((k) => byKey[k]?.name ?? k).join(", "),
+    },
     {
       key: "status", label: "Status", sortable: true,
       render: (r: SME) => (
@@ -186,11 +213,11 @@ export default function SmePage() {
         </span>
       ),
     },
-    {
+    ...(tradelineView ? [{
       key: "bankabilityTier", label: "Bankability", sortable: true,
       render: (r: SME) => (
-        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[r.bankabilityTier] ?? "bg-gray-100 text-gray-500"}`}>
-          {r.bankabilityTier.replace("_", " ")}
+        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[r.bankabilityTier ?? "UNSCORED"] ?? "bg-gray-100 text-gray-500"}`}>
+          {(r.bankabilityTier ?? "UNSCORED").replace("_", " ")}
         </span>
       ),
     },
@@ -206,7 +233,7 @@ export default function SmePage() {
         const parts = [t > 0 ? `${t} Tradeline` : "", g > 0 ? `${g} Grant` : ""].filter(Boolean);
         return parts.join(", ") || "None";
       },
-    },
+    }] : []),
     {
       key: "completeness", label: "Completeness",
       render: (r: SME) => <CompletenessBadge sme={r} />,
@@ -219,7 +246,7 @@ export default function SmePage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Client Overview</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {total.toLocaleString()} clients · pulled in automatically from Tradeline &amp; Grant deals, plus SME profiles you add here
+          {total.toLocaleString()} clients across the group. Everyone can find any client and start a deal for them; each company&apos;s own details stay private to it.
         </p>
       </div>
 
@@ -231,12 +258,14 @@ export default function SmePage() {
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
         onDelete={(row) => { if (confirm(`Delete "${row.companyName}"?`)) deleteMutation.mutate(row.id); }}
+        canEditRow={(row) => row.canEdit !== false}
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <FilterSelect value={filters.status} options={[{ value: "", label: "All Statuses" }, ...STATUS_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]} onChange={(v) => setFilter("status", v)} />
-            <FilterSelect value={filters.tier} options={[{ value: "", label: "All Tiers" }, ...TIER_OPTS.map((t) => ({ value: t, label: t.replace("_", " ") }))]} onChange={(v) => setFilter("tier", v)} />
+            {tradelineView && <FilterSelect value={filters.tier} options={[{ value: "", label: "All Tiers" }, ...TIER_OPTS.map((t) => ({ value: t, label: t.replace("_", " ") }))]} onChange={(v) => setFilter("tier", v)} />}
+            <label className="flex items-center gap-1.5 text-sm text-gray-600 px-1"><input type="checkbox" checked={mine} onChange={(e) => { setMine(e.target.checked); setPage(0); }} /> Only mine</label>
             <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...bdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilter("bdo", v)} />
-            <input value={filters.valueChain} onChange={(e) => setFilter("valueChain", e.target.value)} placeholder="Value chain…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-32" />
+            <input value={filters.valueChain} onChange={(e) => setFilter("valueChain", e.target.value)} placeholder="Value chain…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 w-32" />
             <FilterSelect value={filters.region} options={[{ value: "", label: "All Regions" }, ...GHANA_REGIONS.map((r) => ({ value: r, label: r }))]} onChange={(v) => setFilter("region", v)} />
           </div>
         }
@@ -259,6 +288,8 @@ export default function SmePage() {
         <SmeFormModal
           sme={editing}
           bdos={bdos}
+          tradelineView={tradelineView}
+          onOpenExisting={(id) => { setShowForm(false); setDetailId(id); }}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["sme"] }); }}
         />
@@ -267,6 +298,7 @@ export default function SmePage() {
       {detailId && detail && (
         <DetailDrawer
           sme={detail}
+          serving={(detail.servedBy ?? []).map((k) => byKey[k]?.name ?? k)}
           onClose={() => setDetailId(null)}
           onEdit={() => { setEditing(detail); setDetailId(null); setShowForm(true); }}
         />
@@ -293,7 +325,7 @@ function ScoreBar({ score }: { score: number }) {
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -301,7 +333,9 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
-function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: BdoOption[]; onClose: () => void; onSaved: () => void }) {
+function SmeFormModal({ sme, bdos, tradelineView, onClose, onSaved, onOpenExisting }: { sme: SME | null; bdos: BdoOption[]; tradelineView: boolean; onClose: () => void; onSaved: () => void; onOpenExisting: (id: string) => void }) {
+  const { byKey } = useCompanies();
+  const [dups, setDups] = useState<{ id: string; name: string; region: string | null; servedBy: string[] }[] | null>(null);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(sme ? {
@@ -316,7 +350,8 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
       district: sme.district ?? "",
       businessDescription: sme.businessDescription ?? "",
       status: sme.status,
-      bankabilityTier: sme.bankabilityTier,
+      bankabilityTier: sme.bankabilityTier ?? "UNSCORED",
+      activities: (sme.activities ?? []).join(", "),
       collateralStatus: sme.collateralStatus ?? "",
       investorReadinessScore: sme.investorReadinessScore != null ? String(sme.investorReadinessScore) : "",
       followUpDate: sme.followUpDate ? sme.followUpDate.slice(0, 10) : "",
@@ -334,11 +369,21 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
   const [error, setError] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const save = async () => {
+  const save = async (force = false) => {
     if (!form.companyName.trim()) { setError("Company name is required."); return; }
     setSaving(true); setError("");
+    // A new client is checked against the whole group first, so nobody adds the same business twice.
+    if (!sme && !force) {
+      try {
+        const params = new URLSearchParams({ name: form.companyName, phone: form.phone, email: form.email });
+        const found = await fetcher(`/sme/duplicates?${params}`) as { id: string; name: string; region: string | null; servedBy: string[] }[];
+        if (found.length) { setDups(found); setSaving(false); return; }
+      } catch { /* the check is a convenience; carry on */ }
+    }
+    const tradelineOnly = tradelineView ? {} : { bankabilityTier: undefined, collateralStatus: undefined, investorReadinessScore: undefined, revenueGhs2023: undefined, revenueGhs2024: undefined, revenueGhs2025: undefined, revenueGhs2026: undefined };
     const body = {
       ...form,
+      activities: form.activities.split(",").map((a) => a.trim()).filter(Boolean),
       contactName: form.contactName || null,
       email: form.email || null,
       phone: form.phone || null,
@@ -359,6 +404,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
       revenueGhs2025: form.revenueGhs2025 !== "" ? Number(form.revenueGhs2025) : null,
       revenueGhs2026: form.revenueGhs2026 !== "" ? Number(form.revenueGhs2026) : null,
       bdoId: form.bdoId || null,
+      ...tradelineOnly,
     };
     try {
       sme ? await api.put(`/sme/${sme.id}`, body) : await api.post("/sme", body);
@@ -385,7 +431,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
               <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
-                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— Select region —</option>
                   {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
                   {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -394,10 +440,11 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
               <Field label="Town / District" value={form.district} onChange={(v) => set("district", v)} />
               <Field label="Address" value={form.address} onChange={(v) => set("address", v)} span={2} />
               <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />
+              <Field label="Activities (comma-separated, e.g. shea butter processing, export)" value={form.activities} onChange={(v) => set("activities", v)} span={2} />
             </div>
             <div className="mt-3">
               <label className="text-xs font-medium text-gray-600 block mb-1">Business Description</label>
-              <textarea value={form.businessDescription} onChange={(e) => set("businessDescription", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+              <textarea value={form.businessDescription} onChange={(e) => set("businessDescription", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
             </div>
           </Section>
 
@@ -407,7 +454,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
               <Field label="Years in Operation" type="number" min={0} value={form.yearsInOperation} onChange={(v) => set("yearsInOperation", v)} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— Unassigned —</option>
                   {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
                 </select>
@@ -415,41 +462,55 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
             </div>
           </Section>
 
-          <Section label="Financial Records — Revenue by Year (GHS)">
+          {tradelineView && <Section label="Financial Records — Revenue by Year (GHS)">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {REVENUE_YEARS.map((y) => (
                 <Field key={y} label={y} type="number" min={0} value={form[`revenueGhs${y}` as keyof typeof form] as string} onChange={(v) => set(`revenueGhs${y}`, v)} />
               ))}
             </div>
-          </Section>
+          </Section>}
 
           <Section label="Assessment & Status">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormSelect label="Status" value={form.status} options={STATUS_OPTS as unknown as string[]} onChange={(v) => set("status", v)} />
-              <FormSelect label="Bankability Tier" value={form.bankabilityTier} options={TIER_OPTS as unknown as string[]} onChange={(v) => set("bankabilityTier", v)} />
-              <div>
+              {tradelineView && <FormSelect label="Bankability Tier" value={form.bankabilityTier} options={TIER_OPTS as unknown as string[]} onChange={(v) => set("bankabilityTier", v)} />}
+              {tradelineView && <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Investor Readiness Score (0–100)</label>
-                <input type="number" min="0" max="100" value={form.investorReadinessScore} onChange={(e) => set("investorReadinessScore", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <input type="number" min="0" max="100" value={form.investorReadinessScore} onChange={(e) => set("investorReadinessScore", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
                 {form.investorReadinessScore !== "" && (
                   <div className="mt-1.5"><ScoreBar score={Number(form.investorReadinessScore)} /></div>
                 )}
-              </div>
+              </div>}
               <Field label="Follow Up Date" type="date" value={form.followUpDate} onChange={(v) => set("followUpDate", v)} />
-              <Field label="Bankability / Collateral Status" value={form.collateralStatus} onChange={(v) => set("collateralStatus", v)} span={2} placeholder="e.g. Land title available, no collateral yet…" />
+              {tradelineView && <Field label="Bankability / Collateral Status" value={form.collateralStatus} onChange={(v) => set("collateralStatus", v)} span={2} placeholder="e.g. Land title available, no collateral yet…" />}
             </div>
           </Section>
 
           <Section label="Notes">
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
           </Section>
 
+          {dups && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+              <p className="font-medium text-amber-900">This business may already be in the client list:</p>
+              <ul className="mt-2 space-y-1.5">
+                {dups.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between gap-2">
+                    <span className="text-amber-900">{d.name}{d.region ? ` · ${d.region}` : ""}{d.servedBy.length ? ` · served by ${d.servedBy.map((k) => byKey[k]?.name ?? k).join(", ")}` : ""}</span>
+                    <button onClick={() => onOpenExisting(d.id)} className="text-xs font-semibold text-accent hover:underline shrink-0">Open it</button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">To work with an existing client, open it and start a deal from your pipeline. If this is a different business, save anyway.</p>
+            </div>
+          )}
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         </div>
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? "Saving…" : sme ? "Update Client" : "Add Client"}
+          <button onClick={() => save(!!dups)} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
+            {saving ? "Saving…" : sme ? "Update Client" : dups ? "Save anyway" : "Add Client"}
           </button>
         </div>
       </div>
@@ -459,7 +520,7 @@ function SmeFormModal({ sme, bdos, onClose, onSaved }: { sme: SME | null; bdos: 
 
 // ─── Detail drawer ─────────────────────────────────────────────────────────────
 
-function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void; onEdit: () => void }) {
+function DetailDrawer({ sme, serving, onClose, onEdit }: { sme: SME; serving: string[]; onClose: () => void; onEdit: () => void }) {
   const overdue = sme.followUpDate && new Date(sme.followUpDate) < new Date();
   const { percent, missing } = completeness(sme);
   const revenueYears = REVENUE_YEARS.map((y) => ({ year: y, value: sme[`revenueGhs${y}` as keyof SME] as number | null }));
@@ -475,7 +536,7 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
             <p className="text-xs text-gray-400 mt-0.5">{sme.bizId ?? "No Biz ID"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
+            {sme.canEdit !== false && <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
@@ -500,9 +561,12 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[sme.status] ?? "bg-gray-100 text-gray-500"}`}>
               {sme.status.replace(/_/g, " ")}
             </span>
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[sme.bankabilityTier] ?? "bg-gray-100 text-gray-500"}`}>
-              {sme.bankabilityTier.replace("_", " ")}
-            </span>
+            {sme.bankabilityTier && (
+              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[sme.bankabilityTier] ?? "bg-gray-100 text-gray-500"}`}>
+                {sme.bankabilityTier.replace("_", " ")}
+              </span>
+            )}
+            {serving.map((n) => <span key={n} className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent">Served by {n}</span>)}
           </div>
 
           {/* IR Score */}
@@ -534,7 +598,8 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
             <DetailItem label="Assigned BDO" value={sme.bdo?.name} />
             <DetailItem label="Date of Incorporation" value={sme.dateOfIncorporation ? new Date(sme.dateOfIncorporation).toLocaleDateString() : null} />
             <DetailItem label="Years in Operation" value={sme.yearsInOperation != null ? String(sme.yearsInOperation) : null} />
-            <DetailItem label="Bankability / Collateral" value={sme.collateralStatus} />
+            {"bankabilityTier" in sme && <DetailItem label="Bankability / Collateral" value={sme.collateralStatus} />}
+            <DetailItem label="Activities" value={sme.activities?.length ? sme.activities.join(", ") : null} />
             <div>
               <dt className="text-xs text-gray-400 font-medium">Follow Up Date</dt>
               <dd className={`mt-0.5 ${overdue ? "text-red-600 font-medium" : "text-gray-800"}`}>
@@ -588,8 +653,20 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
             </div>
           )}
 
-          <DocumentsSection smeId={sme.id} />
-          <FollowUpLogSection smeId={sme.id} />
+          <EngagementSection smeId={sme.id} />
+          <ClientComplianceSection smeId={sme.id} clientName={sme.companyName} />
+          <ClientContactsSection smeId={sme.id} />
+
+          {sme.fullAccess === false ? (
+            <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
+              Notes and documents for this client show once your company works with them. Start a deal for them in your pipeline to begin.
+            </p>
+          ) : (
+            <>
+              <DocumentsSection smeId={sme.id} />
+              <FollowUpLogSection smeId={sme.id} />
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -598,7 +675,7 @@ function DetailDrawer({ sme, onClose, onEdit }: { sme: SME; onClose: () => void;
 
 // ─── Documents ─────────────────────────────────────────────────────────────────
 
-type ClientDoc = { id: string; fileName: string; fileUrl: string; fileType: string | null; uploadedBy: string | null; createdAt: string };
+type ClientDoc = { id: string; fileName: string; fileUrl: string; fileType: string | null; uploadedBy: string | null; createdAt: string; company: string | null; sharedWithGroup?: boolean; category?: string | null };
 
 function DocumentsSection({ smeId }: { smeId: string }) {
   const { user } = useAuth();
@@ -613,6 +690,11 @@ function DocumentsSection({ smeId }: { smeId: string }) {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/client-documents/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["client-documents", smeId] }),
+  });
+  const shareMutation = useMutation({
+    mutationFn: (d: ClientDoc) => api.put(`/client-documents/${d.id}`, { sharedWithGroup: !d.sharedWithGroup }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["client-documents", smeId] }),
+    onError: (e: unknown) => alert((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Couldn't change sharing."),
   });
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -638,7 +720,7 @@ function DocumentsSection({ smeId }: { smeId: string }) {
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-gray-400">Documents</p>
-        <label className="text-xs font-medium text-indigo-600 hover:text-indigo-800 cursor-pointer">
+        <label className="text-xs font-medium text-accent hover:text-accent/80 cursor-pointer">
           {uploading ? "Uploading…" : "+ Upload"}
           <input type="file" onChange={handleUpload} disabled={uploading} className="hidden" />
         </label>
@@ -649,16 +731,25 @@ function DocumentsSection({ smeId }: { smeId: string }) {
         <div className="space-y-1.5">
           {docs.map((d) => (
             <div key={d.id} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2">
-              <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 text-sm text-gray-700 hover:text-indigo-700 hover:underline">
+              <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 text-sm text-gray-700 hover:text-accent hover:underline">
                 <FileText size={14} className="shrink-0 text-gray-400" />
                 <span className="truncate">{d.fileName}</span>
               </a>
-              <button
-                onClick={() => { if (confirm(`Delete "${d.fileName}"?`)) deleteMutation.mutate(d.id); }}
-                className="text-gray-400 hover:text-red-600 shrink-0"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => shareMutation.mutate(d)}
+                  title={d.sharedWithGroup ? "Shared with the other companies serving this client — click to make private" : "Only your company sees this — click to share with the group"}
+                  className={`flex items-center gap-1 text-[11px] ${d.sharedWithGroup ? "text-accent" : "text-gray-400 hover:text-accent"}`}
+                >
+                  <Share2 size={12} /> {d.sharedWithGroup ? "Shared" : "Private"}
+                </button>
+                <button
+                  onClick={() => { if (confirm(`Delete "${d.fileName}"?`)) deleteMutation.mutate(d.id); }}
+                  className="text-gray-400 hover:text-red-600"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -714,7 +805,7 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
           onChange={(e) => setText(e.target.value)}
           rows={2}
           placeholder="Log a call, visit, or update…"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none bg-white"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none bg-white"
         />
         <div className="flex flex-wrap gap-2">
           <select value={type} onChange={(e) => setType(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
@@ -724,7 +815,7 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
           <button
             onClick={addNote}
             disabled={saving || !text.trim()}
-            className="ml-auto px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            className="ml-auto px-3 py-1.5 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Add"}
           </button>
@@ -736,10 +827,10 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
       ) : (
         <div className="space-y-3">
           {notes.map((n) => (
-            <div key={n.id} className="border-l-2 border-indigo-200 pl-3 py-0.5">
+            <div key={n.id} className="border-l-2 border-accent/30 pl-3 py-0.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{n.type}</span>
+                  <span className="text-xs font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded">{n.type}</span>
                   <span className="text-xs text-gray-400">{new Date(n.date).toLocaleDateString()}</span>
                   {n.authorName && <span className="text-xs text-gray-400">· {n.authorName}</span>}
                 </div>
@@ -771,7 +862,7 @@ function Field({ label, value, onChange, type = "text", span, min, placeholder }
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
     </div>
   );
 }
@@ -780,7 +871,7 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
         {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     </div>

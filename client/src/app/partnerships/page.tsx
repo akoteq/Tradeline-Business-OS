@@ -85,7 +85,7 @@ export default function PartnershipsPage() {
     {
       key: "partnerOrganisation", label: "Organisation", sortable: true,
       render: (r: Partnership) => (
-        <button onClick={() => setDetail(r)} className="text-left font-medium text-indigo-700 hover:underline truncate max-w-[180px] block">
+        <button onClick={() => setDetail(r)} className="text-left font-medium text-accent hover:underline truncate max-w-[180px] block">
           {r.partnerOrganisation}
         </button>
       ),
@@ -154,7 +154,7 @@ export default function PartnershipsPage() {
           <div className="flex gap-2 flex-wrap">
             <FilterSelect value={filters.status} options={[{ value: "", label: "All Statuses" }, ...STATUS_OPTS.map((s) => ({ value: s, label: s }))]} onChange={(v) => setFilters((f) => ({ ...f, status: v }))} />
             <FilterSelect value={filters.entity} options={[{ value: "", label: "All Entities" }, ...ENTITY_OPTS.map((e) => ({ value: e, label: e }))]} onChange={(v) => setFilters((f) => ({ ...f, entity: v }))} />
-            <input value={filters.country} onChange={(e) => setFilters((f) => ({ ...f, country: e.target.value }))} placeholder="Country…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-28" />
+            <input value={filters.country} onChange={(e) => setFilters((f) => ({ ...f, country: e.target.value }))} placeholder="Country…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 w-28" />
           </div>
         }
       />
@@ -198,7 +198,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -284,7 +284,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Entity</label>
-                <select value={form.tradelineEntity} onChange={(e) => set("tradelineEntity", e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.tradelineEntity} onChange={(e) => set("tradelineEntity", e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— None —</option>
                   {ENTITY_OPTS.map((e) => <option key={e} value={e}>{e}</option>)}
                 </select>
@@ -301,7 +301,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
           </Section>
 
           <Section label="Notes">
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
           </Section>
 
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
@@ -309,7 +309,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : p ? "Update Partnership" : "Add Partnership"}
           </button>
         </div>
@@ -332,7 +332,7 @@ function DetailDrawer({ p, onClose, onEdit }: { p: Partnership; onClose: () => v
             {p.country && <p className="text-xs text-gray-400 mt-0.5">{p.country}</p>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
+            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
@@ -352,9 +352,9 @@ function DetailDrawer({ p, onClose, onEdit }: { p: Partnership; onClose: () => v
           {(p.revenueSharePct != null || p.revenueGeneratedGhs != null) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {p.revenueSharePct != null && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
-                  <div className="text-xs font-medium text-indigo-600">Revenue Share</div>
-                  <div className="font-bold text-indigo-700 text-lg">{p.revenueSharePct}%</div>
+                <div className="bg-accent/10 border border-accent/30 rounded-lg p-3 text-center">
+                  <div className="text-xs font-medium text-accent">Revenue Share</div>
+                  <div className="font-bold text-accent text-lg">{p.revenueSharePct}%</div>
                 </div>
               )}
               {p.revenueGeneratedGhs != null && (
@@ -410,7 +410,7 @@ function Field({ label, value, onChange, type = "text", span }: { label: string;
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
     </div>
   );
 }
@@ -419,7 +419,7 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>

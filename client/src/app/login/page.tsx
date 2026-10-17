@@ -7,6 +7,7 @@ import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { isStaff } from "@/lib/auth";
 import { BrandLoader } from "@/components/BrandLoader";
 
 export default function LoginPage() {
@@ -31,10 +32,10 @@ export default function LoginPage() {
       const user = await login(email.trim(), password);
       if (user.mustChangePassword) {
         router.replace("/change-password");
-      } else if (user.role === "BDO" && user.bdoId) {
-        router.replace(`/bdo/${user.bdoId}`);
+      } else if (isStaff(user) && user.bdoId) {
+        router.replace("/overview");
       } else {
-        router.replace("/"); // CEO / ADMIN → main dashboard
+        router.replace("/"); // home routes Group Owner / Business CEO onward
       }
     } catch {
       setError("Invalid email or password.");

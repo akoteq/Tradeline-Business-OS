@@ -12,7 +12,11 @@ export type Company = {
   color: string;
   order: number;
   isActive: boolean;
+  modules?: { compliance?: boolean; complianceOpportunities?: boolean };
+  clientFields?: ClientField[];
 };
+
+export type ClientField = { key: string; label: string; type: "TEXT" | "LONGTEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN"; options?: string[]; required?: boolean; section?: string };
 
 // Static fallback mirroring the server's DEFAULT_COMPANIES, so labels/menus render
 // instantly on first paint and still work if the request is in flight.
@@ -31,6 +35,17 @@ export function companyHref(c: Pick<Company, "dealSource" | "slug">): string {
   if (c.dealSource === "BAPX") return "/bapx/pipeline";
   if (c.dealSource === "TRADELINE") return "/tradeline/pipeline";
   return `/pipeline/${c.slug}`;
+}
+
+// Badge tint for a company's colour (set when the company is added). Literal classes so Tailwind
+// picks them up; unknown colours fall back to neutral.
+const BADGE: Record<string, string> = {
+  indigo: "bg-indigo-100 text-indigo-700", green: "bg-green-100 text-green-700", emerald: "bg-emerald-100 text-emerald-700",
+  teal: "bg-teal-100 text-teal-700", sky: "bg-sky-100 text-sky-700", violet: "bg-violet-100 text-violet-700",
+  amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700", slate: "bg-slate-100 text-slate-700",
+};
+export function companyBadgeClass(color?: string | null): string {
+  return (color && BADGE[color]) || "bg-gray-100 text-gray-600";
 }
 
 export function useCompanies() {

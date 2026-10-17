@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetcher } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
+import { isGroupOwner, isBusinessCeo } from "@/lib/auth";
+import { useCompanies, companyHref } from "@/lib/companies";
 import {
   AlertTriangle,
   Building2,
@@ -14,7 +18,6 @@ import {
   Gauge,
   Layers,
   ShieldAlert,
-  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
@@ -24,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BrandLoader } from "@/components/BrandLoader";
+import { AiSummaryCard } from "@/components/AiSummary";
 
 /**
  * TYPE SYSTEM — this file uses the two faces wired in app/layout.tsx and
@@ -76,6 +80,7 @@ type Deadline = {
 type StaleDeal = {
   id: string;
   type: "BAPX" | "TRADELINE" | "COMPANY";
+  company?: string;
   businessName: string;
   dealHealth: string;
   lastUpdated: string;
@@ -129,8 +134,6 @@ type Exec = {
   leads?: LeadsSummary;
 };
 
-type ExecutiveSummary = { summary: string; generatedAt: string };
-
 const fmt = (n: number) =>
   (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
 const fmtCompact = (n: number) =>
@@ -150,16 +153,6 @@ function urgencyLabel(u: Urgency, daysUntil: number) {
   }
 }
 
-function timeAgo(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-
 const FLAG_LABEL: Record<FinancialFlag["kind"], string> = {
   profit_decline: "Profit decline",
   discretionary_spike: "Discretionary spend spike",
@@ -176,18 +169,19 @@ function deadlineLink(d: Deadline) {
   return d.bdo?.name ? `${PIPELINE_HREF.TRADELINE}?bdo=${encodeURIComponent(d.bdo.name)}` : PIPELINE_HREF.TRADELINE ?? "/tasks";
 }
 
-/** Collapse individual stale deals into one line per (type, owner) — the signal
+/** Collapse individual stale deals into one line per (company, owner) — the signal
  * that matters is "this book has gone quiet," not each business name in it. */
 function groupStale(stale: StaleDeal[]) {
-  const groups = new Map<string, { type: StaleDeal["type"]; bdoName: string | null; count: number; maxDays: number }>();
+  const groups = new Map<string, { type: StaleDeal["type"]; company: string; bdoName: string | null; count: number; maxDays: number }>();
   for (const d of stale) {
-    const key = `${d.type}|${d.bdo?.name ?? "—"}`;
+    const company = d.company ?? d.type;
+    const key = `${company}|${d.bdo?.name ?? "—"}`;
     const g = groups.get(key);
     if (g) {
       g.count += 1;
       g.maxDays = Math.max(g.maxDays, d.daysSinceUpdate);
     } else {
-      groups.set(key, { type: d.type, bdoName: d.bdo?.name ?? null, count: 1, maxDays: d.daysSinceUpdate });
+      groups.set(key, { type: d.type, company, bdoName: d.bdo?.name ?? null, count: 1, maxDays: d.daysSinceUpdate });
     }
   }
   return Array.from(groups.values()).sort((a, b) => b.count - a.count);
@@ -355,48 +349,6 @@ function QuickNav({
   );
 }
 
-// ---- AI summary — margin note, not a dead box ------------------------------
-// Empty state used to be a bordered card announcing nothing was there. Now
-// it's a slim strip in the ledger's own voice: what's happening and when
-// to check back — direction, not apology.
-
-function AiSummaryStrip({ query }: { query: ReturnType<typeof useQuery<ExecutiveSummary>> }) {
-  const { data, isLoading, isError, refetch, isFetching } = query;
-  const hasSummary = !isLoading && !isError && !!data?.summary;
-
-  return (
-    <div className={`flex gap-3 border-l-2 py-1 pl-4 ${hasSummary ? "border-accent" : "border-border"}`}>
-      <span className="mt-0.5 shrink-0 text-accent">
-        <Sparkles size={13} strokeWidth={2.25} />
-      </span>
-      <div className="min-w-0 flex-1">
-        {isLoading ? (
-          <div className="space-y-1.5 py-0.5">
-            <div className="h-3 w-5/6 animate-pulse rounded-full bg-accent/10" />
-            <div className="h-3 w-1/2 animate-pulse rounded-full bg-accent/10" />
-          </div>
-        ) : hasSummary ? (
-          <p className="text-sm leading-relaxed text-foreground/90">{data!.summary}</p>
-        ) : (
-          <p className="text-sm leading-relaxed text-muted">
-            Tonight&apos;s snapshot hasn&apos;t run yet — the summary lands once it does.
-          </p>
-        )}
-        <div className="mt-1 flex items-center gap-3">
-          {data?.generatedAt && <span className="text-[11px] text-muted">Updated {timeAgo(data.generatedAt)}</span>}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="text-[11px] font-semibold text-accent hover:underline disabled:opacity-50"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ---- Attention glance — the dense view that fills the center ---------------
 // Feedback: too much empty beige between the headline and the actual
 // information. This puts the two things a Group Owner actually needs —
@@ -480,14 +432,29 @@ function AttentionGlance({
 
 // ---- Page ---------------------------------------------------------------
 
-export default function CEODashboard() {
+// Home routes by role: the group dashboard is the Group Owner's view only (the API refuses it
+// to everyone else). Business CEOs land on their company's dashboard, staff on their overview.
+export default function Home() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { byKey } = useCompanies();
+  const isOwner = isGroupOwner(user);
+  const ownSlug = user?.bdoCompany ? byKey[user.bdoCompany]?.slug : undefined;
+
+  useEffect(() => {
+    if (!user || isOwner) return;
+    if (isBusinessCeo(user) && ownSlug) router.replace(`/dashboard/${ownSlug}`);
+    else if (!isBusinessCeo(user) || !user.bdoCompany) router.replace(user.bdoId ? "/overview" : "/tasks");
+  }, [user, isOwner, ownSlug, router]);
+
+  if (!isOwner) return <BrandLoader label="Loading" />;
+  return <CEODashboard />;
+}
+
+function CEODashboard() {
+  const { byKey } = useCompanies();
   const alerts = useQuery<AlertsResponse>({ queryKey: ["alerts"], queryFn: () => fetcher("/alerts") });
   const exec = useQuery<Exec>({ queryKey: ["executive-dashboard"], queryFn: () => fetcher("/dashboard/executive") });
-  const summary = useQuery<ExecutiveSummary>({
-    queryKey: ["executive-summary"],
-    queryFn: () => fetcher("/dashboard/executive/summary"),
-  });
-
   const [activeId, setActiveId] = useState("overview");
 
   const data = exec.data;
@@ -591,7 +558,7 @@ export default function CEODashboard() {
 
           <div className="border-t border-dashed border-border" />
 
-          <AiSummaryStrip query={summary} />
+          <AiSummaryCard endpoint="/dashboard/executive/summary" variant="strip" />
         </motion.header>
 
         {/* ---- Tab switcher ----------------------------------------------- */}
@@ -782,14 +749,15 @@ export default function CEODashboard() {
                   />
                   <ul className="divide-y divide-dashed divide-border">
                     {visibleStaleGroups.map((g, i) => {
-                      const href = PIPELINE_HREF[g.type];
+                      const co = byKey[g.company];
+                      const href = co ? companyHref(co) : PIPELINE_HREF[g.type];
                       const content = (
                         <div className="group flex items-center gap-3 py-3 text-sm transition-colors hover:bg-surface/60">
                           <span className="h-full w-[3px] self-stretch rounded-full bg-accent/60" aria-hidden />
                           <AlertTriangle size={14} className="shrink-0 text-accent" />
                           <span className="shrink-0 font-semibold tabular-nums text-accent">{g.maxDays}d+ silent</span>
                           <span className="min-w-0 flex-1 truncate text-muted">
-                            {g.count} {g.type} deal{g.count === 1 ? "" : "s"}
+                            {g.count} {co?.name ?? g.type} deal{g.count === 1 ? "" : "s"}
                             {g.bdoName ? <> · {g.bdoName}</> : ""}
                           </span>
                           <ChevronRight size={14} className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />

@@ -6,9 +6,14 @@ import { clsx } from "clsx";
 import { api, fetcher } from "@/lib/api";
 import { useCompanies } from "@/lib/companies";
 import { useAuth } from "@/components/AuthProvider";
+import { accessLevel, isGroupOwner, isBusinessCeo, isManager, type AccessLevel } from "@/lib/auth";
+import {
+  KpiStatus, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
+  fmtKpiVal, PaceBar, AutoTag,
+} from "@/components/kpi";
 import {
   TrendingUp, TrendingDown, Minus, Plus, Pencil, X, Settings2, Trash2,
-  ChevronLeft, ChevronRight, Zap, Lock,
+  ChevronLeft, ChevronRight, Lock,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -19,7 +24,7 @@ type Def = {
 };
 type AutoKey = { key: string; label: string; unit: string };
 type Entry = {
-  id: string; definitionId: string; period: string; current: number | null; target: number | null;
+  id: string; definitionId: string; period: string; current: number | null; target: number | null; start: number | null;
   priority: string; actionPlan: string | null; decisionRequired: string | null;
   executiveCommentary: string | null; dataSource: string | null; bdoId: string | null; company: string | null;
   reviewStatus: ReviewStatus;
@@ -29,32 +34,20 @@ type AuditLog = {
   reviewStatus: string | null; actorEmail: string | null; actorRole: string | null; note: string | null; createdAt: string;
 };
 
-type Status = "ON_TRACK" | "AT_RISK" | "OFF_TRACK" | "NO_TARGET";
+type Status = KpiStatus;
 type ReviewStatus = "DRAFT" | "TARGET_SET" | "ACTUAL_SUBMITTED" | "VERIFIED" | "LOCKED";
 type BoardRow = {
   definition: Def; entry: Entry | null;
   current: number | null; target: number | null; variance: number; attainment: number | null;
-  status: Status; trend: string;
+  expected: number | null; status: Status; trend: string;
 };
 type Dept = { department: string; count: number };
 
 const UNIT_OPTS = ["COUNT", "CURRENCY", "PERCENT", "SCORE", "DAYS", "HOURS"];
 const FREQ_OPTS = ["WEEKLY", "MONTHLY", "QUARTERLY", "ANNUAL"];
-const STATUS_LIST: Status[] = ["ON_TRACK", "AT_RISK", "OFF_TRACK", "NO_TARGET"];
-
-// Same restrained tinted pills as the leads page.
-const STATUS_STYLE: Record<Status, string> = {
-  ON_TRACK: "bg-emerald-500/10 text-emerald-700",
-  AT_RISK: "bg-amber-500/10 text-amber-700",
-  OFF_TRACK: "bg-red-500/10 text-red-700",
-  NO_TARGET: "bg-foreground/5 text-muted",
-};
-const STATUS_BAR: Record<Status, string> = {
-  ON_TRACK: "bg-emerald-500", AT_RISK: "bg-amber-500", OFF_TRACK: "bg-red-500", NO_TARGET: "bg-border",
-};
-const STATUS_LABEL: Record<Status, string> = {
-  ON_TRACK: "On Track", AT_RISK: "At Risk", OFF_TRACK: "Off Track", NO_TARGET: "No Target",
-};
+const STATUS_LIST = KPI_STATUS_LIST;
+const STATUS_STYLE = KPI_STATUS_STYLE;
+const STATUS_LABEL = KPI_STATUS_LABEL;
 
 const REVIEW_STYLE: Record<ReviewStatus, string> = {
   DRAFT: "bg-foreground/5 text-muted",
@@ -69,14 +62,14 @@ const REVIEW_LABEL: Record<ReviewStatus, string> = {
 
 // Mirrors TRANSITIONS in server/src/routes/kpiFramework.ts — the server is the authority,
 // this only decides which buttons to show.
-const MANAGER_ROLES = ["SENIOR_BDO", "MANAGING_PARTNER", "SENIOR_PARTNER", "ADMIN", "CEO"];
-const ADMIN_ROLES = ["ADMIN", "CEO"];
-const TRANSITIONS: { action: string; label: string; from: ReviewStatus[]; roles: string[] | null }[] = [
-  { action: "submit_target", label: "Submit target", from: ["DRAFT"], roles: null },
-  { action: "submit_actual", label: "Submit actual", from: ["DRAFT", "TARGET_SET"], roles: null },
-  { action: "verify", label: "Verify", from: ["ACTUAL_SUBMITTED"], roles: MANAGER_ROLES },
-  { action: "lock", label: "Lock", from: ["VERIFIED"], roles: ADMIN_ROLES },
-  { action: "reopen", label: "Reopen", from: ["TARGET_SET", "ACTUAL_SUBMITTED", "VERIFIED", "LOCKED"], roles: ADMIN_ROLES },
+const MANAGERS: AccessLevel[] = ["GROUP_OWNER", "BUSINESS_CEO"];
+const OWNERS: AccessLevel[] = ["GROUP_OWNER"];
+const TRANSITIONS: { action: string; label: string; from: ReviewStatus[]; levels: AccessLevel[] | null }[] = [
+  { action: "submit_target", label: "Submit target", from: ["DRAFT"], levels: null },
+  { action: "submit_actual", label: "Submit actual", from: ["DRAFT", "TARGET_SET"], levels: null },
+  { action: "verify", label: "Verify", from: ["ACTUAL_SUBMITTED"], levels: MANAGERS },
+  { action: "lock", label: "Lock", from: ["VERIFIED"], levels: OWNERS },
+  { action: "reopen", label: "Reopen", from: ["TARGET_SET", "ACTUAL_SUBMITTED", "VERIFIED", "LOCKED"], levels: OWNERS },
 ];
 
 const inputClass =
@@ -84,15 +77,7 @@ const inputClass =
 const selectClass =
   "text-sm bg-background border border-border rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40";
 
-function fmtVal(v: number | null, unit: string) {
-  if (v == null) return "—";
-  if (unit === "CURRENCY") return "GHS " + v.toLocaleString();
-  if (unit === "PERCENT") return `${v}%`;
-  if (unit === "SCORE") return `${v}/100`;
-  if (unit === "DAYS") return `${v}d`;
-  if (unit === "HOURS") return `${v}h`;
-  return v.toLocaleString();
-}
+const fmtVal = fmtKpiVal;
 
 function apiError(err: unknown, fallback: string) {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
@@ -110,27 +95,20 @@ function TrendIcon({ trend }: { trend: string }) {
   return <span className="text-muted/50 text-xs">—</span>;
 }
 
-function AutoTag() {
-  return (
-    <span
-      className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wider bg-sky-500/10 text-sky-700 px-1.5 py-0.5 rounded"
-      title="Actual is auto-calculated from live data"
-    >
-      <Zap size={9} /> Auto
-    </span>
-  );
-}
-
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function KpiFrameworkPage() {
   const { user } = useAuth();
-  const isAdmin = !!user && ADMIN_ROLES.includes(user.role);
+  const isAdmin = isGroupOwner(user);
+  // A Business CEO runs their own company's KPIs — same tools as the Group Owner, one company.
+  const ownCompany = isBusinessCeo(user) ? (user?.bdoCompany ?? null) : null;
+  const canManage = isAdmin || !!ownCompany;
   const qc = useQueryClient();
-  const { companies } = useCompanies();
+  const { companies, byKey } = useCompanies();
 
   const PAGE_SIZE = 15;
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
-  const [company, setCompany] = useState("GROUP");
+  const [pickedCompany, setCompany] = useState("GROUP");
+  const company = ownCompany ?? pickedCompany;
   const [department, setDepartment] = useState<string>(""); // "" = all departments
   const [statusFilter, setStatusFilter] = useState<Status | "">("");
   const [page, setPage] = useState(1);
@@ -138,13 +116,16 @@ export default function KpiFrameworkPage() {
   const [showDefForm, setShowDefForm] = useState(false);
   const [editDef, setEditDef] = useState<Def | null>(null);
 
-  // Company picker: Group + every active company.
-  const companyOpts = [{ key: "GROUP", name: "Group" }, ...companies.map((c) => ({ key: c.key, name: c.name }))];
+  // Company picker: Group + every active company (Group Owner); just their own (Business CEO).
+  const companyOpts = ownCompany
+    ? [{ key: ownCompany, name: byKey[ownCompany]?.name ?? ownCompany }]
+    : [{ key: "GROUP", name: "Group" }, ...companies.map((c) => ({ key: c.key, name: c.name }))];
 
   // Departments that exist within the selected company (optional sub-filter).
   const { data: departments = [] } = useQuery<Dept[]>({
     queryKey: ["kpi-departments", company],
     queryFn: () => fetcher(`/kpi-framework/departments?company=${company}`),
+    enabled: !!user,
   });
 
   // Reset the department sub-filter whenever the company changes.
@@ -156,6 +137,7 @@ export default function KpiFrameworkPage() {
   const { data: board = [], isLoading } = useQuery<BoardRow[]>({
     queryKey: ["kpi-board", company, department, period],
     queryFn: () => fetcher(`/kpi-framework/board?${qp}`),
+    enabled: !!user,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["kpi-board"] });
@@ -164,6 +146,18 @@ export default function KpiFrameworkPage() {
   const deleteDef = useMutation({
     mutationFn: (id: string) => api.delete(`/kpi-framework/definitions/${id}`),
     onSuccess: refreshAll,
+  });
+
+  // One-tap +1 for manual count KPIs. Staff update their own KPIs from My KPIs instead.
+  const canQuickAdd = (r: BoardRow) =>
+    isManager(user) && r.definition.source !== "AUTO"
+    && r.definition.unit === "COUNT" && r.entry?.reviewStatus !== "LOCKED";
+  const quickAdd = useMutation({
+    mutationFn: (r: BoardRow) => api.post("/kpi-framework/quick-update", {
+      definitionId: r.definition.id, period, delta: 1, bdoId: r.entry?.bdoId ?? null,
+    }),
+    onSuccess: invalidate,
+    onError: (err) => window.alert(apiError(err, "Couldn't update the KPI.")),
   });
 
   const counts = board.reduce(
@@ -190,7 +184,7 @@ export default function KpiFrameworkPage() {
           <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">Performance</p>
           <h1 className="font-serif text-2xl md:text-3xl text-foreground">KPI Framework</h1>
           <p className="text-sm text-muted mt-1">
-            Targets vs actuals for {periodLabel(period)}. Status is calculated, not typed.
+            {ownCompany && <>{byKey[ownCompany]?.name ?? ownCompany} · </>}Targets vs actuals for {periodLabel(period)}. Status is calculated against pace — the tick on each bar is where a KPI should be by today.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -200,7 +194,7 @@ export default function KpiFrameworkPage() {
             onChange={(e) => e.target.value && setPeriod(e.target.value)}
             className={selectClass + " py-2"}
           />
-          {isAdmin && (
+          {canManage && (
             <button
               onClick={() => setShowDefForm(true)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 transition-opacity"
@@ -213,6 +207,7 @@ export default function KpiFrameworkPage() {
 
       {/* Company tabs + optional department */}
       <div className="flex flex-wrap items-center gap-2">
+        {!ownCompany && (
         <div className="flex flex-wrap gap-1 p-1 bg-surface border border-border rounded-xl">
           {companyOpts.map((c) => (
             <button
@@ -227,6 +222,7 @@ export default function KpiFrameworkPage() {
             </button>
           ))}
         </div>
+        )}
         {departments.length > 0 && (
           <select value={department} onChange={(e) => setDepartment(e.target.value)} className={selectClass + " py-2"}>
             <option value="">All departments</option>
@@ -236,7 +232,7 @@ export default function KpiFrameworkPage() {
       </div>
 
       {/* Summary — click a status to filter */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
         <div className="col-span-2 sm:col-span-1 rounded-xl border border-border bg-primary text-accent-foreground p-3">
           <div className="text-[11px] font-medium uppercase tracking-wider opacity-60 mb-2">Avg attainment</div>
           <div className="text-2xl font-semibold tabular-nums">{avgAttainment != null ? `${avgAttainment}%` : "—"}</div>
@@ -248,6 +244,7 @@ export default function KpiFrameworkPage() {
             <button
               key={s}
               onClick={() => setStatusFilter(active ? "" : s)}
+              title={KPI_STATUS_HINT[s]}
               className={clsx(
                 "rounded-xl border p-3 text-left transition-all bg-surface",
                 active ? "border-accent ring-1 ring-accent" : "border-border hover:border-accent/40",
@@ -291,7 +288,7 @@ export default function KpiFrameworkPage() {
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center">
                     <p className="text-muted">{board.length === 0 ? "No KPIs set up for this company yet." : "No KPIs match this filter."}</p>
-                    {isAdmin && board.length === 0 && (
+                    {canManage && board.length === 0 && (
                       <button onClick={() => setShowDefForm(true)} className="mt-3 text-sm font-medium text-accent hover:underline">
                         Add the first KPI
                       </button>
@@ -316,15 +313,13 @@ export default function KpiFrameworkPage() {
                   <td className="px-4 py-3 min-w-[120px]">
                     {r.attainment != null ? (
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-foreground/5 overflow-hidden">
-                          <div className={`h-full rounded-full ${STATUS_BAR[r.status]}`} style={{ width: `${Math.min(100, r.attainment)}%` }} />
-                        </div>
+                        <PaceBar attainment={r.attainment} expected={r.expected} status={r.status} />
                         <span className="text-xs tabular-nums text-foreground w-10 text-right">{r.attainment}%</span>
                       </div>
                     ) : <span className="text-muted/50">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_STYLE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                    <span title={KPI_STATUS_HINT[r.status]} className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_STYLE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap"><TrendIcon trend={r.trend} /></td>
                   <td className="px-4 py-3">
@@ -332,8 +327,18 @@ export default function KpiFrameworkPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-0.5 justify-end">
+                      {canQuickAdd(r) && (
+                        <button
+                          onClick={() => quickAdd.mutate(r)}
+                          disabled={quickAdd.isPending}
+                          title="Add 1 to the actual"
+                          className="px-1.5 py-0.5 mr-1 rounded-md border border-border text-xs font-medium text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+                        >
+                          +1
+                        </button>
+                      )}
                       <IconButton title="Enter target / actual" onClick={() => setEditRow(r)}><Pencil size={14} /></IconButton>
-                      {isAdmin && (
+                      {canManage && (
                         <>
                           <IconButton title="Edit KPI" onClick={() => setEditDef(r.definition)}><Settings2 size={14} /></IconButton>
                           <IconButton
@@ -464,6 +469,7 @@ function EntryModal({ row, period, company, role, onClose, onSaved }: {
   const [form, setForm] = useState({
     current: row.entry?.current != null ? String(row.entry.current) : "",
     target: row.entry?.target != null ? String(row.entry.target) : "",
+    start: row.entry?.start != null ? String(row.entry.start) : "",
     actionPlan: row.entry?.actionPlan ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -473,7 +479,7 @@ function EntryModal({ row, period, company, role, onClose, onSaved }: {
   const review: ReviewStatus = entry?.reviewStatus ?? "DRAFT";
   const locked = review === "LOCKED";
   const actions = entry
-    ? TRANSITIONS.filter((t) => t.from.includes(review) && (!t.roles || t.roles.includes(role)))
+    ? TRANSITIONS.filter((t) => t.from.includes(review) && (!t.levels || t.levels.includes(accessLevel(role))))
     : [];
 
   const { data: audit = [], refetch: refetchAudit } = useQuery<AuditLog[]>({
@@ -490,6 +496,7 @@ function EntryModal({ row, period, company, role, onClose, onSaved }: {
       // AUTO KPIs never store an actual — it's computed live.
       current: isAuto ? null : (form.current !== "" ? Number(form.current) : null),
       target: form.target !== "" ? Number(form.target) : null,
+      start: form.start !== "" ? Number(form.start) : null,
       actionPlan: form.actionPlan || null,
       company,
       bdoId: entry?.bdoId ?? null,
@@ -563,6 +570,10 @@ function EntryModal({ row, period, company, role, onClose, onSaved }: {
         <div>
           <Label>Target</Label>
           <input type="number" value={form.target} onChange={(e) => set("target", e.target.value)} disabled={locked} className={inputClass} />
+        </div>
+        <div className="col-span-2">
+          <Label>Start value <span className="text-muted/60">(optional — e.g. spend starting at 4,000 to cut to 2,500)</span></Label>
+          <input type="number" value={form.start} onChange={(e) => set("start", e.target.value)} disabled={locked} className={inputClass} placeholder="Measure progress from this value" />
         </div>
       </div>
       {isAuto && (
@@ -675,12 +686,14 @@ function DefinitionModal({ editDef, departments, companyOpts, defaultCompany, on
         <input value={form.metric} onChange={(e) => set("metric", e.target.value)} className={inputClass} placeholder="e.g. Advisory Revenue" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {companyOpts.length > 1 && (
         <div>
           <Label>Company *</Label>
           <select value={form.company} onChange={(e) => set("company", e.target.value)} className={selectClass + " w-full py-2"}>
             {companyOpts.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
           </select>
         </div>
+        )}
         <div>
           <Label>Department <span className="text-muted/60">(optional)</span></Label>
           <input value={form.department} onChange={(e) => set("department", e.target.value)} list="dept-list" className={inputClass} />

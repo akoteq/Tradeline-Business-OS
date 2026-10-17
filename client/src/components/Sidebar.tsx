@@ -21,32 +21,22 @@ import {
   FolderKanban,
   UsersRound,
   HelpCircle,
+  Target,
+  ShieldCheck,
+  AlertTriangle,
+  Contact,
+  Briefcase,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { useCompanies, companyHref } from "@/lib/companies";
-import { AskTranqoTrigger, TranqoAssistant, type Scope } from "@/components/TranqoAssistant";
+import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 
 /**
- * ROLE STRINGS — confirmed with backend: ADMIN, CEO, BUSINESS_CEO, BDO.
- * Backend confirmed ADMIN and CEO both land on the Group Owner dashboard,
- * so both map to the same nav below.
- *
- * STILL UNCONFIRMED: what BDO should see. It isn't one of the three roles
- * in the spec doc (Group Owner / Business CEO / Staff) at all, so for now
- * it's routed to the same nav as Staff (own tasks/leads/KPIs) as the
- * closest safe default — flag me the real answer and I'll give it its
- * own nav if it needs one.
+ * One nav per spec role (Group Owner / Business CEO / Staff). Stored roles fold into these via
+ * accessLevel(): ADMIN and CEO are Group Owners; BDO and the retired titles are Staff.
  */
-const GROUP_OWNER_ROLES = ["ADMIN", "CEO"];
-const ROLE = {
-  BUSINESS_CEO: "BUSINESS_CEO",
-  // No STAFF role exists on the backend (see User.ts USER_ROLES), so comparing
-  // against it is a type error. Commented out until the real role is confirmed.
-  // STAFF: "STAFF",
-  BDO: "BDO",
-} as const;
 
 /**
  * status: "live"  -> route + API already wired, safe to ship
@@ -80,7 +70,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { user, loading, logout } = useAuth();
   const { companies } = useCompanies();
   const [open, setOpen] = useState<string[]>(["Companies"]);
-  const [askOpen, setAskOpen] = useState(false);
 
   if (AUTH_PATHS.includes(pathname)) return null;
   if (loading) return <aside className="hidden md:flex w-64 min-h-screen bg-surface shrink-0" />;
@@ -89,27 +78,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const toggle = (label: string) =>
     setOpen((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
 
-  const isGroupOwner = GROUP_OWNER_ROLES.includes(user.role);
-  const isBusinessCeo = user.role === ROLE.BUSINESS_CEO;
-  const isStaff = /* user.role === ROLE.STAFF || */ user.role === ROLE.BDO;
-
-  // ---- Ask Tranqo scope ---------------------------------------------------
-  // Group Owner: group-wide by default, auto-scoped to a company the moment
-  // they're already sitting on that company's dashboard — no need to say
-  // "for Finance Factory" out loud when the page already says it.
-  // Business CEO / Staff: always their own company. Their `companies` list
-  // is already backend-scoped to just that one business (FR-1 data
-  // isolation), so companies[0] is safe to treat as "mine," not a guess.
-  const activeCompany = companies.find((c) => pathname === `/dashboard/${c.slug}`);
-  const scope: Scope = isGroupOwner
-    ? activeCompany
-      ? { level: "company", companyKey: activeCompany.key, companyName: activeCompany.name }
-      : { level: "group" }
-    : companies[0]
-    ? { level: "company", companyKey: companies[0].key, companyName: companies[0].name }
-    : { level: "group" };
-
-  const scopeHint = scope.level === "company" ? `Scoped to ${scope.companyName}` : "Scoped to the whole group";
+  const level = accessLevel(user.role);
+  // Compliance shows only where the module is on: any company for the Group Owner, else their own.
+  const complianceOn = level === "GROUP_OWNER"
+    ? companies.some((c) => c.modules?.compliance)
+    : !!companies.find((c) => c.key === user.bdoCompany)?.modules?.compliance;
+  const complianceItem: NavItem[] = complianceOn ? [{ href: "/compliance", label: "Compliance", icon: ShieldCheck, status: "live" }] : [];
 
   // ---- Role-scoped nav content -------------------------------------------------
 
@@ -127,9 +101,14 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           children: companies.map((c) => ({ href: `/dashboard/${c.slug}`, label: c.name, status: "live" })),
         },
         { href: "/leads", label: "All Leads", icon: Users, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        ...complianceItem,
+        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
         { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
         { href: "/consolidated", label: "Group Financials", icon: Database, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
       ],
     },
     {
@@ -145,10 +124,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     },
   ];
 
+  // A Business CEO's dashboard is their own company's, not the group view.
+  const ownCompany = companies.find((c) => c.key === user.bdoCompany);
   const businessCeoNav: NavSection[] = [
     {
       items: [
-        { href: "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
+        { href: ownCompany ? `/dashboard/${ownCompany.slug}` : "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
         { href: "/alerts", label: "Alerts", icon: Bell, status: "soon" },
       ],
     },
@@ -164,14 +145,19 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       items: [
         { href: "/tasks", label: "Batch-Assign Tasks", icon: ListChecks, status: "live" },
         { href: "/projects", label: "Projects", icon: FolderKanban, status: "live" },
+        ...complianceItem,
+        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
       ],
     },
     {
       title: "People",
       items: [
         { href: "/leads", label: "Leads", icon: Users, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
         { href: "/team", label: "Team", icon: UsersRound, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
         { href: "/partnerships", label: "Partnerships", icon: Handshake, status: "live" },
       ],
     },
@@ -183,27 +169,22 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const staffNav: NavSection[] = [
     {
       items: [
-        { href: "/", label: "My Tasks", icon: ListChecks, status: "live" },
+        { href: "/overview", label: "Overview", icon: LayoutDashboard, status: "live" },
+        { href: "/tasks", label: "My Tasks", icon: ListChecks, status: "live" },
         { href: "/leads", label: "My Leads", icon: Users, status: "live" },
-        { href: "/kpi-framework", label: "My KPIs", icon: BarChart3, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        ...complianceItem,
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
+        { href: "/risks", label: "My Risk Actions", icon: AlertTriangle, status: "live" },
+        { href: "/my-kpis", label: "My KPIs", icon: Target, status: "live" },
         { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
       ],
     },
   ];
 
-  // Lightweight fallback in case a role isn't mapped yet — no BDO baggage.
-  const fallbackNav: NavSection[] = [
-    {
-      items: [
-        { href: "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
-        { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
-      ],
-    },
-  ];
+  const nav = level === "GROUP_OWNER" ? groupOwnerNav : level === "BUSINESS_CEO" ? businessCeoNav : staffNav;
 
-  const nav = isGroupOwner ? groupOwnerNav : isBusinessCeo ? businessCeoNav : isStaff ? staffNav : fallbackNav;
-
-  const portalLabel = isGroupOwner ? "Group Owner" : isBusinessCeo ? "Business CEO" : isStaff ? "Staff" : "Portal";
+  const portalLabel = ACCESS_LEVEL_LABEL[level];
 
   const asideClass = clsx(
     "w-64 bg-surface text-foreground flex flex-col shrink-0 z-40 border-r border-border h-screen",
@@ -224,12 +205,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
       <aside className={asideClass}>
         <Brand portalLabel={portalLabel} onClose={onClose} />
-
-        {/* Pinned above the scrollable nav on purpose — this is a flagship
-            entry point, not just another row that can scroll out of view. */}
-        <div className="px-2.5 pt-3">
-          <AskTranqoTrigger onClick={() => setAskOpen(true)} scopeHint={scopeHint} />
-        </div>
 
         <nav className="no-scrollbar flex-1 overflow-y-auto py-3 px-2.5">
           {nav.map((section, i) => (
@@ -269,8 +244,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
         <UserFooter name={user.email} meta={portalLabel} onLogout={logout} />
       </aside>
-
-      <TranqoAssistant scope={scope} open={askOpen} onClose={() => setAskOpen(false)} />
 
       {/* Scrollbar hidden but still scrollable (wheel/touch/keyboard all still work) */}
       <style jsx global>{`
@@ -338,6 +311,20 @@ function NavLink({
   active: boolean;
   onClick?: () => void;
 }) {
+  // "Soon" pages aren't built yet — show the item, but don't link to a 404.
+  if (status === "soon") {
+    return (
+      <span
+        aria-disabled="true"
+        title={`${label} is coming soon`}
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm border-l-2 border-transparent text-foreground/40 cursor-not-allowed select-none"
+      >
+        {Icon && <Icon size={16} strokeWidth={1.75} className="shrink-0" />}
+        <span className="flex-1 truncate">{label}</span>
+        <StatusBadge status={status} />
+      </span>
+    );
+  }
   return (
     <Link
       href={href}
@@ -400,6 +387,17 @@ function CompanyBranchGroup({
             return (
               <div key={child.href} className="relative">
                 <span className="absolute -left-4 top-1/2 -translate-y-1/2 w-3 h-px bg-border" />
+                {child.status === "soon" ? (
+                  <span
+                    aria-disabled="true"
+                    title={`${child.label} is coming soon`}
+                    className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-[13px] text-foreground/40 cursor-not-allowed select-none"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-border" />
+                    <span className="flex-1 truncate">{child.label}</span>
+                    <StatusBadge status={child.status} />
+                  </span>
+                ) : (
                 <Link
                   href={child.href}
                   onClick={onNavigate}
@@ -414,6 +412,7 @@ function CompanyBranchGroup({
                   <span className="flex-1 truncate">{child.label}</span>
                   <StatusBadge status={child.status} />
                 </Link>
+                )}
               </div>
             );
           })}

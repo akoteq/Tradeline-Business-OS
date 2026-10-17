@@ -64,7 +64,7 @@ export default function BdoDashboard() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800 text-sm">Open Tasks</h3>
-            <Link href="/tasks" className="text-xs text-indigo-600 hover:text-indigo-800">View all</Link>
+            <Link href="/tasks" className="text-xs text-accent hover:text-accent/80">View all</Link>
           </div>
           <div className="divide-y divide-gray-50">
             {tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED').slice(0, 5).map((t) => (
@@ -95,7 +95,7 @@ function KpiCard({ label, value, sub, icon, color, href }: {
     sky: "bg-sky-50 text-sky-600",
   };
   return (
-    <Link href={href} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3 hover:border-indigo-200 transition-colors">
+    <Link href={href} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3 hover:border-accent/30 transition-colors">
       <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
       <div>
         <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</div>
@@ -115,7 +115,7 @@ function PipelineList({ title, deals, href }: {
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h3 className="font-semibold text-gray-800 text-sm">{title}</h3>
-        <Link href={href} className="text-xs text-indigo-600 hover:text-indigo-800">View all</Link>
+        <Link href={href} className="text-xs text-accent hover:text-accent/80">View all</Link>
       </div>
       {deals.length === 0 ? (
         <p className="px-4 py-8 text-sm text-gray-400 text-center">No deals yet</p>

@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
+import { isStaff } from "@/lib/auth";
+import { useCompanies, companyHref } from "@/lib/companies";
 import { Bell, ChevronDown, ChevronUp, X } from "lucide-react";
 
 type Urgency = "overdue" | "today" | "1day" | "3days" | "week";
@@ -23,6 +25,7 @@ type Deadline = {
 type StaleDeal = {
   id: string;
   type: "BAPX" | "TRADELINE" | "COMPANY";
+  company?: string;
   businessName: string;
   dealHealth: string;
   lastUpdated: string;
@@ -80,8 +83,9 @@ export function Alerts() {
   const [view, setView] = useState<View>("hidden");
   const [autoShown, setAutoShown] = useState(false);
   const [bannerExpanded, setBannerExpanded] = useState(false);
+  const { byKey } = useCompanies();
 
-  const isBdo = user?.role === "BDO";
+  const isBdo = isStaff(user);
   const bdoId = isBdo ? user?.bdoId ?? null : null;
   // BDOs are always scoped to their own data; admins/CEO see everyone.
   // An unlinked BDO (no bdoId) must NOT fall through to the org-wide feed.
@@ -150,13 +154,16 @@ export function Alerts() {
           </p>
           <div className="space-y-1.5">
             {stale.map((d) => {
-              const href = pipelineLink(d.type, d.bdo?.name);
+              const co = d.company ? byKey[d.company] : undefined;
+              const href = co
+                ? `${companyHref(co)}${d.bdo?.name ? `?bdo=${encodeURIComponent(d.bdo.name)}` : ""}`
+                : pipelineLink(d.type, d.bdo?.name);
               const content = (
                 <div className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{d.businessName}</p>
                     <p className="text-xs text-gray-400">
-                      {TYPE_LABELS[d.type]}{d.bdo ? ` · ${d.bdo.name}` : ""}
+                      {co?.name ?? TYPE_LABELS[d.type]}{d.bdo ? ` · ${d.bdo.name}` : ""}
                     </p>
                   </div>
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 bg-gray-100 text-gray-600 border-gray-200">
@@ -181,7 +188,7 @@ export function Alerts() {
         <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <Bell size={18} className="text-indigo-600" />
+              <Bell size={18} className="text-accent" />
               <h2 className="font-semibold text-gray-900">Alerts</h2>
             </div>
             <button onClick={() => setView("banner")} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>

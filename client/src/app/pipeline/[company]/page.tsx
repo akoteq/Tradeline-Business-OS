@@ -7,25 +7,10 @@ import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
-
-// ─── Config per company ────────────────────────────────────────────────────────
-
-const COMPANY_META: Record<string, { label: string; color: string }> = {
-  ALPHA_AFRICA:      { label: "Alpha Africa Consult Ltd",  color: "indigo" },
-  FINANCE_FACTORY:   { label: "Finance Factory Limited",   color: "emerald" },
-  COMMUNITY_FINANCE: { label: "Community Finance Ltd",     color: "sky" },
-  AKOTEQ:            { label: "Akoteq Ltd",                color: "violet" },
-};
-
-const SLUG_TO_KEY: Record<string, string> = {
-  "alpha-africa":      "ALPHA_AFRICA",
-  "finance-factory":   "FINANCE_FACTORY",
-  "community-finance": "COMMUNITY_FINANCE",
-  "akoteq":            "AKOTEQ",
-};
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // Note: this is the post-conversion deal pipeline (stage / health / invoice),
@@ -94,10 +79,12 @@ const selectCls = "text-sm rounded-lg border border-border bg-background px-2.5 
 
 export default function CompanyPipelinePage({ params }: { params: Promise<{ company: string }> }) {
   const { company: slug } = use(params);
+  // The company comes from the live list, so any company added in the admin screen gets a
+  // pipeline here. Built-ins resolve instantly from the static fallback; added ones once loaded.
   const { bySlug } = useCompanies();
   const co = bySlug[slug];
-  const companyKey = co?.key ?? SLUG_TO_KEY[slug] ?? slug.toUpperCase();
-  const label = co?.name ?? COMPANY_META[companyKey]?.label ?? companyKey;
+  const companyKey = co?.key ?? "";
+  const label = co?.name ?? "Pipeline";
 
   const qc = useQueryClient();
   const [filterStage, setFilterStage]   = useState("");
@@ -124,6 +111,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
   const { data: deals = [], isLoading } = useQuery<Deal[]>({
     queryKey: ["company-deals", companyKey, filterStage, filterHealth],
     queryFn: () => fetcher(`/company-deals?${qp}`),
+    enabled: !!companyKey,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["company-deals", companyKey] });
@@ -182,7 +170,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
           <KpiTile icon={TrendingUp} label="Active" value={deals.filter((d) => d.dealHealth === "ACTIVE").length} />
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface">
+        <div>
           <DataTable
             columns={columns}
             data={deals}
@@ -297,6 +285,7 @@ function DealFormModal({
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
+  const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -325,6 +314,7 @@ function DealFormModal({
       nextSteps:           form.nextSteps            || null,
       nextCallDate:        form.nextCallDate         || null,
       notes:               form.notes               || null,
+      assignedBdoIds:      assigned,
     };
     try {
       deal ? await api.put(`/company-deals/${deal.id}`, body) : await api.post("/company-deals", body);
@@ -388,6 +378,7 @@ function DealFormModal({
               <option value="">— Unassigned —</option>
               {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
             </SelectField>
+            <AssigneesField value={assigned} onChange={setAssigned} people={bdos.filter((b) => b.company === companyKey)} ownerId={form.bdoId} />
             <SelectField label="Deal stage"     value={form.dealStage}     onChange={(v) => set("dealStage", v)}>
               {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>
