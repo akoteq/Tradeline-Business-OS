@@ -32,8 +32,6 @@ import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { useCompanies, companyHref } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
-import { AskTranqoTrigger } from "@/components/TranqoAssistant";
-import { openAssistant } from "@/components/assistant/AssistantPanel";
 
 /**
  * One nav per spec role (Group Owner / Business CEO / Staff). Stored roles fold into these via
@@ -86,14 +84,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     ? companies.some((c) => c.modules?.compliance)
     : !!companies.find((c) => c.key === user.bdoCompany)?.modules?.compliance;
   const complianceItem: NavItem[] = complianceOn ? [{ href: "/compliance", label: "Compliance", icon: ShieldCheck, status: "live" }] : [];
-
-  // ---- Ask Tranqo ----------------------------------------------------------
-  // Opens the assistant (components/assistant). Chat is for the Group Owner (whole group) and
-  // Business CEOs (their own company); staff get AI summaries instead, so no button for them.
-  const canAsk = level === "GROUP_OWNER" || level === "BUSINESS_CEO";
-  const scopeHint = level === "GROUP_OWNER"
-    ? "Scoped to the whole group"
-    : `Scoped to ${companies.find((c) => c.key === user.bdoCompany)?.name ?? "your company"}`;
 
   // ---- Role-scoped nav content -------------------------------------------------
 
@@ -215,14 +205,6 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
       <aside className={asideClass}>
         <Brand portalLabel={portalLabel} onClose={onClose} />
-
-        {/* Pinned above the scrollable nav on purpose — this is a flagship
-            entry point, not just another row that can scroll out of view. */}
-        {canAsk && (
-          <div className="px-2.5 pt-3">
-            <AskTranqoTrigger onClick={() => { openAssistant(); onClose?.(); }} scopeHint={scopeHint} />
-          </div>
-        )}
 
         <nav className="no-scrollbar flex-1 overflow-y-auto py-3 px-2.5">
           {nav.map((section, i) => (

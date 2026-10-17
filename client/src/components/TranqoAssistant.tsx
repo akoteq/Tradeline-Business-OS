@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Ask Tranqo — a scope-aware chat drawer over the group/company data.
+ * Ask Trunqo — a scope-aware chat drawer over the group/company data.
  *
  * ARCHITECTURE NOTE (read before wiring the backend):
  * This component never asks a model to *know* a number. Every request
@@ -78,7 +78,7 @@ export function AskTranqoTrigger({ onClick, scopeHint }: { onClick: () => void; 
         <Sparkles size={15} strokeWidth={2.25} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-foreground">Ask Tranqo</span>
+        <span className="block text-sm font-semibold text-foreground">Ask Trunqo</span>
         {scopeHint && <span className="block truncate text-[11px] text-muted">{scopeHint}</span>}
       </span>
     </button>
@@ -94,7 +94,7 @@ export function AskTranqoFab({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Ask Tranqo"
+      aria-label="Ask Trunqo"
       className="fixed bottom-5 right-5 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-transform hover:scale-105 md:hidden"
     >
       <MessageCircle size={20} />
@@ -207,7 +207,7 @@ export function TranqoAssistant({
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             role="dialog"
             aria-modal="true"
-            aria-label="Ask Tranqo"
+            aria-label="Ask Trunqo"
             className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-border bg-background shadow-2xl"
           >
             {/* Header */}
@@ -217,7 +217,7 @@ export function TranqoAssistant({
                   <Sparkles size={14} strokeWidth={2.25} />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold tracking-tight text-foreground">Ask Tranqo</p>
+                  <p className="text-sm font-semibold tracking-tight text-foreground">Ask Trunqo</p>
                   <p className="flex items-center gap-1 text-[11px] text-muted">
                     {scope.level === "company" ? <Building2 size={10} /> : <Layers size={10} />}
                     Scoped to {scopeLabel(scope)}
@@ -334,5 +334,5 @@ export function TranqoAssistant({
 //   `companies` list is already backend-scoped to just that one business.
 //
 // AskTranqoFab is optional — a mobile-only floating launcher, in case you
-// want Tranqo reachable without opening the sidebar drawer first. Both
+// want Trunqo reachable without opening the sidebar drawer first. Both
 // entry points call the same setAskOpen(true), so they coexist safely.

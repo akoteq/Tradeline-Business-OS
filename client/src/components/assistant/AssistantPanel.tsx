@@ -75,7 +75,7 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-// Opens the assistant from anywhere (e.g. the sidebar's "Ask Tranqo" button).
+// Opens the assistant from anywhere (e.g. the sidebar's "Ask Trunqo" button).
 const OPEN_EVENT = "assistant:open";
 export function openAssistant() {
   window.dispatchEvent(new Event(OPEN_EVENT));
@@ -102,11 +102,11 @@ export function AssistantLauncher() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Ask Tranqo"
+          aria-label="Ask Trunqo"
           className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           <Sparkles size={16} className="text-accent" />
-          <span className="hidden sm:inline">Ask Tranqo</span>
+          <span className="hidden sm:inline">Ask Trunqo</span>
         </button>
       )}
       {open && <AssistantPanel onClose={() => setOpen(false)} />}

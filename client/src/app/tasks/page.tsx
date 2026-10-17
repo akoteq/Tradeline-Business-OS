@@ -254,7 +254,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "gre
   );
 }
 
-// Tranqo design tokens for the task popup — same as the KPI and Team & Access popups.
+// Trunqo design tokens for the task popup — same as the KPI and Team & Access popups.
 const inputClass = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
 const labelClass = "text-xs font-medium text-muted block mb-1";
 
