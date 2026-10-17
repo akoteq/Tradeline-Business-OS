@@ -105,7 +105,7 @@ export default function ManageTeamPage() {
             {memberCount} team members{noLoginCount > 0 ? ` · ${noLoginCount} without a login` : ""}
           </p>
         </div>
-        <button onClick={() => setShowOnboard(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
+        <button onClick={() => setShowOnboard(true)} className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground text-sm font-medium rounded-lg hover:opacity-90">
           <UserPlus size={16} /> Add team member
         </button>
       </div>
@@ -113,48 +113,48 @@ export default function ManageTeamPage() {
       {creds && <CredentialsBanner creds={creds} onClose={() => setCreds(null)} />}
 
       <div className="flex gap-2">
-        <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
           <option value="">All Companies</option>
           {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
         </select>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="border-b border-border">
               <tr>
                 {["Name", "Company", "Title", "Access", "Account", "Deals", "Tasks", "Actions"].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-border/60">
               {isLoading ? (
-                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">Loading…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No team members yet — add one above.</td></tr>
+                <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">No team members yet — add one above.</td></tr>
               ) : rows.map((r) => {
                 const p = r.perf; const u = r.user;
                 return (
-                  <tr key={r.key} className="hover:bg-gray-50">
-                    <td className="px-3 py-2.5 font-medium text-gray-900">{p ? p.bdo.name : u!.email}</td>
-                    <td className="px-3 py-2.5 text-gray-600">{p ? (byKey[p.bdo.company]?.name ?? p.bdo.company) : "—"}</td>
-                    <td className="px-3 py-2.5 text-gray-600">{p?.bdo.role ?? "—"}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={r.key} className="hover:bg-primary/[0.03] transition-colors">
+                    <td className="px-4 py-3 font-medium text-foreground">{p ? p.bdo.name : u!.email}</td>
+                    <td className="px-4 py-3 text-muted">{p ? (byKey[p.bdo.company]?.name ?? p.bdo.company) : "—"}</td>
+                    <td className="px-4 py-3 text-muted">{p?.bdo.role ?? "—"}</td>
+                    <td className="px-4 py-3">
                       {u ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${roleColor(u.role)}`}>{ROLE_LABELS[u.role] ?? u.role}</span>
-                         : <span className="text-xs text-gray-400">No login</span>}
+                         : <span className="text-xs text-muted">No login</span>}
                     </td>
-                    <td className="px-3 py-2.5">
-                      {!u ? <span className="text-xs text-gray-400">—</span>
+                    <td className="px-4 py-3">
+                      {!u ? <span className="text-xs text-muted">—</span>
                         : u.mustChangePassword ? <span className="text-xs text-amber-600 font-medium">Invited</span>
                         : <span className="text-xs text-green-600">Active</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-gray-600 tabular-nums">{p ? p.bapxDeals + p.tradelineDeals : "—"}</td>
-                    <td className="px-3 py-2.5 tabular-nums">
-                      {p ? <span className={p.tasks.overdue > 0 ? "text-red-600 font-medium" : "text-gray-600"}>{p.tasks.open}{p.tasks.overdue > 0 ? ` (${p.tasks.overdue}!)` : ""}</span> : "—"}
+                    <td className="px-4 py-3 text-muted tabular-nums">{p ? p.bapxDeals + p.tradelineDeals : "—"}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {p ? <span className={p.tasks.overdue > 0 ? "text-red-600 font-medium" : "text-muted"}>{p.tasks.open}{p.tasks.overdue > 0 ? ` (${p.tasks.overdue}!)` : ""}</span> : "—"}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-0.5">
                         {p && !u && (
                           <ActionBtn title="Send invite" onClick={() => setInviteTarget(p)} icon={<Mail size={14} />} accent />
@@ -207,8 +207,8 @@ export default function ManageTeamPage() {
 }
 
 function ActionBtn({ title, icon, onClick, danger, accent }: { title: string; icon: React.ReactNode; onClick: () => void; danger?: boolean; accent?: boolean }) {
-  const c = danger ? "text-gray-400 hover:text-red-600 hover:bg-red-50" : accent ? "text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50" : "text-gray-400 hover:text-indigo-600 hover:bg-indigo-50";
-  return <button title={title} onClick={onClick} className={`p-1.5 rounded ${c}`}>{icon}</button>;
+  const c = danger ? "text-muted hover:text-red-600 hover:bg-red-500/10" : accent ? "text-accent hover:text-accent hover:bg-accent/10" : "text-muted hover:text-accent hover:bg-accent/10";
+  return <button title={title} onClick={onClick} className={`p-1.5 rounded-lg ${c}`}>{icon}</button>;
 }
 
 function CredentialsBanner({ creds, onClose }: { creds: Credentials; onClose: () => void }) {

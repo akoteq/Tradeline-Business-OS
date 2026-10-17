@@ -193,7 +193,7 @@ export default function LeadsPage() {
         })}
       </div>
 
-      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div>
         <DataTable
           columns={columns}
           data={leads}

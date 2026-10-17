@@ -6,9 +6,10 @@ import { api, fetcher } from "@/lib/api";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, Sparkles } from "lucide-react";
 
 type BapxDeal = {
   id: string;
@@ -39,6 +40,7 @@ type BapxDeal = {
   targetGhs: number | null;
   daysSinceLastContact: number | null;
   aiCoachRecommendation: string | null;
+  aiCoachGeneratedAt?: string | null;
 };
 
 type BdoOption = { id: string; name: string; company: string };
@@ -92,7 +94,7 @@ export default function BapxPipelinePage() {
     {
       key: "businessName", label: "Business", sortable: true,
       render: (r: BapxDeal) => (
-        <button onClick={() => setDetail(r)} className="text-left font-medium text-indigo-700 hover:underline truncate max-w-[180px] block">
+        <button onClick={() => setDetail(r)} className="text-left font-medium text-accent hover:underline truncate max-w-[180px] block">
           {r.businessName}
         </button>
       ),
@@ -155,7 +157,7 @@ export default function BapxPipelinePage() {
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -198,6 +200,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -225,6 +228,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
       keyTopics: form.keyTopics || null,
       callOutcome: form.callOutcome || null,
       nextSteps: form.nextSteps || null,
+      assignedBdoIds: assigned,
     };
     try {
       if (deal) await api.put(`/bapx/${deal.id}`, body);
@@ -270,7 +274,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
                   }}
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
+                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add in Client Overview first →</Link>
                 </p>
               </div>
               <Field label="Client Name" value={form.clientName} onChange={(v) => set("clientName", v)} />
@@ -278,7 +282,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
               <Field label="Industry / Value Chain" value={form.industry} onChange={(v) => set("industry", v)} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
-                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— Select region —</option>
                   {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
                   {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -294,11 +298,12 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— Unassigned —</option>
                   {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
+              <AssigneesField value={assigned} onChange={setAssigned} people={bdos} ownerId={form.bdoId} />
               <Field label="Product / Service" value={form.product} onChange={(v) => set("product", v)} />
               <Field label="Activity Type" value={form.activityType} onChange={(v) => set("activityType", v)} />
               <FormSelect label="Currency" value={form.currency} options={CURRENCIES} onChange={(v) => set("currency", v)} />
@@ -329,7 +334,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : deal ? "Update Deal" : "Create Deal"}
           </button>
         </div>
@@ -351,7 +356,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
             <p className="text-xs text-gray-400 mt-0.5">{deal.bizId ?? "No Biz ID"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
+            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
@@ -386,9 +391,51 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
           {deal.keyTopics && <LongField label="Key Topics" value={deal.keyTopics} />}
           {deal.callOutcome && <LongField label="Call Outcome / Updates" value={deal.callOutcome} />}
           {deal.nextSteps && <LongField label="Next Steps" value={deal.nextSteps} />}
-          {deal.aiCoachRecommendation && <LongField label="AI Coach Recommendation" value={deal.aiCoachRecommendation} accent />}
+          <CoachBox deal={deal} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── AI coach ─────────────────────────────────────────────────────────────────
+// The recommendation is written by the server from the deal's fields. Older deals may still
+// show the text imported from the spreadsheet until it is rewritten (nightly, or here).
+
+function CoachBox({ deal }: { deal: BapxDeal }) {
+  const qc = useQueryClient();
+  const [coach, setCoach] = useState({ text: deal.aiCoachRecommendation, at: deal.aiCoachGeneratedAt ?? null });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const rewrite = async () => {
+    setBusy(true); setError("");
+    try {
+      const { data } = await api.post<{ aiCoachRecommendation: string; aiCoachGeneratedAt: string }>(`/bapx/${deal.id}/coach`);
+      setCoach({ text: data.aiCoachRecommendation, at: data.aiCoachGeneratedAt });
+      qc.invalidateQueries({ queryKey: ["bapx"] });
+    } catch (err) {
+      setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Couldn't write a recommendation.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bg-accent/10 rounded-lg p-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-accent"><Sparkles size={12} /> AI Coach Recommendation</p>
+        <button onClick={rewrite} disabled={busy} className="text-[11px] font-semibold text-accent hover:underline disabled:opacity-50">
+          {busy ? "Writing…" : coach.text ? "Rewrite" : "Get a recommendation"}
+        </button>
+      </div>
+      {coach.text
+        ? <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{coach.text}</p>
+        : <p className="text-sm text-gray-400">No recommendation yet.</p>}
+      <p className="text-[11px] text-gray-400 mt-1.5">
+        {coach.at ? `Written by the AI coach on ${new Date(coach.at).toLocaleDateString()}` : coach.text ? "Imported from the spreadsheet" : ""}
+      </p>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
 }
@@ -408,7 +455,7 @@ function Field({ label, value, onChange, type = "text", span }: { label: string;
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
     </div>
   );
 }
@@ -417,7 +464,7 @@ function TextArea({ label, value, onChange, rows = 2 }: { label: string; value: 
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
     </div>
   );
 }
@@ -426,7 +473,7 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
         {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     </div>
@@ -444,8 +491,8 @@ function DetailItem({ label, value }: { label: string; value: string | null | un
 
 function LongField({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={accent ? "bg-indigo-50 rounded-lg p-3" : ""}>
-      <p className={`text-xs font-semibold mb-1.5 ${accent ? "text-indigo-600" : "text-gray-400"}`}>{label}</p>
+    <div className={accent ? "bg-accent/10 rounded-lg p-3" : ""}>
+      <p className={`text-xs font-semibold mb-1.5 ${accent ? "text-accent" : "text-gray-400"}`}>{label}</p>
       <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{value}</p>
     </div>
   );

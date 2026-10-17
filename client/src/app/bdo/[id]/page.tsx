@@ -81,7 +81,7 @@ export default function BdoDashboardPage({ params }: { params: Promise<{ id: str
         </div>
         <Link
           href={`/sme?bdo=${encodeURIComponent(bdo.name)}`}
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          className="text-xs font-medium text-accent hover:text-accent/80"
         >
           View Client Overview →
         </Link>
@@ -175,7 +175,7 @@ function BapxBody({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">BAPX Pipeline</h2>
-          <Link href={`/bapx/pipeline?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Link href={`/bapx/pipeline?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
             View pipeline →
           </Link>
         </div>
@@ -192,7 +192,7 @@ function BapxBody({
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700">Leads</h3>
-            <Link href={`/leads?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            <Link href={`/leads?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
               View leads →
             </Link>
           </div>
@@ -206,7 +206,7 @@ function BapxBody({
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700">Scheme of Work</h3>
-            <Link href={`/tasks?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            <Link href={`/tasks?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
               View tasks →
             </Link>
           </div>
@@ -251,7 +251,7 @@ function TradelineBody({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Tradeline Revenue</h2>
-          <Link href={`/tradeline/pipeline?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Link href={`/tradeline/pipeline?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
             View pipeline →
           </Link>
         </div>
@@ -266,7 +266,7 @@ function TradelineBody({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Grants & Loans</h2>
-          <Link href={`/grant-loans?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Link href={`/grant-loans?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
             View full page →
           </Link>
         </div>
@@ -314,7 +314,7 @@ function CompanyBody({
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{label} Pipeline</h2>
-          <Link href={pipelineHref} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Link href={pipelineHref} className="text-xs font-medium text-accent hover:text-accent/80">
             View pipeline →
           </Link>
         </div>
@@ -340,7 +340,7 @@ function CompanyBody({
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-700">Scheme of Work</h3>
-          <Link href={`/tasks?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Link href={`/tasks?bdo=${encodeURIComponent(bdo.name)}`} className="text-xs font-medium text-accent hover:text-accent/80">
             View tasks →
           </Link>
         </div>

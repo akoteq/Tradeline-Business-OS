@@ -8,6 +8,7 @@ import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } fr
 import { useAuth } from "@/components/AuthProvider";
 import { isStaff } from "@/lib/auth";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { AssigneesField } from "@/components/AssigneesField";
 import Link from "next/link";
 import { X } from "lucide-react";
 
@@ -115,7 +116,7 @@ export default function TradelinePipelinePage() {
     {
       key: "businessName", label: "Business", sortable: true,
       render: (r: TradelineDeal) => (
-        <button onClick={() => setDetail(r)} className="text-left font-medium text-indigo-700 hover:underline truncate max-w-[180px] block">
+        <button onClick={() => setDetail(r)} className="text-left font-medium text-accent hover:underline truncate max-w-[180px] block">
           {r.businessName}
         </button>
       ),
@@ -125,7 +126,7 @@ export default function TradelinePipelinePage() {
     {
       key: "tier", label: "Tier", sortable: true,
       render: (r: TradelineDeal) => (
-        <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+        <span className="text-xs font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">
           {r.tier?.replace("_", " ")}
         </span>
       ),
@@ -151,9 +152,9 @@ export default function TradelinePipelinePage() {
           </p>
         </div>
         <div className="flex gap-3 text-sm">
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-center">
-            <div className="text-xs text-indigo-600 font-medium">Potential Revenue</div>
-            <div className="font-bold text-indigo-700">{fmt(totalPotential)}</div>
+          <div className="bg-accent/10 border border-accent/30 rounded-lg px-3 py-2 text-center">
+            <div className="text-xs text-accent font-medium">Potential Revenue</div>
+            <div className="font-bold text-accent">{fmt(totalPotential)}</div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-center">
             <div className="text-xs text-blue-600 font-medium">Expected Revenue</div>
@@ -220,7 +221,7 @@ export default function TradelinePipelinePage() {
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -261,6 +262,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const computedBalance = Math.max(0, (Number(form.expectedRevenueReceivedGhs) || 0) - (Number(form.revenueReceivedGhs) || 0));
@@ -295,6 +297,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
       telephone: form.telephone || null,
       currentStatus: form.currentStatus || null,
       nextAction: form.nextAction || null,
+      assignedBdoIds: assigned,
     };
     try {
       if (deal) await api.put(`/tradeline/${deal.id}`, body);
@@ -339,7 +342,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
                   }}
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-indigo-600 hover:underline">Add in Client Overview first →</Link>
+                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add in Client Overview first →</Link>
                 </p>
               </div>
               <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />
@@ -354,13 +357,14 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
               {!isBdoRole && (
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
-                  <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                     <option value="">— Unassigned —</option>
                     {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
               )}
               <Field label="Due Date" type="date" value={form.dueDate} onChange={(v) => set("dueDate", v)} span={isBdoRole ? 2 : undefined} />
+              <div className="col-span-2"><AssigneesField value={assigned} onChange={setAssigned} people={bdos} ownerId={form.bdoId} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3 sm:grid-cols-4">
               <FormSelect label="Tier" value={form.tier} options={TIER_OPTS} onChange={(v) => set("tier", v)} />
@@ -407,7 +411,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : deal ? "Update Client" : "Add Client"}
           </button>
         </div>
@@ -429,7 +433,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
             <p className="text-xs text-gray-400 mt-0.5">{deal.bizId ?? `Serial #${deal.serialNo ?? "—"}`}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
+            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
@@ -440,7 +444,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
             <DealHealthBadge value={deal.dealHealth} />
             <DealStageBadge value={deal.dealStage} />
             <PriorityBadge value={deal.priority} />
-            <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">{deal.tier?.replace("_", " ")}</span>
+            <span className="text-xs font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">{deal.tier?.replace("_", " ")}</span>
             <PaymentBadge value={deal.paymentStatus} />
             <InvoiceStatusBadge value={deal.invoiceStatus ?? "NOT_INVOICED"} />
           </div>
@@ -486,7 +490,7 @@ function Field({ label, value, onChange, type = "text", span, min }: { label: st
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
     </div>
   );
 }
@@ -495,7 +499,7 @@ function TextArea({ label, value, onChange, rows = 2 }: { label: string; value: 
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
     </div>
   );
 }
@@ -504,7 +508,7 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
         {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     </div>
@@ -546,8 +550,8 @@ function RevenueCard({ label, value, color }: { label: string; value: number | n
 
 function LongField({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={accent ? "bg-indigo-50 rounded-lg p-3" : ""}>
-      <p className={`text-xs font-semibold mb-1.5 ${accent ? "text-indigo-600" : "text-gray-400"}`}>{label}</p>
+    <div className={accent ? "bg-accent/10 rounded-lg p-3" : ""}>
+      <p className={`text-xs font-semibold mb-1.5 ${accent ? "text-accent" : "text-gray-400"}`}>{label}</p>
       <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{value}</p>
     </div>
   );

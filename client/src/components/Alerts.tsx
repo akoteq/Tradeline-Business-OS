@@ -188,7 +188,7 @@ export function Alerts() {
         <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <Bell size={18} className="text-indigo-600" />
+              <Bell size={18} className="text-accent" />
               <h2 className="font-semibold text-gray-900">Alerts</h2>
             </div>
             <button onClick={() => setView("banner")} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>

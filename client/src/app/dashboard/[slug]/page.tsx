@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
 import { useCompanies, companyHref } from "@/lib/companies";
 import { BrandLoader } from "@/components/BrandLoader";
+import { AiSummaryCard } from "@/components/AiSummary";
 import {
   ArrowRight,
   TrendingUp,
@@ -22,7 +23,6 @@ import {
   Users,
   Lock,
   Globe2,
-  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -171,20 +171,10 @@ function TabSwitcher({ items, activeId, onSelect }: { items: TabItem[]; activeId
   );
 }
 
-// ---- AI-generated company summary ----------------------------------------
+// ---- Company summary -----------------------------------------------------
 //
-// FR-19/20 already produce templated flag copy for the alert pipeline
-// ("Finance Factory: expenses outpaced revenue by 18% this month"). This is
-// the same idea surfaced at the top of the dashboard instead of only in a
-// push notification: one plain-English sentence built from the same nightly
-// snapshot data, refreshed whenever `data` changes.
-//
-// This is a deterministic template today (safe, free, always available —
-// matches the "financial accuracy must be deterministic" guardrail for the
-// numbers it quotes). If you want actual LLM phrasing instead of the
-// template, swap `buildSummary`'s return for a call to your `/v1/messages`
-// proxy, passing the same three inputs as the prompt, and keep this
-// function as the loading/fallback state.
+// The AI summary card asks the API, which writes it from the same numbers as this dashboard.
+// This template is the fallback if that request fails.
 function buildSummary(data: CompanyDash): string {
   const parts: string[] = [];
 
@@ -211,50 +201,6 @@ function buildSummary(data: CompanyDash): string {
   // Join as a single readable sentence, capitalised once.
   const sentence = parts.join(", ").replace(/^./, (c) => c.toUpperCase());
   return `${sentence}.`;
-}
-
-function AISummaryCard({ data }: { data: CompanyDash }) {
-  // `refreshKey` just forces buildSummary to re-run against the latest
-  // `data` already in cache. If/when this is backed by a real LLM call,
-  // swap this for a mutation that re-requests a fresh phrasing and keep
-  // the same loading/empty states below.
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const summary = useMemo(() => buildSummary(data), [data, refreshKey]);
-  const hasSignal = summary !== "Nothing flagged — steady week.";
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRefreshKey((k) => k + 1);
-    // Cosmetic delay so "Refresh" reads as an action, not a no-op —
-    // remove once this is wired to a real async regeneration call.
-    window.setTimeout(() => setIsRefreshing(false), 400);
-  };
-
-  return (
-    <div className="rounded-2xl border border-accent/20 bg-accent/[0.05] px-5 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
-            <Sparkles size={14} strokeWidth={2.25} />
-          </span>
-          <span className="text-sm font-semibold text-foreground">AI summary</span>
-        </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="text-xs font-semibold text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent disabled:opacity-50"
-        >
-          {isRefreshing ? "Refreshing…" : "Refresh"}
-        </button>
-      </div>
-      <p className={`mt-2 pl-9 text-sm ${hasSignal ? "text-foreground" : "text-muted"}`}>
-        {isRefreshing ? "Reading the latest numbers…" : summary}
-      </p>
-    </div>
-  );
 }
 
 // ---- Page ---------------------------------------------------------------
@@ -320,7 +266,7 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
             )}
           </div>
 
-          {data && <AISummaryCard data={data} />}
+          {data && <AiSummaryCard endpoint={`/dashboard/company/${data.company.key}/summary`} fallback={buildSummary(data)} />}
         </motion.header>
 
         {isLoading || !data ? (

@@ -54,13 +54,13 @@ export default function CrossSellingPage() {
   const coName = (k: string | null) => (k ? byKey[k]?.name ?? k : "—");
 
   const columns: Column<Referral>[] = [
-    { key: "clientName", label: "Client", sortable: true, render: (r) => <button onClick={() => { setEditing(r); setShowForm(true); }} className="text-left font-semibold text-indigo-700 hover:underline">{r.clientName}</button>, exportValue: (r) => r.clientName },
+    { key: "clientName", label: "Client", sortable: true, render: (r) => <button onClick={() => { setEditing(r); setShowForm(true); }} className="text-left font-semibold text-accent hover:underline">{r.clientName}</button>, exportValue: (r) => r.clientName },
     {
       key: "fromCompany", label: "Referral", render: (r) => (
         <span className="flex items-center gap-1.5 text-xs">
           <span className="text-gray-600">{coName(r.fromCompany)}</span>
           <ArrowRight size={12} className="text-gray-300" />
-          <span className="font-medium text-indigo-700">{coName(r.toCompany)}</span>
+          <span className="font-medium text-accent">{coName(r.toCompany)}</span>
         </span>
       ),
       exportValue: (r) => `${coName(r.fromCompany)} -> ${coName(r.toCompany)}`,
@@ -221,7 +221,7 @@ function ReferralModal({ referral, onClose, onSaved }: { referral: Referral | nu
         </div>
         <div className="px-5 py-3 border-t flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-          <button onClick={save} disabled={saving || !form.clientName.trim()} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+          <button onClick={save} disabled={saving || !form.clientName.trim()} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
         </div>
       </div>
     </div>

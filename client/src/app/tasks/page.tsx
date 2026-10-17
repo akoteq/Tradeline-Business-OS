@@ -186,7 +186,7 @@ export default function TasksPage() {
             onClick={() => setView(val)}
             className={clsx(
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-              view === val ? "border-indigo-500 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"
+              view === val ? "border-accent text-accent" : "border-transparent text-gray-500 hover:text-gray-700"
             )}
           >
             {label}

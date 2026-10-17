@@ -128,7 +128,7 @@ export default function HelpPage() {
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">On this page</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
           {SECTIONS.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline">
+            <a key={s.id} href={`#${s.id}`} className="text-sm text-accent hover:text-accent/80 hover:underline">
               {s.title}
             </a>
           ))}

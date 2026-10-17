@@ -7,6 +7,7 @@ import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
+import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
@@ -169,7 +170,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
           <KpiTile icon={TrendingUp} label="Active" value={deals.filter((d) => d.dealHealth === "ACTIVE").length} />
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface">
+        <div>
           <DataTable
             columns={columns}
             data={deals}
@@ -284,6 +285,7 @@ function DealFormModal({
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
+  const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -312,6 +314,7 @@ function DealFormModal({
       nextSteps:           form.nextSteps            || null,
       nextCallDate:        form.nextCallDate         || null,
       notes:               form.notes               || null,
+      assignedBdoIds:      assigned,
     };
     try {
       deal ? await api.put(`/company-deals/${deal.id}`, body) : await api.post("/company-deals", body);
@@ -375,6 +378,7 @@ function DealFormModal({
               <option value="">— Unassigned —</option>
               {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
             </SelectField>
+            <AssigneesField value={assigned} onChange={setAssigned} people={bdos.filter((b) => b.company === companyKey)} ownerId={form.bdoId} />
             <SelectField label="Deal stage"     value={form.dealStage}     onChange={(v) => set("dealStage", v)}>
               {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>

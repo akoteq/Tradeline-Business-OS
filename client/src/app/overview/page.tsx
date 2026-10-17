@@ -7,6 +7,7 @@ import { ArrowDownRight, ArrowUpRight, ArrowRight, CheckCircle2, AlertTriangle, 
 import { fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { useCompanies } from "@/lib/companies";
+import { AiSummaryCard } from "@/components/AiSummary";
 import { KpiStatus, KPI_STATUS_STYLE, KPI_STATUS_LABEL, fmtKpiVal, PaceBar } from "@/components/kpi";
 
 // ─── Types (mirror GET /dashboard/me) ───────────────────────────────────────
@@ -109,6 +110,9 @@ export default function OverviewPage() {
         <Card><p className="text-sm text-muted py-8 text-center">Couldn&apos;t load your overview. Try again in a moment.</p></Card>
       ) : (
         <>
+          {/* AI summary of this month (the summary always covers the current month) */}
+          {isCurrent && <AiSummaryCard endpoint="/dashboard/me/summary" />}
+
           {/* Focus */}
           <Card>
             <SectionTitle>{focus.length ? "Where to focus" : "You're on top of things"}</SectionTitle>

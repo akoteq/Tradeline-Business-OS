@@ -87,7 +87,7 @@ export default function ProjectsPage() {
       render: (r: Project) => (
         <button
           onClick={() => setDetail(r)}
-          className="text-left font-semibold text-indigo-700 hover:underline"
+          className="text-left font-semibold text-accent hover:underline"
         >
           {r.name}
         </button>
@@ -138,7 +138,7 @@ export default function ProjectsPage() {
             key={s}
             onClick={() => setFilterStatus(filterStatus === s ? "" : s)}
             className={`rounded-xl border p-3 text-left transition-all bg-white ${
-              filterStatus === s ? "ring-2 ring-indigo-400 border-indigo-200" : "border-gray-200 hover:border-gray-300"
+              filterStatus === s ? "ring-2 ring-accent/40 border-accent/30" : "border-gray-200 hover:border-gray-300"
             }`}
           >
             <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mb-2 ${STATUS_COLORS[s]}`}>
@@ -164,7 +164,7 @@ export default function ProjectsPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
               <option value="">All Statuses</option>
               {STATUS_LIST.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
@@ -172,7 +172,7 @@ export default function ProjectsPage() {
             <select
               value={filterCompany}
               onChange={(e) => setFilterCompany(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
               <option value="">All Companies</option>
               <option value="SHARED">Shared</option>
@@ -266,7 +266,7 @@ function ProjectFormModal({
 
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Status</label>
-              <select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                 {["ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"].map((s) => (
                   <option key={s} value={s}>{s.replace("_", " ")}</option>
                 ))}
@@ -275,7 +275,7 @@ function ProjectFormModal({
 
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Company</label>
-              <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                 <option value="SHARED">Shared</option>
                 {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
               </select>
@@ -287,12 +287,12 @@ function ProjectFormModal({
 
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Description</label>
-            <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
           </div>
 
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
           </div>
 
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
@@ -300,7 +300,7 @@ function ProjectFormModal({
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : project ? "Update Project" : "Add Project"}
           </button>
         </div>
@@ -329,7 +329,7 @@ function DetailDrawer({
           </div>
           <div className="flex items-center gap-2">
             {onEdit && (
-              <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+              <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">
                 Edit
               </button>
             )}
@@ -383,7 +383,7 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
       />
     </div>
   );

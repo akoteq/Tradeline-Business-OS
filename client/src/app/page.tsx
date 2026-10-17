@@ -18,7 +18,6 @@ import {
   Gauge,
   Layers,
   ShieldAlert,
-  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
@@ -26,6 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { BrandLoader } from "@/components/BrandLoader";
+import { AiSummaryCard } from "@/components/AiSummary";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -94,8 +94,6 @@ type Exec = {
   topRisks: DealRow[];
 };
 
-type ExecutiveSummary = { summary: string; generatedAt: string };
-
 const fmt = (n: number) =>
   (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
 const fmtCompact = (n: number) =>
@@ -111,16 +109,6 @@ function urgencyLabel(u: Urgency, daysUntil: number) {
     case "1day": return "1 day left";
     default: return `${daysUntil}d left`;
   }
-}
-
-function timeAgo(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }
 
 const FLAG_LABEL: Record<FinancialFlag["kind"], string> = {
@@ -258,48 +246,6 @@ function QuickNav({
   );
 }
 
-// ---- AI summary ------------------------------------------------------------
-
-function AiSummaryCard({ query }: { query: ReturnType<typeof useQuery<ExecutiveSummary>> }) {
-  const { data, isLoading, isError, refetch, isFetching } = query;
-  return (
-    <div className="rounded-2xl border border-accent/20 bg-accent/[0.04] p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
-            <Sparkles size={13} strokeWidth={2.25} />
-          </span>
-          <h2 className="text-sm font-semibold text-foreground">AI summary</h2>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {data?.generatedAt && <span className="text-[11px] text-muted">Updated {timeAgo(data.generatedAt)}</span>}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="text-[11px] font-semibold text-accent hover:underline disabled:opacity-50"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="mt-3 space-y-2">
-          <div className="h-3 w-full animate-pulse rounded-full bg-accent/10" />
-          <div className="h-3 w-5/6 animate-pulse rounded-full bg-accent/10" />
-          <div className="h-3 w-2/3 animate-pulse rounded-full bg-accent/10" />
-        </div>
-      ) : isError || !data?.summary ? (
-        <p className="mt-3 text-sm leading-relaxed text-muted">
-          No summary available right now — check back once today&apos;s numbers are in.
-        </p>
-      ) : (
-        <p className="mt-3 text-sm leading-relaxed text-foreground/90">{data.summary}</p>
-      )}
-    </div>
-  );
-}
-
 // ---- Page ---------------------------------------------------------------
 
 // Home routes by role: the group dashboard is the Group Owner's view only (the API refuses it
@@ -325,11 +271,6 @@ function CEODashboard() {
   const { byKey } = useCompanies();
   const alerts = useQuery<AlertsResponse>({ queryKey: ["alerts"], queryFn: () => fetcher("/alerts") });
   const exec = useQuery<Exec>({ queryKey: ["executive-dashboard"], queryFn: () => fetcher("/dashboard/executive") });
-  const summary = useQuery<ExecutiveSummary>({
-    queryKey: ["executive-summary"],
-    queryFn: () => fetcher("/dashboard/executive/summary"),
-  });
-
   const [activeId, setActiveId] = useState("overview");
 
   const data = exec.data;
@@ -426,7 +367,7 @@ function CEODashboard() {
           variants={fadeUp}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
         >
-          <AiSummaryCard query={summary} />
+          <AiSummaryCard endpoint="/dashboard/executive/summary" />
         </motion.section>
 
         {/* ---- Tab switcher ----------------------------------------------- */}

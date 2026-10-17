@@ -22,6 +22,10 @@ import {
   UsersRound,
   HelpCircle,
   Target,
+  ShieldCheck,
+  AlertTriangle,
+  Contact,
+  Briefcase,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
@@ -75,6 +79,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     setOpen((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
 
   const level = accessLevel(user.role);
+  // Compliance shows only where the module is on: any company for the Group Owner, else their own.
+  const complianceOn = level === "GROUP_OWNER"
+    ? companies.some((c) => c.modules?.compliance)
+    : !!companies.find((c) => c.key === user.bdoCompany)?.modules?.compliance;
+  const complianceItem: NavItem[] = complianceOn ? [{ href: "/compliance", label: "Compliance", icon: ShieldCheck, status: "live" }] : [];
 
   // ---- Role-scoped nav content -------------------------------------------------
 
@@ -92,6 +101,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           children: companies.map((c) => ({ href: `/dashboard/${c.slug}`, label: c.name, status: "live" })),
         },
         { href: "/leads", label: "All Leads", icon: Users, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        ...complianceItem,
+        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
         { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
         { href: "/consolidated", label: "Group Financials", icon: Database, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
@@ -132,12 +145,16 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       items: [
         { href: "/tasks", label: "Batch-Assign Tasks", icon: ListChecks, status: "live" },
         { href: "/projects", label: "Projects", icon: FolderKanban, status: "live" },
+        ...complianceItem,
+        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
       ],
     },
     {
       title: "People",
       items: [
         { href: "/leads", label: "Leads", icon: Users, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
         { href: "/team", label: "Team", icon: UsersRound, status: "live" },
         { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
         { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
@@ -155,6 +172,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
         { href: "/overview", label: "Overview", icon: LayoutDashboard, status: "live" },
         { href: "/tasks", label: "My Tasks", icon: ListChecks, status: "live" },
         { href: "/leads", label: "My Leads", icon: Users, status: "live" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        ...complianceItem,
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
+        { href: "/risks", label: "My Risk Actions", icon: AlertTriangle, status: "live" },
         { href: "/my-kpis", label: "My KPIs", icon: Target, status: "live" },
         { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
       ],

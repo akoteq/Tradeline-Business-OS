@@ -12,7 +12,11 @@ export type Company = {
   color: string;
   order: number;
   isActive: boolean;
+  modules?: { compliance?: boolean; complianceOpportunities?: boolean };
+  clientFields?: ClientField[];
 };
+
+export type ClientField = { key: string; label: string; type: "TEXT" | "LONGTEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN"; options?: string[]; required?: boolean; section?: string };
 
 // Static fallback mirroring the server's DEFAULT_COMPANIES, so labels/menus render
 // instantly on first paint and still work if the request is in flight.

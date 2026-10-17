@@ -96,7 +96,7 @@ export default function GrantLoansPage() {
     {
       key: "clientName", label: "Client / SME", sortable: true,
       render: (r: GrantLoan) => (
-        <button onClick={() => setDetail(r)} className="text-left font-medium text-indigo-700 hover:underline truncate max-w-[160px] block">
+        <button onClick={() => setDetail(r)} className="text-left font-medium text-accent hover:underline truncate max-w-[160px] block">
           {r.clientName}
         </button>
       ),
@@ -138,7 +138,7 @@ export default function GrantLoansPage() {
           <button
             key={s}
             onClick={() => setFilters((f) => ({ ...f, status: f.status === s ? "" : s }))}
-            className={`rounded-xl border p-2.5 text-left transition-all bg-white ${filters.status === s ? "ring-2 ring-indigo-400 border-indigo-200" : "border-gray-200 hover:border-gray-300"}`}
+            className={`rounded-xl border p-2.5 text-left transition-all bg-white ${filters.status === s ? "ring-2 ring-accent/40 border-accent/30" : "border-gray-200 hover:border-gray-300"}`}
           >
             <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mb-1.5 ${STATUS_COLORS[s]}`}>
               {s.replace(/_/g, " ")}
@@ -198,7 +198,7 @@ export default function GrantLoansPage() {
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -275,7 +275,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
               <Field label="Client / SME Name *" value={form.clientName} onChange={(v) => set("clientName", v)} span={2} />
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
                   <option value="">— Unassigned —</option>
                   {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
                 </select>
@@ -298,7 +298,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Commission Received (GHS)</label>
                 <div className="flex gap-1">
-                  <input type="number" value={form.commissionReceived} onChange={(e) => set("commissionReceived", e.target.value)} className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input type="number" value={form.commissionReceived} onChange={(e) => set("commissionReceived", e.target.value)} className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
                   <button type="button" onClick={autoCommission} title="Calculate from approved amount × commission %" className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-500 shrink-0">Auto</button>
                 </div>
               </div>
@@ -306,7 +306,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
           </Section>
 
           <Section label="Notes">
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
           </Section>
 
           {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
@@ -314,7 +314,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
 
         <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : g ? "Update Record" : "Add Record"}
           </button>
         </div>
@@ -336,7 +336,7 @@ function DetailDrawer({ g, onClose, onEdit }: { g: GrantLoan; onClose: () => voi
             <p className="text-xs text-gray-400 mt-0.5">{g.grantLoanType ?? "Grant / Loan"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Edit</button>
+            <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
@@ -402,7 +402,7 @@ function Field({ label, value, onChange, type = "text", span, placeholder }: { l
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
     </div>
   );
 }
@@ -411,7 +411,7 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
   return (
     <div>
       <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
         {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     </div>
