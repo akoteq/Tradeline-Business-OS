@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { Plus, Trash2, ChevronLeft } from "lucide-react";
+import {
+  Plus, Trash2, ChevronLeft, ChevronDown, Search, Filter, ArrowUpDown, MoreVertical,
+  Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X,
+} from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { isManager } from "@/lib/auth";
@@ -38,7 +41,7 @@ const UNIT_CHOICES = [["COUNT", "Number"], ["CURRENCY", "GHS"], ["PERCENT", "%"]
 const inputClass =
   "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-60";
 const selectClass =
-  "text-sm bg-background border border-border rounded-lg px-2 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40";
+  "text-sm bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40";
 const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
 const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
 
@@ -46,15 +49,25 @@ function apiError(err: unknown, fallback: string) {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
 }
 
+// "YYYY-MM" in the user's local time (toISOString would be UTC and can land on the wrong month).
+function monthKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function periodLabel(period: string) {
   const [y, m] = period.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+function prevPeriod(period: string) {
+  const [y, m] = period.split("-").map(Number);
+  return monthKey(new Date(y, m - 2, 1));
+}
+
 // Days left in the selected month, or null when it isn't the current month.
 function daysLeft(period: string): number | null {
   const now = new Date();
-  if (now.toISOString().slice(0, 7) !== period) return null;
+  if (monthKey(now) !== period) return null;
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   return Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86_400_000));
 }
@@ -89,6 +102,26 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
   );
 }
 
+// Select with a custom chevron so it matches the rest of the toolbar.
+function SelectField({ className, children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select {...rest} className={clsx(selectClass, "appearance-none pr-8 w-full", className)}>{children}</select>
+      <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
+    </div>
+  );
+}
+
+// Closes a popover when Escape is pressed.
+function useEscape(active: boolean, close: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, close]);
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 // view: "team" (managers' overview), "me", or a staff profile id.
 export default function MyKpisPage() {
@@ -98,7 +131,7 @@ export default function MyKpisPage() {
   const canAssign = isManager(user);
   const hasProfile = !!user?.bdoId;
 
-  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [period, setPeriod] = useState(() => monthKey(new Date()));
   const [view, setView] = useState<string>(""); // "" = default for the role
   const [updateRow, setUpdateRow] = useState<Row | null>(null);
   const [creating, setCreating] = useState(false);
@@ -110,16 +143,12 @@ export default function MyKpisPage() {
   // Staff whose login has no staff profile have nothing to track yet.
   const unlinked = !isTeam && !personId && !hasProfile;
 
+  const go = (v: string) => { setCreating(false); setView(v); };
+
   const { data: people = [] } = useQuery<Bdo[]>({
     queryKey: ["bdos"],
     queryFn: () => fetcher("/bdo"),
     enabled: canAssign,
-  });
-
-  const { data: team = [], isLoading: teamLoading, error: teamError } = useQuery<TeamRow[]>({
-    queryKey: ["kpi-team", period],
-    queryFn: () => fetcher(`/kpi-framework/team?period=${period}`),
-    enabled: canAssign && isTeam,
   });
 
   const qp = new URLSearchParams({ period });
@@ -144,30 +173,50 @@ export default function MyKpisPage() {
   const canCreate = !isTeam && !!data;
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+    <div className={clsx("p-4 md:p-5 space-y-5", !isTeam && "max-w-5xl mx-auto")}>
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">Performance</p>
           {canAssign && !isTeam && (
-            <button onClick={() => setView("team")} className="text-xs text-muted hover:text-accent transition-colors mb-1 inline-flex items-center gap-1">
+            <button onClick={() => go("team")} className="text-xs text-muted hover:text-accent transition-colors mb-1 inline-flex items-center gap-1">
               <ChevronLeft size={13} /> Team
             </button>
           )}
-          <h1 className="font-serif text-2xl md:text-3xl text-foreground">{title}</h1>
-          <p className="text-sm text-muted mt-1">
-            {periodLabel(period)}{left != null && <> · {left} day{left === 1 ? "" : "s"} left</>}.{" "}
-            {isTeam ? "People who need attention are listed first." : "The tick on each bar is where you should be by today."}
+          <h1 className="font-serif text-3xl md:text-4xl text-foreground">{title}</h1>
+          <p className="text-sm text-muted mt-1.5">
+            {isTeam ? (
+              "Track targets, progress and team performance. Keep your team aligned and accountable."
+            ) : (
+              <>
+                {periodLabel(period)}{left != null && <> · {left} day{left === 1 ? "" : "s"} left</>}.{" "}
+                The tick on each bar is where you should be by today.
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {canAssign && (
-            <select value={current} onChange={(e) => setView(e.target.value)} className={selectClass}>
+            <SelectField value={current} onChange={(e) => go(e.target.value)} className="min-w-[160px]">
               <option value="team">Whole team</option>
               {hasProfile && <option value="me">Me</option>}
               {people.filter((p) => p.id !== user?.bdoId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            </SelectField>
           )}
-          <input type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} className={selectClass} />
+          <div className="relative">
+            <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground/70" />
+            <input
+              type="month"
+              value={period}
+              onChange={(e) => e.target.value && setPeriod(e.target.value)}
+              className={clsx(
+                selectClass, "relative pl-9 cursor-pointer",
+                // Hide the browser's own icon but keep the whole field clickable.
+                "[&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0",
+                "[&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full",
+                "[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
+              )}
+            />
+          </div>
           {canCreate && (
             <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 transition-opacity">
               <Plus size={15} /> {viewingSomeoneElse ? "Assign KPI" : "New KPI"}
@@ -177,10 +226,11 @@ export default function MyKpisPage() {
       </div>
 
       {isTeam ? (
-        teamLoading ? <Empty text="Loading team…" />
-        : teamError ? <Empty text={apiError(teamError, "Couldn't load the team.")} />
-        : team.length === 0 ? <Empty text="No staff profiles yet. Add people in Team & Access." />
-        : <TeamGrid team={team} onOpen={(id) => setView(id)} />
+        <TeamOverview
+          period={period}
+          onOpen={(id) => go(id)}
+          onAssign={(id) => { setView(id); setCreating(true); }}
+        />
       ) : (
         <>
           {rows.length > 0 && (
@@ -233,42 +283,403 @@ export default function MyKpisPage() {
   );
 }
 
-// Managers' overview: one card per person with their status counts.
-function TeamGrid({ team, onOpen }: { team: TeamRow[]; onOpen: (id: string) => void }) {
+// ─── Team overview ──────────────────────────────────────────────────────────
+// Raw KPI statuses are folded into three buckets for the team view.
+// If your KpiStatus enum uses different names, tweak the patterns here.
+type Bucket = "ON_TRACK" | "AT_RISK" | "OVERDUE";
+function bucketOf(status: string): Bucket | null {
+  if (status === "NO_TARGET") return null;
+  if (/RISK|WARN|SLIP/.test(status)) return "AT_RISK";
+  if (/OVERDUE|BEHIND|MISS|OFF|LATE|FAIL/.test(status)) return "OVERDUE";
+  return "ON_TRACK";
+}
+
+type Tally = { onTrack: number; atRisk: number; overdue: number; total: number };
+function tally(counts: TeamRow["counts"]): Tally {
+  const t: Tally = { onTrack: 0, atRisk: 0, overdue: 0, total: 0 };
+  for (const [status, n] of Object.entries(counts)) {
+    const b = bucketOf(status);
+    const c = Number(n) || 0;
+    if (!b || !c) continue;
+    t.total += c;
+    if (b === "ON_TRACK") t.onTrack += c;
+    else if (b === "AT_RISK") t.atRisk += c;
+    else t.overdue += c;
+  }
+  return t;
+}
+
+function sumTeam(rows: TeamRow[] | undefined): Tally {
+  return (rows ?? []).reduce((a, r) => {
+    const t = tally(r.counts);
+    a.onTrack += t.onTrack; a.atRisk += t.atRisk; a.overdue += t.overdue; a.total += t.total;
+    return a;
+  }, { onTrack: 0, atRisk: 0, overdue: 0, total: 0 } as Tally);
+}
+
+const pctOf = (t: Tally) => (t.total ? Math.round((t.onTrack / t.total) * 100) : null);
+const relDelta = (cur: number, prev: number) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
+
+type PersonStatus = Bucket | "NONE";
+const PERSON_STATUS: Record<PersonStatus, { label: string; pill: string; bar: string; rank: number }> = {
+  OVERDUE: { label: "Overdue", pill: "bg-red-500/10 text-red-700", bar: "bg-red-500", rank: 0 },
+  AT_RISK: { label: "At Risk", pill: "bg-orange-500/10 text-orange-700", bar: "bg-orange-500", rank: 1 },
+  NONE: { label: "No targets", pill: "bg-foreground/5 text-foreground/60", bar: "bg-foreground/20", rank: 2 },
+  ON_TRACK: { label: "On Track", pill: "bg-emerald-500/10 text-emerald-700", bar: "bg-emerald-500", rank: 3 },
+};
+
+function personStatus(t: Tally, pct: number | null): PersonStatus {
+  if (!t.total || pct == null) return "NONE";
+  if (t.overdue > 0 && t.overdue / t.total >= 0.5) return "OVERDUE";
+  if (t.overdue > 0 || pct < 50) return "AT_RISK";
+  return "ON_TRACK";
+}
+
+type Person = { row: TeamRow; t: Tally; pct: number | null; status: PersonStatus; companyName: string };
+
+type SortKey = "attention" | "performance" | "name";
+const SORT_LABEL: Record<SortKey, string> = { attention: "Needs attention", performance: "Performance", name: "Name" };
+const STATUS_FILTERS = [
+  ["ALL", "All"], ["ON_TRACK", "On track"], ["AT_RISK", "At risk"], ["OVERDUE", "Overdue"], ["NONE", "No targets"],
+] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number][0];
+
+const TONE = {
+  green: { solid: "bg-emerald-500", bar: "bg-emerald-500" },
+  orange: { solid: "bg-orange-500", bar: "bg-orange-500" },
+  red: { solid: "bg-red-500", bar: "bg-red-500" },
+} as const;
+
+function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (id: string) => void; onAssign: (id: string) => void }) {
   const { byKey } = useCompanies();
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("attention");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [companyFilter, setCompanyFilter] = useState("");
+
+  useEscape(sortOpen || filterOpen, () => { setSortOpen(false); setFilterOpen(false); });
+
+  const { data: team = [], isLoading, error } = useQuery<TeamRow[]>({
+    queryKey: ["kpi-team", period],
+    queryFn: () => fetcher(`/kpi-framework/team?period=${period}`),
+  });
+  const { data: prev } = useQuery<TeamRow[]>({
+    queryKey: ["kpi-team", prevPeriod(period)],
+    queryFn: () => fetcher(`/kpi-framework/team?period=${prevPeriod(period)}`),
+  });
+
+  const people = useMemo<Person[]>(
+    () => team.map((row) => {
+      const t = tally(row.counts);
+      const pct = pctOf(t);
+      return { row, t, pct, status: personStatus(t, pct), companyName: byKey[row.person.company]?.name ?? row.person.company };
+    }),
+    [team, byKey],
+  );
+
+  const companies = useMemo(() => {
+    const seen = new Map<string, string>();
+    people.forEach((p) => seen.set(p.row.person.company, p.companyName));
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [people]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = people.filter((p) => {
+      if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
+      if (companyFilter && p.row.person.company !== companyFilter) return false;
+      if (!q) return true;
+      return [p.row.person.name, p.row.person.title ?? "", p.companyName].some((s) => s.toLowerCase().includes(q));
+    });
+    const byName = (a: Person, b: Person) => a.row.person.name.localeCompare(b.row.person.name);
+    return list.sort((a, b) => {
+      if (sort === "name") return byName(a, b);
+      if (sort === "performance") return (b.pct ?? -1) - (a.pct ?? -1) || byName(a, b);
+      return PERSON_STATUS[a.status].rank - PERSON_STATUS[b.status].rank || (a.pct ?? 101) - (b.pct ?? 101) || byName(a, b);
+    });
+  }, [people, query, statusFilter, companyFilter, sort]);
+
+  if (isLoading) return <Empty text="Loading team…" />;
+  if (error) return <Empty text={apiError(error, "Couldn't load the team.")} />;
+  if (team.length === 0) return <Empty text="No staff profiles yet. Add people in Team & Access." />;
+
+  const cur = sumTeam(team);
+  const old = prev ? sumTeam(prev) : null;
+  const curPct = pctOf(cur);
+  const oldPct = old ? pctOf(old) : null;
+  const activeFilters = (statusFilter !== "ALL" ? 1 : 0) + (companyFilter ? 1 : 0);
+  const share = (n: number) => (cur.total ? Math.round((n / cur.total) * 100) : 0);
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {team.map((t) => {
-        const statuses = KPI_STATUS_LIST.filter((s) => s !== "NO_TARGET" && t.counts[s]);
-        return (
-          <button
-            key={t.person.id}
-            onClick={() => onOpen(t.person.id)}
-            className="text-left rounded-xl border border-border bg-surface p-4 flex flex-col gap-3 hover:border-accent/40 transition-colors"
-          >
-            <div className="min-w-0">
-              <div className="font-medium text-foreground truncate">{t.person.name}</div>
-              <div className="text-xs text-muted truncate">
-                {[t.person.title, byKey[t.person.company]?.name ?? t.person.company].filter(Boolean).join(" · ")}
-              </div>
-            </div>
-            {statuses.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {statuses.map((s) => (
-                  <span key={s} className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${KPI_STATUS_STYLE[s]}`}>
-                    {t.counts[s]} {KPI_STATUS_LABEL[s]}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-muted">No targets set this month</span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          tone="green" icon={<Target size={20} />} label="Target Achievement"
+          value={curPct != null ? `${curPct}%` : "—"}
+          sub={`${cur.onTrack} / ${cur.total} KPIs on track`}
+          bar={curPct ?? 0}
+          delta={curPct != null && oldPct != null ? curPct - oldPct : null} unit=" pts" goodWhenUp
+        />
+        <StatCard
+          tone="green" icon={<Check size={20} />} label="On Track"
+          value={String(cur.onTrack)} sub={`of ${cur.total} KPIs`} bar={share(cur.onTrack)}
+          delta={old ? relDelta(cur.onTrack, old.onTrack) : null} unit="%" goodWhenUp
+        />
+        <StatCard
+          tone="orange" icon={<AlertTriangle size={20} />} label="At Risk"
+          value={String(cur.atRisk)} sub={`of ${cur.total} KPIs`} bar={share(cur.atRisk)}
+          delta={old ? relDelta(cur.atRisk, old.atRisk) : null} unit="%" goodWhenUp={false}
+        />
+        <StatCard
+          tone="red" icon={<AlertCircle size={20} />} label="Overdue"
+          value={String(cur.overdue)} sub={`of ${cur.total} KPIs`} bar={share(cur.overdue)}
+          delta={old ? relDelta(cur.overdue, old.overdue) : null} unit="%" goodWhenUp={false}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface/60 p-3 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search team members…"
+              className={clsx(inputClass, "pl-9 bg-surface")}
+            />
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-surface text-foreground hover:bg-primary/5 transition-colors"
+            >
+              <ArrowUpDown size={14} className="text-muted" />
+              <span>Sort by: {SORT_LABEL[sort]}</span>
+              <ChevronDown size={14} className="text-muted" />
+            </button>
+            {sortOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-surface shadow-lg py-1 text-sm">
+                  {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => { setSort(k); setSortOpen(false); }}
+                      className={clsx("w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors", sort === k && "font-medium text-accent")}
+                    >
+                      {SORT_LABEL[k]}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
-            <span className="text-xs text-muted mt-auto">
-              {t.personalCount ? `${t.personalCount} personal KPI${t.personalCount === 1 ? "" : "s"} · ` : ""}View KPIs →
-            </span>
-          </button>
-        );
-      })}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-surface text-foreground hover:bg-primary/5 transition-colors"
+            >
+              <Filter size={14} className="text-muted" />
+              Filter
+              {activeFilters > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-accent text-accent-foreground text-[10px] font-semibold">
+                  {activeFilters}
+                </span>
+              )}
+            </button>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-72 rounded-xl border border-border bg-surface shadow-lg p-3 space-y-3">
+                  <div>
+                    <Label>Status</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STATUS_FILTERS.map(([k, label]) => (
+                        <button
+                          key={k}
+                          onClick={() => setStatusFilter(k)}
+                          className={clsx(
+                            "px-2.5 py-1 rounded-full text-xs border transition-colors",
+                            statusFilter === k ? "border-accent bg-accent/10 text-accent" : "border-border text-foreground/70 hover:border-accent/40",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {companies.length > 1 && (
+                    <div>
+                      <Label>Company</Label>
+                      <SelectField value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}>
+                        <option value="">All companies</option>
+                        {companies.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+                      </SelectField>
+                    </div>
+                  )}
+                  {activeFilters > 0 && (
+                    <button
+                      onClick={() => { setStatusFilter("ALL"); setCompanyFilter(""); }}
+                      className="text-xs text-muted hover:text-accent inline-flex items-center gap-1"
+                    >
+                      <X size={12} /> Clear filters
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {visible.length === 0 ? (
+          <Empty text="No one matches those filters." />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {visible.map((p) => (
+              <PersonCard key={p.row.person.id} p={p} onOpen={() => onOpen(p.row.person.id)} onAssign={() => onAssign(p.row.person.id)} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ tone, icon, label, value, sub, bar, delta, unit, goodWhenUp }: {
+  tone: keyof typeof TONE; icon: React.ReactNode; label: string; value: string; sub: string;
+  bar: number; delta: number | null; unit: string; goodWhenUp: boolean;
+}) {
+  const t = TONE[tone];
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3.5">
+      <div className="flex items-start gap-3">
+        <span className={clsx("h-11 w-11 shrink-0 rounded-full grid place-items-center text-white", t.solid)}>{icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-foreground">{label}</div>
+          <div className="flex items-end justify-between gap-2">
+            <span className="text-3xl font-semibold text-foreground tabular-nums leading-tight">{value}</span>
+            <Delta value={delta} unit={unit} goodWhenUp={goodWhenUp} />
+          </div>
+          <p className="text-xs text-muted tabular-nums">{sub}</p>
+        </div>
+      </div>
+      <div className="mt-3 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+        <div className={clsx("h-full rounded-full transition-all", t.bar)} style={{ width: `${Math.min(100, Math.max(0, bar))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// Trend vs last month. Green = moving the right way, red = the wrong way.
+function Delta({ value, unit, goodWhenUp }: { value: number | null; unit: string; goodWhenUp: boolean }) {
+  if (value == null) return null;
+  const good = value === 0 ? null : (value > 0) === goodWhenUp;
+  return (
+    <div className="text-right shrink-0 pb-0.5">
+      <div className={clsx("inline-flex items-center gap-0.5 text-xs font-medium tabular-nums", good == null ? "text-muted" : good ? "text-emerald-600" : "text-red-600")}>
+        {value > 0 && <ArrowUp size={12} />}
+        {value < 0 && <ArrowDown size={12} />}
+        {value > 0 ? "+" : ""}{value}{unit}
+      </div>
+      <div className="text-[10px] text-muted leading-tight">vs. last month</div>
+    </div>
+  );
+}
+
+const AVATAR_COLORS = [
+  "bg-slate-700", "bg-orange-500", "bg-violet-600", "bg-emerald-600",
+  "bg-teal-600", "bg-indigo-500", "bg-amber-500", "bg-purple-600", "bg-sky-600", "bg-rose-500",
+];
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[1][0] : "")).toUpperCase() || "?";
+}
+
+function avatarColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function PersonCard({ p, onOpen, onAssign }: { p: Person; onOpen: () => void; onAssign: () => void }) {
+  const { person } = p.row;
+  const st = PERSON_STATUS[p.status];
+  const subtitle = [person.title, p.companyName].filter(Boolean).join(" · ");
+  const hasTargets = p.status !== "NONE";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(); } }}
+      className="text-left rounded-xl border border-border bg-surface p-3.5 flex flex-col gap-2.5 cursor-pointer hover:border-accent/40 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-accent/40"
+    >
+      <div className="flex items-start gap-3">
+        <span className={clsx("h-11 w-11 shrink-0 rounded-full grid place-items-center text-white text-sm font-semibold", avatarColor(person.name))}>
+          {initials(person.name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            {/* Wraps instead of truncating so long names stay readable. */}
+            <div className="font-medium text-foreground leading-snug break-words min-w-0">{person.name}</div>
+            <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
+              {hasTargets && (
+                <span className={clsx("px-2 py-0.5 rounded-md text-[11px] font-medium whitespace-nowrap", st.pill)}>{st.label}</span>
+              )}
+              <CardMenu onView={onOpen} onAssign={onAssign} />
+            </div>
+          </div>
+          <div className="text-xs text-muted truncate" title={subtitle}>{subtitle}</div>
+        </div>
+      </div>
+
+      {hasTargets ? (
+        <div>
+          <div className="text-sm font-medium text-foreground">{p.t.total} KPI{p.t.total === 1 ? "" : "s"}</div>
+          <div className="text-[11px] text-muted tabular-nums">
+            {p.t.onTrack} on track · {p.t.atRisk} at risk · {p.t.overdue} overdue
+          </div>
+        </div>
+      ) : (
+        <div className="text-xs text-muted">No targets set this month</div>
+      )}
+
+      <div className="flex items-center gap-2 mt-auto">
+        <div className="flex-1 h-2 rounded-full bg-foreground/10 overflow-hidden">
+          <div className={clsx("h-full rounded-full transition-all", st.bar)} style={{ width: `${p.pct ?? 0}%` }} />
+        </div>
+        <span className="text-xs tabular-nums text-muted w-9 text-right">{p.pct != null ? `${p.pct}%` : "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+function CardMenu({ onView, onAssign }: { onView: () => void; onAssign: () => void }) {
+  const [open, setOpen] = useState(false);
+  useEscape(open, () => setOpen(false));
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        aria-label="More actions"
+        onClick={() => setOpen((o) => !o)}
+        className="p-1 rounded-md text-muted hover:text-foreground hover:bg-foreground/5 transition-colors"
+      >
+        <MoreVertical size={16} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg py-1 text-sm">
+            <button onClick={() => { setOpen(false); onView(); }} className="w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors">View KPIs</button>
+            <button onClick={() => { setOpen(false); onAssign(); }} className="w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors">Assign KPI</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
