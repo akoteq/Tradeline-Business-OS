@@ -20,7 +20,6 @@ type Risk = {
   indicators: Indicator[]; mitigations: Mitigation[]; ownerBdoId: string | null; ownerName: string | null; reviewStatus: string; reviewState: string;
   lastReviewedAt: string | null; nextReviewDate: string | null; canEdit: boolean;
 };
-type Heat = { company: string; companyName: string; cells: number[][]; total: number; high: number };
 type Bdo = { id: string; name: string; company: string };
 
 const CATEGORIES = ["FINANCIAL", "OPERATIONAL", "REGULATORY", "CREDIT", "PEOPLE", "TECHNOLOGY", "REPUTATIONAL", "MARKET"];
@@ -43,7 +42,6 @@ export default function RisksPage() {
   const [reviewing, setReviewing] = useState<Risk | null>(null);
 
   const { data: risks = [], isLoading } = useQuery<Risk[]>({ queryKey: ["risks", includeClosed], queryFn: () => fetcher(`/risks${includeClosed ? "?includeClosed=1" : ""}`) });
-  const { data: heat = [] } = useQuery<Heat[]>({ queryKey: ["risks", "heatmap"], queryFn: () => fetcher("/risks/heatmap"), enabled: manager });
   const refresh = () => qc.invalidateQueries({ queryKey: ["risks"] });
   const rows = risks.filter((r) => !company || r.company === company);
 
@@ -103,12 +101,6 @@ export default function RisksPage() {
         <p className="text-sm text-gray-500">Each company&apos;s top 10–15 material risks. Score = impact × likelihood (1–25).</p>
       </div>
 
-      {heat.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {heat.map((h) => <HeatGrid key={h.company} h={h} onPick={() => setCompany(company === h.company ? "" : h.company)} active={company === h.company} />)}
-        </div>
-      )}
-
       <DataTable
         columns={columns}
         data={rows}
@@ -133,29 +125,6 @@ export default function RisksPage() {
       {editing && <RiskModal risk={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(w) => { setEditing(null); refresh(); if (w) alert(w); }} />}
       {reviewing && <ReviewModal risk={reviewing} onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); refresh(); }} />}
     </div>
-  );
-}
-
-function HeatGrid({ h, onPick, active }: { h: Heat; onPick: () => void; active: boolean }) {
-  return (
-    <button onClick={onPick} className={`text-left bg-white rounded-xl border p-4 ${active ? "border-accent ring-2 ring-accent/20" : "border-gray-200"}`}>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-semibold text-gray-800">{h.companyName}</p>
-        <p className="text-xs text-gray-500">{h.total} open · <span className="text-red-600">{h.high} high</span></p>
-      </div>
-      <div className="flex gap-1">
-        <div className="flex flex-col justify-between text-[9px] text-gray-400 py-0.5 -rotate-0"><span>5</span><span>Impact</span><span>1</span></div>
-        <div className="grid grid-cols-5 gap-0.5 flex-1">
-          {[5, 4, 3, 2, 1].flatMap((imp) => [1, 2, 3, 4, 5].map((lik) => {
-            const n = h.cells[imp - 1][lik - 1];
-            const s = imp * lik;
-            const bg = s >= 15 ? "bg-red-500" : s >= 8 ? "bg-amber-300" : "bg-green-200";
-            return <div key={`${imp}-${lik}`} className={`aspect-square rounded-sm flex items-center justify-center text-[11px] font-bold ${n ? `${bg} ${s >= 15 ? "text-white" : "text-gray-900"}` : "bg-gray-100 text-transparent"}`}>{n || "·"}</div>;
-          }))}
-        </div>
-      </div>
-      <p className="text-[9px] text-gray-400 text-center mt-1">Likelihood →</p>
-    </button>
   );
 }
 
