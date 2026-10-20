@@ -20,6 +20,7 @@ const stageColors: Record<string, string> = {
 };
 
 const priorityColors: Record<string, string> = {
+  URGENT: "bg-red-600 text-white",
   HIGH: "bg-red-100 text-red-700",
   MEDIUM: "bg-amber-100 text-amber-700",
   LOW: "bg-green-100 text-green-700",

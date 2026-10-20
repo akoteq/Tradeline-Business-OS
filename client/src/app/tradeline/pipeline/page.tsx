@@ -11,6 +11,7 @@ import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { AssigneesField } from "@/components/AssigneesField";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { DealPayments } from "@/components/DealPayments";
 
 type TradelineDeal = {
   id: string;
@@ -466,6 +467,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: TradelineDeal; onClose:
             <RevenueCard label="Balance" value={deal.balanceGhs} color="red" />
           </div>
 
+          <DealPayments source="TRADELINE" dealId={deal.id} />
           {/* Long text */}
           {deal.currentStatus && <LongField label="Current Status / Updates" value={deal.currentStatus} />}
           {deal.nextAction && <LongField label="Next Action Required" value={deal.nextAction} accent />}

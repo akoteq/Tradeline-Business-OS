@@ -11,6 +11,7 @@ import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
+import { DealPayments } from "@/components/DealPayments";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 // Note: this is the post-conversion deal pipeline (stage / health / invoice),
@@ -479,6 +480,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
             <DItem label="Balance"          value={fmt(deal.balanceGhs)} />
             <DItem label="Next call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />
           </dl>
+          <DealPayments source="COMPANY" dealId={deal.id} />
           {deal.nextSteps && (
             <div>
               <p className="mb-1.5 text-xs font-semibold text-muted">Next steps</p>

@@ -194,6 +194,9 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
     compliance: !!company?.modules?.compliance,
     complianceOpportunities: !!company?.modules?.complianceOpportunities,
     clientFields: (company?.clientFields ?? []) as ClientField[],
+    onTrack: String(Math.round((company?.kpiOnTrackLine ?? 0.9) * 100)),
+    atRisk: String(Math.round((company?.kpiAtRiskLine ?? 0.6) * 100)),
+    dealCreditMode: company?.dealCreditMode ?? "OWNER",
   });
   const { data: packs = [] } = useQuery<{ key: string; label: string; fields: ClientField[] }[]>({ queryKey: ["field-packs"], queryFn: () => fetcher("/companies/field-packs") });
   const setField = (i: number, patch: Partial<ClientField>) => setForm((f) => ({ ...f, clientFields: f.clientFields.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
@@ -207,7 +210,10 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
       const modules = { compliance: form.compliance, complianceOpportunities: form.compliance && form.complianceOpportunities };
       const clientFields = form.clientFields.map((f) => ({ ...f, options: f.type === "SELECT" ? (f.options ?? []) : [] }));
       if (company) {
-        await api.put(`/companies/${company.id}`, { name: form.name, slug: form.slug, color: form.color, order: form.order, isActive: form.isActive, modules, clientFields });
+        await api.put(`/companies/${company.id}`, {
+          name: form.name, slug: form.slug, color: form.color, order: form.order, isActive: form.isActive, modules, clientFields,
+          kpiOnTrackLine: Number(form.onTrack) / 100, kpiAtRiskLine: Number(form.atRisk) / 100, dealCreditMode: form.dealCreditMode,
+        });
       } else {
         await api.post("/companies", { name: form.name, slug: form.slug || undefined, color: form.color, order: form.order, modules, clientFields });
       }
@@ -290,6 +296,32 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
               Compliance opportunities (turn gaps and renewals into deals)
             </label>
           </div>
+
+          {company && (
+            <div className="rounded-xl border border-border p-3 space-y-2">
+              <p className="text-xs font-semibold text-foreground">KPI settings</p>
+              <p className="text-[11px] text-muted">A KPI is On track at or above the first line of where it should be by today, At risk down to the second, Behind below that.</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={labelCls}>On track from (%)</label>
+                  <input type="number" min="10" max="150" value={form.onTrack} onChange={(e) => setForm((f) => ({ ...f, onTrack: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>At risk from (%)</label>
+                  <input type="number" min="0" max="150" value={form.atRisk} onChange={(e) => setForm((f) => ({ ...f, atRisk: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Shared-deal credit</label>
+                  <select value={form.dealCreditMode} onChange={(e) => setForm((f) => ({ ...f, dealCreditMode: e.target.value as "OWNER" | "SHARED" | "SPLIT" }))} className={inputCls}>
+                    <option value="OWNER">Owner only</option>
+                    <option value="SHARED">Everyone on the deal, in full</option>
+                    <option value="SPLIT">Split equally</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted">Credit decides whose personal KPIs count a deal&apos;s wins and payments when several people work on it.</p>
+            </div>
+          )}
 
           <div className="rounded-xl border border-border p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">

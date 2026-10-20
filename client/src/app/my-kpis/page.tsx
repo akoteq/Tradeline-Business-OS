@@ -5,36 +5,29 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
   Plus, Trash2, ChevronLeft, ChevronDown, Search, Filter, ArrowUpDown, MoreVertical,
-  Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X,
+  Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X, Ban, AlarmClock, ListTodo,
 } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { isManager } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
 import {
-  KpiStatus, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
-  fmtKpiVal, PaceBar, AutoTag, KpiSheet,
+  KpiStatus, KpiRow, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
+  fmtKpiVal, PaceBar, AutoTag, Tag, StatusPill, WorkChip, KpiSheet, KpiDetailSheet, windowLabel, daysLeftIn,
+  type ParentOpt, fitsUnder, ShareHint, FREQ_WORD,
 } from "@/components/kpi";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Def = {
-  id: string; metric: string; unit: string; higherIsBetter: boolean; definition: string | null;
-  source: string; autoKey: string | null; assignedBy: string | null; ownerBdoId: string | null;
-};
-type Entry = { id: string; current: number | null; target: number | null; start: number | null; reviewStatus: string };
-type Row = {
-  definition: Def; entry: Entry | null;
-  current: number | null; target: number | null; attainment: number | null; expected: number | null;
-  status: KpiStatus; kind: "PERSONAL" | "STANDARD"; canManage: boolean;
-};
+type Row = KpiRow & { kind: "PERSONAL" | "STANDARD" | "ACCOUNTABLE"; canManage: boolean; canSetTarget: boolean };
 type MyKpis = { owner: { id: string; name: string; company: string }; rows: Row[] };
 type AutoKey = { key: string; label: string; unit: string; kind: string; personal: boolean };
 type Bdo = { id: string; name: string; company: string };
 type TeamRow = {
   person: { id: string; name: string; company: string; title: string | null };
-  counts: Partial<Record<KpiStatus, number>>; personalCount: number; tracked: number;
+  counts: Partial<Record<KpiStatus, number>>; personalCount: number; tracked: number; achievement: number | null;
+  kpis: { id: string; metric: string; unit: string; status: KpiStatus; current: number | null; target: number | null; attainment: number | null; expected: number | null }[];
+  work: { open: number; overdue: number; blocked: number };
 };
-type AuditLog = { id: string; action: string; field: string | null; previousValue: string | null; newValue: string | null; note: string | null; actorEmail: string | null; createdAt: string };
 
 const UNIT_CHOICES = [["COUNT", "Number"], ["CURRENCY", "GHS"], ["PERCENT", "%"]] as const;
 
@@ -62,14 +55,6 @@ function periodLabel(period: string) {
 function prevPeriod(period: string) {
   const [y, m] = period.split("-").map(Number);
   return monthKey(new Date(y, m - 2, 1));
-}
-
-// Days left in the selected month, or null when it isn't the current month.
-function daysLeft(period: string): number | null {
-  const now = new Date();
-  if (monthKey(now) !== period) return null;
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86_400_000));
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -127,13 +112,16 @@ function useEscape(active: boolean, close: () => void) {
 export default function MyKpisPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { byKey } = useCompanies();
+  const companyName = (k: string) => (k === "GROUP" ? "Group" : byKey[k]?.name ?? k);
   // Mirrors KPI_ASSIGNER_ROLES in server/src/routes/kpiFramework.ts: Group Owner or Business CEO.
   const canAssign = isManager(user);
   const hasProfile = !!user?.bdoId;
 
   const [period, setPeriod] = useState(() => monthKey(new Date()));
   const [view, setView] = useState<string>(""); // "" = default for the role
-  const [updateRow, setUpdateRow] = useState<Row | null>(null);
+  const [openRow, setOpenRow] = useState<Row | null>(null);
+  const [openKpi, setOpenKpi] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const current = view || (canAssign ? "team" : "me");
@@ -159,7 +147,11 @@ export default function MyKpisPage() {
     enabled: !!user && !isTeam && !unlinked,
   });
   const rows = data?.rows ?? [];
-  const invalidate = () => { qc.invalidateQueries({ queryKey: ["my-kpis"] }); qc.invalidateQueries({ queryKey: ["kpi-team"] }); };
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["my-kpis"] });
+    qc.invalidateQueries({ queryKey: ["kpi-team"] });
+    qc.invalidateQueries({ queryKey: ["kpi-detail"] });
+  };
 
   const quickAdd = useMutation({
     mutationFn: (r: Row) => api.post("/kpi-framework/quick-update", { definitionId: r.definition.id, period, delta: 1, bdoId: data?.owner.id }),
@@ -168,7 +160,6 @@ export default function MyKpisPage() {
   });
 
   const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
-  const left = daysLeft(period);
   const title = isTeam ? "Team KPIs" : viewingSomeoneElse && data ? `${data.owner.name}'s KPIs` : "My KPIs";
   const canCreate = !isTeam && !!data;
 
@@ -184,14 +175,9 @@ export default function MyKpisPage() {
           )}
           <h1 className="font-serif text-3xl md:text-4xl text-foreground">{title}</h1>
           <p className="text-sm text-muted mt-1.5">
-            {isTeam ? (
-              "Track targets, progress and team performance. Keep your team aligned and accountable."
-            ) : (
-              <>
-                {periodLabel(period)}{left != null && <> · {left} day{left === 1 ? "" : "s"} left</>}.{" "}
-                The tick on each bar is where you should be by today.
-              </>
-            )}
+            {isTeam
+              ? "Track targets, progress and the work behind them. People who need attention are listed first."
+              : <>{periodLabel(period)} for recurring KPIs; fixed-date KPIs show their whole window. The tick on each bar is where you should be by today.</>}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -250,14 +236,15 @@ export default function MyKpisPage() {
           ) : error ? (
             <Empty text={apiError(error, "Couldn't load KPIs.")} />
           ) : rows.length === 0 ? (
-            <Empty text="No KPIs yet. Create one: a title, a target, and you're done." action={<button onClick={() => setCreating(true)} className="mt-3 text-sm font-medium text-accent hover:underline">Create the first KPI</button>} />
+            <Empty text="No KPIs yet. Create one: a title, a target, and the company KPI it contributes to." action={<button onClick={() => setCreating(true)} className="mt-3 text-sm font-medium text-accent hover:underline">Create the first KPI</button>} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {rows.map((r) => (
                 <KpiCard
-                  key={r.definition.id}
+                  key={`${r.definition.id}-${r.kind}`}
                   row={r}
-                  onUpdate={() => setUpdateRow(r)}
+                  companyName={companyName}
+                  onOpen={() => setOpenRow(r)}
                   onPlusOne={() => quickAdd.mutate(r)}
                   busy={quickAdd.isPending}
                 />
@@ -267,12 +254,25 @@ export default function MyKpisPage() {
         </>
       )}
 
-      {updateRow && (
-        <UpdateSheet row={updateRow} period={period} bdoId={data?.owner.id ?? null} onClose={() => setUpdateRow(null)} onSaved={invalidate} />
+      {openRow && data && (
+        <KpiDetailSheet
+          kpiId={openRow.definition.id}
+          period={period}
+          bdoId={openRow.kind === "ACCOUNTABLE" ? null : data.owner.id}
+          onClose={() => setOpenRow(null)}
+          onChanged={invalidate}
+          onOpen={(id) => { setOpenRow(null); setOpenKpi(id); }}
+          companyName={companyName}
+          extra={(row) => <TargetAndManage row={row} meta={openRow} period={period} bdoId={data.owner.id} onSaved={invalidate} onRemoved={() => { setOpenRow(null); invalidate(); }} />}
+        />
+      )}
+      {openKpi && (
+        <KpiDetailSheet kpiId={openKpi} period={period} onClose={() => setOpenKpi(null)} onOpen={setOpenKpi} onChanged={invalidate} companyName={companyName} />
       )}
       {creating && data && (
         <CreateSheet
           ownerId={data.owner.id}
+          ownerCompany={data.owner.company}
           ownerName={viewingSomeoneElse ? data.owner.name : null}
           period={period}
           onClose={() => setCreating(false)}
@@ -284,27 +284,26 @@ export default function MyKpisPage() {
 }
 
 // ─── Team overview ──────────────────────────────────────────────────────────
-// Raw KPI statuses are folded into three buckets for the team view.
-// If your KpiStatus enum uses different names, tweak the patterns here.
-type Bucket = "ON_TRACK" | "AT_RISK" | "OVERDUE";
-function bucketOf(status: string): Bucket | null {
-  if (status === "NO_TARGET") return null;
-  if (/RISK|WARN|SLIP/.test(status)) return "AT_RISK";
-  if (/OVERDUE|BEHIND|MISS|OFF|LATE|FAIL/.test(status)) return "OVERDUE";
-  return "ON_TRACK";
-}
+// KPI statuses folded into three buckets for the team view. Not started, No target and Draft
+// KPIs aren't judged, so they don't count either way.
+type Bucket = "ON_TRACK" | "AT_RISK" | "BEHIND";
+const BUCKET: Partial<Record<KpiStatus, Bucket>> = {
+  ON_TRACK: "ON_TRACK", ACHIEVED: "ON_TRACK",
+  AT_RISK: "AT_RISK", STALE: "AT_RISK",
+  OFF_TRACK: "BEHIND", OVERDUE: "BEHIND",
+};
 
-type Tally = { onTrack: number; atRisk: number; overdue: number; total: number };
+type Tally = { onTrack: number; atRisk: number; behind: number; total: number };
 function tally(counts: TeamRow["counts"]): Tally {
-  const t: Tally = { onTrack: 0, atRisk: 0, overdue: 0, total: 0 };
+  const t: Tally = { onTrack: 0, atRisk: 0, behind: 0, total: 0 };
   for (const [status, n] of Object.entries(counts)) {
-    const b = bucketOf(status);
+    const b = BUCKET[status as KpiStatus];
     const c = Number(n) || 0;
     if (!b || !c) continue;
     t.total += c;
     if (b === "ON_TRACK") t.onTrack += c;
     else if (b === "AT_RISK") t.atRisk += c;
-    else t.overdue += c;
+    else t.behind += c;
   }
   return t;
 }
@@ -312,17 +311,22 @@ function tally(counts: TeamRow["counts"]): Tally {
 function sumTeam(rows: TeamRow[] | undefined): Tally {
   return (rows ?? []).reduce((a, r) => {
     const t = tally(r.counts);
-    a.onTrack += t.onTrack; a.atRisk += t.atRisk; a.overdue += t.overdue; a.total += t.total;
+    a.onTrack += t.onTrack; a.atRisk += t.atRisk; a.behind += t.behind; a.total += t.total;
     return a;
-  }, { onTrack: 0, atRisk: 0, overdue: 0, total: 0 } as Tally);
+  }, { onTrack: 0, atRisk: 0, behind: 0, total: 0 } as Tally);
 }
 
-const pctOf = (t: Tally) => (t.total ? Math.round((t.onTrack / t.total) * 100) : null);
+// Average progress across everyone with a target (the server works out each person's).
+function teamAchievement(rows: TeamRow[] | undefined) {
+  const scored = (rows ?? []).filter((t) => t.achievement != null);
+  return scored.length ? Math.round(scored.reduce((s, t) => s + (t.achievement ?? 0), 0) / scored.length) : null;
+}
+
 const relDelta = (cur: number, prev: number) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
 
 type PersonStatus = Bucket | "NONE";
 const PERSON_STATUS: Record<PersonStatus, { label: string; pill: string; bar: string; rank: number }> = {
-  OVERDUE: { label: "Overdue", pill: "bg-red-500/10 text-red-700", bar: "bg-red-500", rank: 0 },
+  BEHIND: { label: "Behind", pill: "bg-red-500/10 text-red-700", bar: "bg-red-500", rank: 0 },
   AT_RISK: { label: "At Risk", pill: "bg-orange-500/10 text-orange-700", bar: "bg-orange-500", rank: 1 },
   NONE: { label: "No targets", pill: "bg-foreground/5 text-foreground/60", bar: "bg-foreground/20", rank: 2 },
   ON_TRACK: { label: "On Track", pill: "bg-emerald-500/10 text-emerald-700", bar: "bg-emerald-500", rank: 3 },
@@ -330,8 +334,8 @@ const PERSON_STATUS: Record<PersonStatus, { label: string; pill: string; bar: st
 
 function personStatus(t: Tally, pct: number | null): PersonStatus {
   if (!t.total || pct == null) return "NONE";
-  if (t.overdue > 0 && t.overdue / t.total >= 0.5) return "OVERDUE";
-  if (t.overdue > 0 || pct < 50) return "AT_RISK";
+  if (t.behind > 0 && t.behind / t.total >= 0.5) return "BEHIND";
+  if (t.behind > 0 || t.atRisk > 0 || pct < 50) return "AT_RISK";
   return "ON_TRACK";
 }
 
@@ -340,7 +344,7 @@ type Person = { row: TeamRow; t: Tally; pct: number | null; status: PersonStatus
 type SortKey = "attention" | "performance" | "name";
 const SORT_LABEL: Record<SortKey, string> = { attention: "Needs attention", performance: "Performance", name: "Name" };
 const STATUS_FILTERS = [
-  ["ALL", "All"], ["ON_TRACK", "On track"], ["AT_RISK", "At risk"], ["OVERDUE", "Overdue"], ["NONE", "No targets"],
+  ["ALL", "All"], ["ON_TRACK", "On track"], ["AT_RISK", "At risk"], ["BEHIND", "Behind"], ["NONE", "No targets"],
 ] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number][0];
 
@@ -373,7 +377,7 @@ function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (i
   const people = useMemo<Person[]>(
     () => team.map((row) => {
       const t = tally(row.counts);
-      const pct = pctOf(t);
+      const pct = row.achievement;
       return { row, t, pct, status: personStatus(t, pct), companyName: byKey[row.person.company]?.name ?? row.person.company };
     }),
     [team, byKey],
@@ -385,6 +389,7 @@ function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (i
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [people]);
 
+  // The server lists people who need attention first; "Needs attention" keeps that order within a status.
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = people.filter((p) => {
@@ -397,7 +402,7 @@ function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (i
     return list.sort((a, b) => {
       if (sort === "name") return byName(a, b);
       if (sort === "performance") return (b.pct ?? -1) - (a.pct ?? -1) || byName(a, b);
-      return PERSON_STATUS[a.status].rank - PERSON_STATUS[b.status].rank || (a.pct ?? 101) - (b.pct ?? 101) || byName(a, b);
+      return PERSON_STATUS[a.status].rank - PERSON_STATUS[b.status].rank;
     });
   }, [people, query, statusFilter, companyFilter, sort]);
 
@@ -407,10 +412,11 @@ function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (i
 
   const cur = sumTeam(team);
   const old = prev ? sumTeam(prev) : null;
-  const curPct = pctOf(cur);
-  const oldPct = old ? pctOf(old) : null;
+  const curPct = teamAchievement(team);
+  const oldPct = prev ? teamAchievement(prev) : null;
   const activeFilters = (statusFilter !== "ALL" ? 1 : 0) + (companyFilter ? 1 : 0);
   const share = (n: number) => (cur.total ? Math.round((n / cur.total) * 100) : 0);
+  const work = team.reduce((w, t) => ({ open: w.open + t.work.open, overdue: w.overdue + t.work.overdue, blocked: w.blocked + t.work.blocked }), { open: 0, overdue: 0, blocked: 0 });
 
   return (
     <div className="space-y-3">
@@ -424,18 +430,18 @@ function TeamOverview({ period, onOpen, onAssign }: { period: string; onOpen: (i
         />
         <StatCard
           tone="green" icon={<Check size={20} />} label="On Track"
-          value={String(cur.onTrack)} sub={`of ${cur.total} KPIs`} bar={share(cur.onTrack)}
+          value={String(cur.onTrack)} sub={`of ${cur.total} KPIs · includes achieved`} bar={share(cur.onTrack)}
           delta={old ? relDelta(cur.onTrack, old.onTrack) : null} unit="%" goodWhenUp
         />
         <StatCard
           tone="orange" icon={<AlertTriangle size={20} />} label="At Risk"
-          value={String(cur.atRisk)} sub={`of ${cur.total} KPIs`} bar={share(cur.atRisk)}
+          value={String(cur.atRisk)} sub={`of ${cur.total} KPIs · includes stale`} bar={share(cur.atRisk)}
           delta={old ? relDelta(cur.atRisk, old.atRisk) : null} unit="%" goodWhenUp={false}
         />
         <StatCard
-          tone="red" icon={<AlertCircle size={20} />} label="Overdue"
-          value={String(cur.overdue)} sub={`of ${cur.total} KPIs`} bar={share(cur.overdue)}
-          delta={old ? relDelta(cur.overdue, old.overdue) : null} unit="%" goodWhenUp={false}
+          tone="red" icon={<AlertCircle size={20} />} label="Behind / Overdue"
+          value={String(cur.behind)} sub={`of ${cur.total} KPIs · ${work.overdue} task${work.overdue === 1 ? "" : "s"} overdue, ${work.blocked} blocked`} bar={share(cur.behind)}
+          delta={old ? relDelta(cur.behind, old.behind) : null} unit="%" goodWhenUp={false}
         />
       </div>
 
@@ -606,8 +612,9 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+// One card per person: how they're doing, their worst KPIs, and the work behind them.
 function PersonCard({ p, onOpen, onAssign }: { p: Person; onOpen: () => void; onAssign: () => void }) {
-  const { person } = p.row;
+  const { person, kpis, work } = p.row;
   const st = PERSON_STATUS[p.status];
   const subtitle = [person.title, p.companyName].filter(Boolean).join(" · ");
   const hasTargets = p.status !== "NONE";
@@ -642,18 +649,37 @@ function PersonCard({ p, onOpen, onAssign }: { p: Person; onOpen: () => void; on
         <div>
           <div className="text-sm font-medium text-foreground">{p.t.total} KPI{p.t.total === 1 ? "" : "s"}</div>
           <div className="text-[11px] text-muted tabular-nums">
-            {p.t.onTrack} on track · {p.t.atRisk} at risk · {p.t.overdue} overdue
+            {p.t.onTrack} on track · {p.t.atRisk} at risk · {p.t.behind} behind
           </div>
         </div>
       ) : (
-        <div className="text-xs text-muted">No targets set this month</div>
+        <div className="text-xs text-muted">{kpis.length ? "No targets set yet" : "No KPIs yet"}</div>
       )}
 
-      <div className="flex items-center gap-2 mt-auto">
-        <div className="flex-1 h-2 rounded-full bg-foreground/10 overflow-hidden">
-          <div className={clsx("h-full rounded-full transition-all", st.bar)} style={{ width: `${p.pct ?? 0}%` }} />
+      {kpis.length > 0 && (
+        <ul className="space-y-1.5">
+          {kpis.map((k) => (
+            <li key={k.id} className="text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-foreground">{k.metric}</span>
+                <span className="tabular-nums text-muted whitespace-nowrap">{fmtKpiVal(k.current, k.unit)} / {fmtKpiVal(k.target, k.unit)}</span>
+              </div>
+              <PaceBar attainment={k.attainment} expected={k.expected} status={k.status} className="h-1 mt-1" />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex items-center gap-2 mt-auto pt-1">
+        <div className="flex-1 h-2 rounded-full bg-foreground/10 overflow-hidden" title="Average progress across their KPIs with a target">
+          <div className={clsx("h-full rounded-full transition-all", st.bar)} style={{ width: `${Math.min(100, p.pct ?? 0)}%` }} />
         </div>
         <span className="text-xs tabular-nums text-muted w-9 text-right">{p.pct != null ? `${p.pct}%` : "—"}</span>
+      </div>
+      <div className="flex items-center gap-3 text-[11px] text-muted">
+        <span className="inline-flex items-center gap-1"><ListTodo size={12} />{work.open} open</span>
+        {work.overdue > 0 && <span className="inline-flex items-center gap-1 text-red-700"><AlarmClock size={12} />{work.overdue} overdue</span>}
+        {work.blocked > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><Ban size={12} />{work.blocked} blocked</span>}
       </div>
     </div>
   );
@@ -693,25 +719,27 @@ function Empty({ text, action }: { text: string; action?: React.ReactNode }) {
   );
 }
 
-function KpiCard({ row, onUpdate, onPlusOne, busy }: { row: Row; onUpdate: () => void; onPlusOne: () => void; busy: boolean }) {
+function KpiCard({ row, onOpen, onPlusOne, busy, companyName }: { row: Row; onOpen: () => void; onPlusOne: () => void; busy: boolean; companyName: (k: string) => string }) {
   const { definition: d, current, target, status } = row;
   const isAuto = d.source === "AUTO";
   const locked = row.entry?.reviewStatus === "LOCKED";
+  const left = daysLeftIn(row.window);
   return (
     <div className="rounded-xl border border-border bg-surface p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-medium text-foreground leading-snug">{d.metric}</div>
+        <button onClick={onOpen} className="min-w-0 text-left group">
+          <div className="font-medium text-foreground leading-snug group-hover:text-accent">{d.metric}</div>
           <div className="flex flex-wrap items-center gap-1 mt-1">
             {isAuto && <AutoTag />}
             {d.assignedBy && <Tag>Assigned</Tag>}
             {row.kind === "STANDARD" && <Tag>Scorecard</Tag>}
+            {row.kind === "ACCOUNTABLE" && <Tag title="A company KPI you are accountable for">Owner</Tag>}
             {!d.higherIsBetter && <Tag>Decrease</Tag>}
+            {d.state === "DRAFT" && <Tag>Draft</Tag>}
           </div>
-        </div>
-        <span title={KPI_STATUS_HINT[status]} className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${KPI_STATUS_STYLE[status]}`}>
-          {KPI_STATUS_LABEL[status]}
-        </span>
+          {row.parent && <div className="text-[11px] text-muted mt-1 truncate">↳ part of {row.parent.metric} ({companyName(row.parent.company)})</div>}
+        </button>
+        <StatusPill status={status} className="shrink-0" />
       </div>
 
       <div className="flex items-baseline gap-1.5">
@@ -724,142 +752,68 @@ function KpiCard({ row, onUpdate, onPlusOne, busy }: { row: Row; onUpdate: () =>
         <span className="text-xs tabular-nums text-muted w-9 text-right">{row.attainment != null ? `${row.attainment}%` : "—"}</span>
       </div>
 
+      <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+        <span>{windowLabel(row.window, d.frequency)}{left != null && ` · ${left} day${left === 1 ? "" : "s"} left`}</span>
+        <WorkChip work={row.work} />
+      </div>
+
       <div className="flex items-center gap-2 mt-auto pt-1">
-        {!isAuto && d.unit === "COUNT" && !locked && (
+        {!isAuto && row.aggregation === "SUM" && d.unit === "COUNT" && !locked && d.state !== "DRAFT" && (
           <button onClick={onPlusOne} disabled={busy} className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50">
             +1
           </button>
         )}
-        <button onClick={onUpdate} className="flex-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/5 text-foreground hover:bg-primary/10 transition-colors">
-          {isAuto ? "Set target" : "Update"}
+        <button onClick={onOpen} className="flex-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/5 text-foreground hover:bg-primary/10 transition-colors">
+          {isAuto ? "Details" : "Log result"}
         </button>
       </div>
     </div>
   );
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="text-[9px] font-semibold uppercase tracking-wider bg-foreground/5 text-foreground/60 px-1.5 py-0.5 rounded">{children}</span>;
-}
-
-// ─── Update: set value / add, target, start, note ───────────────────────────
-function UpdateSheet({ row, period, bdoId, onClose, onSaved }: { row: Row; period: string; bdoId: string | null; onClose: () => void; onSaved: () => void }) {
-  const d = row.definition;
-  const isAuto = d.source === "AUTO";
-  const locked = row.entry?.reviewStatus === "LOCKED";
-  const [value, setValue] = useState(row.current != null && !isAuto ? String(row.current) : "");
+// Inside the detail sheet: the target (for whoever manages the KPI) and removing a personal KPI.
+function TargetAndManage({ row, meta, period, bdoId, onSaved, onRemoved }: { row: KpiRow; meta: Row; period: string; bdoId: string; onSaved: () => void; onRemoved: () => void }) {
   const [target, setTarget] = useState(row.target != null ? String(row.target) : "");
-  const [start, setStart] = useState(row.entry?.start != null ? String(row.entry.start) : "");
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  const { data: audit = [] } = useQuery<AuditLog[]>({
-    queryKey: ["kpi-audit", row.entry?.id],
-    queryFn: () => fetcher(`/kpi-framework/entries/${row.entry!.id}/audit`),
-    enabled: !!row.entry,
-  });
-
+  if (!meta.canSetTarget && !meta.canManage) return null;
   const save = async () => {
     setBusy(true); setError("");
-    const body: Record<string, unknown> = { definitionId: d.id, period, bdoId, note: note || undefined, target, start };
-    if (!isAuto && value !== "" && Number(value) !== row.current) body.value = value;
     try {
-      await api.post("/kpi-framework/quick-update", body);
+      await api.post("/kpi-framework/quick-update", { definitionId: row.definition.id, period, target, bdoId: meta.kind === "ACCOUNTABLE" ? undefined : bdoId });
       onSaved();
-      onClose();
-    } catch (err) {
-      setError(apiError(err, "Failed to save."));
-    } finally { setBusy(false); }
+    } catch (err) { setError(apiError(err, "Couldn't save the target.")); } finally { setBusy(false); }
   };
-
   const remove = async () => {
-    if (!window.confirm(`Remove "${d.metric}"? Its history is kept.`)) return;
-    setBusy(true); setError("");
-    try {
-      await api.delete(`/kpi-framework/my/${d.id}`);
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(apiError(err, "Failed to remove."));
-      setBusy(false);
-    }
+    if (!window.confirm(`Remove "${row.definition.metric}"? Its history is kept.`)) return;
+    try { await api.delete(`/kpi-framework/my/${row.definition.id}`); onRemoved(); }
+    catch (err) { setError(apiError(err, "Couldn't remove it.")); }
   };
-
   return (
-    <KpiSheet
-      title={<>{d.metric}{isAuto && <AutoTag />}</>}
-      subtitle={`${periodLabel(period)} · ${KPI_STATUS_LABEL[row.status]}`}
-      onClose={onClose}
-      footer={
-        <>
-          {row.canManage && (
-            <button onClick={remove} disabled={busy} className="mr-auto p-2 rounded-lg text-muted hover:text-red-600 hover:bg-red-500/10 transition-colors" title="Remove KPI">
-              <Trash2 size={16} />
-            </button>
-          )}
-          <button onClick={onClose} className={btnSecondary}>Cancel</button>
-          <button onClick={save} disabled={busy || locked} className={btnPrimary}>{busy ? "Saving…" : "Save"}</button>
-        </>
-      }
-    >
-      {d.definition && <p className="text-xs text-muted bg-background border border-border rounded-lg p-3 leading-relaxed">{d.definition}</p>}
-      {locked && <p className="text-xs text-foreground bg-foreground/5 rounded-lg px-3 py-2">This scorecard is locked. An admin must reopen it before values can change.</p>}
-
-      {isAuto ? (
-        <p className="text-[11px] text-sky-700 bg-sky-500/5 rounded-lg px-3 py-2">
-          Current value <strong>{fmtKpiVal(row.current, d.unit)}</strong> is calculated live from your records. Just set the target.
-        </p>
-      ) : (
-        <div>
-          <Label>Current value</Label>
-          <input type="number" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} disabled={locked} className={inputClass + " text-lg tabular-nums"} autoFocus />
+    <div className="rounded-xl border border-border p-3 space-y-2">
+      {meta.canSetTarget && (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Label>{row.window.windowed ? "Target for the window" : `Target for ${windowLabel(row.window, row.definition.frequency)}`}</Label>
+            <input type="number" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass} />
+          </div>
+          <button onClick={save} disabled={busy} className={btnSecondary}>Save target</button>
         </div>
       )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Target</Label>
-          <input type="number" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} disabled={locked} className={inputClass} />
-        </div>
-        <div>
-          <Label>Start value <span className="text-muted/60">(optional)</span></Label>
-          <input type="number" inputMode="decimal" value={start} onChange={(e) => setStart(e.target.value)} disabled={locked} className={inputClass} />
-        </div>
-      </div>
-
-      {!isAuto && (
-        <div>
-          <Label>Note <span className="text-muted/60">(optional)</span></Label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} placeholder="e.g. 3 calls with Kumasi SMEs" maxLength={140} />
-        </div>
+      {meta.canManage && meta.kind === "PERSONAL" && (
+        <button onClick={remove} className="inline-flex items-center gap-1 text-xs text-muted hover:text-red-600"><Trash2 size={12} /> Remove this KPI</button>
       )}
-
-      <ErrorNote message={error} />
-
-      {audit.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-muted mb-2">History</p>
-          <ul className="space-y-1.5 max-h-36 overflow-y-auto border-l border-border pl-3">
-            {audit.slice(0, 12).map((l) => (
-              <li key={l.id} className="text-[11px] text-muted">
-                <span className="text-muted/60 mr-2">{new Date(l.createdAt).toLocaleDateString()}</span>
-                {l.field ? <>{l.field}: {l.previousValue || "—"} → <span className="text-foreground">{l.newValue || "—"}</span></> : l.action.replace(/_/g, " ")}
-                {l.note && <span className="italic"> · {l.note}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </KpiSheet>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
   );
 }
 
-// ─── Create: title, target, unit, direction, source ─────────────────────────
-function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
-  ownerId: string; ownerName: string | null; period: string; onClose: () => void; onSaved: () => void;
+// ─── Create: title, target, what it's part of, and the window ───────────────
+function CreateSheet({ ownerId, ownerCompany, ownerName, period, onClose, onSaved }: {
+  ownerId: string; ownerCompany: string; ownerName: string | null; period: string; onClose: () => void; onSaved: () => void;
 }) {
   const { data: autoKeys = [] } = useQuery<AutoKey[]>({ queryKey: ["kpi-auto-keys"], queryFn: () => fetcher("/kpi-framework/auto-keys") });
+  const { data: parents = [] } = useQuery<ParentOpt[]>({ queryKey: ["kpi-parents", ownerCompany, "", period], queryFn: () => fetcher(`/kpi-framework/parents?company=${ownerCompany}&period=${period}`) });
   const suggestions = autoKeys.filter((k) => k.personal && k.kind === "PERIOD");
   const otherFeeds = autoKeys.filter((k) => k.personal && k.kind !== "PERIOD");
 
@@ -869,9 +823,15 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
   const [direction, setDirection] = useState<"UP" | "DOWN">("UP");
   const [start, setStart] = useState("");
   const [autoKey, setAutoKey] = useState("");
+  const [parentId, setParentId] = useState("");
+  const [frequency, setFrequency] = useState<"WEEKLY" | "MONTHLY" | "QUARTERLY" | "ANNUAL">("MONTHLY");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Same unit, and tracked as often as this KPI or less often, so results roll up.
+  const parentChoices = parents.filter((p) => p.unit === unit && fitsUnder(p, frequency));
+  const parent = parents.find((p) => p.id === parentId);
+  const pickFrequency = (f: typeof frequency) => { setFrequency(f); if (parent && !fitsUnder(parent, f)) setParentId(""); };
   const pickFeed = (key: string) => {
     const k = autoKeys.find((a) => a.key === key);
     setAutoKey(key);
@@ -895,6 +855,8 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
         source: autoKey ? "AUTO" : "MANUAL",
         autoKey: autoKey || null,
         ownerBdoId: ownerId,
+        parentId: parentId || null,
+        frequency,
       });
       onSaved();
     } catch (err) {
@@ -905,7 +867,7 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
   return (
     <KpiSheet
       title={ownerName ? `Assign a KPI to ${ownerName}` : "New KPI"}
-      subtitle={`Tracked for ${periodLabel(period)}`}
+      subtitle="Your share of a company or Group goal, and how you'll be measured."
       onClose={onClose}
       footer={
         <>
@@ -937,7 +899,7 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
 
       <div>
         <Label>Title *</Label>
-        <input value={metric} onChange={(e) => setMetric(e.target.value)} className={inputClass} placeholder="e.g. Make 40 calls" autoFocus />
+        <input value={metric} onChange={(e) => setMetric(e.target.value)} className={inputClass} placeholder="e.g. Revenue collected" autoFocus />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -947,8 +909,23 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
         </div>
         <div>
           <Label>Unit</Label>
-          <Segmented value={unit as "COUNT"} options={UNIT_CHOICES} onChange={(v) => setUnit(v)} />
+          <Segmented value={unit as "COUNT"} options={UNIT_CHOICES} onChange={(v) => { setUnit(v); setParentId(""); }} />
         </div>
+      </div>
+
+      <div>
+        <Label>Part of <span className="text-muted/60">(the company or Group KPI this counts toward)</span></Label>
+        <SelectField value={parentId} onChange={(e) => setParentId(e.target.value)}>
+          <option value="">— Not part of a bigger KPI —</option>
+          {parentChoices.map((p) => <option key={p.id} value={p.id}>{p.company === "GROUP" ? "Group" : p.company} · {p.metric}{p.targetValue != null ? ` (${p.targetValue.toLocaleString()}${p.startDate && p.endDate ? "" : ` a ${FREQ_WORD[p.frequency] ?? "period"}`})` : ""}</option>)}
+        </SelectField>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Every</Label>
+        <Segmented value={frequency} options={[["WEEKLY", "Week"], ["MONTHLY", "Month"], ["QUARTERLY", "Quarter"], ["ANNUAL", "Year"]] as const} onChange={pickFrequency} />
+        <p className="text-[11px] text-muted">The target repeats each {FREQ_WORD[frequency]} until it is changed.</p>
+        <ShareHint parent={parent} frequency={frequency} onUse={(v) => setTarget(String(v))} />
       </div>
 
       {!autoKey && (
@@ -969,10 +946,10 @@ function CreateSheet({ ownerId, ownerName, period, onClose, onSaved }: {
       {otherFeeds.length > 0 && (
         <div>
           <Label>Or track a running total</Label>
-          <select value={suggestions.some((k) => k.key === autoKey) ? "" : autoKey} onChange={(e) => (e.target.value ? pickFeed(e.target.value) : setAutoKey(""))} className={selectClass + " w-full"}>
-            <option value="">Manual — I&apos;ll update it myself</option>
+          <SelectField value={suggestions.some((k) => k.key === autoKey) ? "" : autoKey} onChange={(e) => (e.target.value ? pickFeed(e.target.value) : setAutoKey(""))}>
+            <option value="">Manual — I&apos;ll log results myself</option>
             {otherFeeds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
-          </select>
+          </SelectField>
         </div>
       )}
 
