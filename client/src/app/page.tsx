@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,17 +10,19 @@ import { isGroupOwner, isBusinessCeo } from "@/lib/auth";
 import { useCompanies, companyHref } from "@/lib/companies";
 import {
   AlertTriangle,
+  Bell,
   Building2,
+  Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
   Flag,
-  Gauge,
   Layers,
   ShieldAlert,
   Target,
   TrendingDown,
   TrendingUp,
+  User,
   Users,
   Wallet,
   type LucideIcon,
@@ -30,15 +32,10 @@ import { BrandLoader } from "@/components/BrandLoader";
 import { AiSummaryCard } from "@/components/AiSummary";
 
 /**
- * TYPE SYSTEM — this file uses the two faces wired in app/layout.tsx and
- * mapped in globals.css: Manrope (--font-sans) is the default on <body>,
- * so headline/label/tab text needs no extra class — weight and tracking
- * do the "display" work. Instrument Serif (--font-serif) ships at 400
- * only and is a decorative display face, so it's spent in exactly one
- * place: the hero deadline count in the masthead. Every other numeral —
- * stat figures, table indices, tab counts — is a number someone is
- * scanning fast to catch a problem, so it stays sans/bold/tabular for
- * legibility. One flourish, not four.
+ * TYPE SYSTEM — Manrope (--font-sans) everywhere. Headline numeral, stat
+ * figures, table indices and tab counts are all sans/bold/tabular: these are
+ * numbers someone scans fast to catch a problem, so legibility wins over
+ * decoration. Accent color (orange) carries the emphasis, not a second face.
  */
 
 const fadeUp = {
@@ -50,16 +47,6 @@ const tabFade = {
   hidden: { opacity: 0, y: 8 },
   visible: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -8 },
-};
-
-const tickStagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.045, delayChildren: 0.15 } },
-};
-
-const tick = {
-  hidden: { scaleY: 0, opacity: 0 },
-  visible: { scaleY: 1, opacity: 1 },
 };
 
 // ---- Types ------------------------------------------------------------
@@ -126,6 +113,10 @@ type Exec = {
     deals: number; active: number; closedWon: number;
     potential: number; received: number; outstanding: number;
     netProfit?: number; burnRate?: number; investment?: number;
+    /** Daily/weekly count of active deals, oldest → newest. Drives the
+     * sparkline on the Active card; the sparkline stays hidden until the
+     * API sends this. */
+    activeTrend?: number[];
   };
   companies: CoSummary[];
   kpiHealth: { onTrack: number; atRisk: number; offTrack: number; noTarget: number };
@@ -134,24 +125,55 @@ type Exec = {
   leads?: LeadsSummary;
 };
 
-const fmt = (n: number) =>
-  (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 });
-const fmtCompact = (n: number) =>
-  (n ?? 0).toLocaleString("en-GH", { style: "currency", currency: "GHS", notation: "compact", maximumFractionDigits: 1 });
-const fmtSigned = (n: number) =>
-  `${n > 0 ? "+" : ""}${fmtCompact(n)}`;
+// ---- Formatting -------------------------------------------------------------
+// "GHS 1.6M" / "GHS 19,346,099" — plain code prefix, no ₵ glyph, so numbers
+// read the same here as in the AI summary text.
+
+const compactNumber = new Intl.NumberFormat("en-GH", { notation: "compact", maximumFractionDigits: 1 });
+const fullNumber = new Intl.NumberFormat("en-GH", { maximumFractionDigits: 0 });
+
+const fmt = (n: number) => {
+  const v = n ?? 0;
+  return `${v < 0 ? "-" : ""}GHS ${fullNumber.format(Math.abs(v))}`;
+};
+const fmtCompact = (n: number) => {
+  const v = n ?? 0;
+  return `${v < 0 ? "-" : ""}GHS ${compactNumber.format(Math.abs(v))}`;
+};
+const fmtSigned = (n: number) => `${n > 0 ? "+" : ""}${fmtCompact(n)}`;
 
 const URGENCY_RANK: Record<Urgency, number> = { overdue: 0, today: 1, "1day": 2, "3days": 3, week: 4 };
 const URGENCY_URGENT: Urgency[] = ["overdue", "today", "1day"];
 
+// ---- Copy helpers -------------------------------------------------------------
+// Durations read the way a person would say them: under a month it's days,
+// from 30 days it's months ("1 month", "8 months"), from a year it's years.
+// "250d overdue" is a number to decode; "8 months overdue" is a sentence.
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function formatSpan(days: number) {
+  const d = Math.max(0, Math.round(Math.abs(days)));
+  if (d < 30) return plural(d, "day");
+  if (d < 365) return plural(Math.floor(d / 30), "month");
+  return plural(Math.floor(d / 365), "year");
+}
+
+const silentLabel = (days: number) => `Silent over ${formatSpan(days)}`;
+
 function urgencyLabel(u: Urgency, daysUntil: number) {
   switch (u) {
-    case "overdue": return `${Math.abs(daysUntil)}d overdue`;
+    case "overdue": return `${formatSpan(daysUntil)} overdue`;
     case "today": return "Due today";
-    case "1day": return "1 day left";
-    default: return `${daysUntil}d left`;
+    case "1day": return "Due tomorrow";
+    default: return `${formatSpan(daysUntil)} left`;
   }
 }
+
+/** Dev-only sample series so the Active sparkline's design can be reviewed
+ * (open the page with ?previewTrend) before the API ships real history.
+ * Never used in production builds. */
+const PREVIEW_TREND = [52, 54, 53, 57, 56, 60, 59, 63, 62, 66, 68];
 
 const FLAG_LABEL: Record<FinancialFlag["kind"], string> = {
   profit_decline: "Profit decline",
@@ -169,10 +191,13 @@ function deadlineLink(d: Deadline) {
   return d.bdo?.name ? `${PIPELINE_HREF.TRADELINE}?bdo=${encodeURIComponent(d.bdo.name)}` : PIPELINE_HREF.TRADELINE ?? "/tasks";
 }
 
+type StaleGroup = { type: StaleDeal["type"]; company: string; bdoName: string | null; count: number; maxDays: number };
+type CompanyMap = ReturnType<typeof useCompanies>["byKey"];
+
 /** Collapse individual stale deals into one line per (company, owner) — the signal
  * that matters is "this book has gone quiet," not each business name in it. */
-function groupStale(stale: StaleDeal[]) {
-  const groups = new Map<string, { type: StaleDeal["type"]; company: string; bdoName: string | null; count: number; maxDays: number }>();
+function groupStale(stale: StaleDeal[]): StaleGroup[] {
+  const groups = new Map<string, StaleGroup>();
   for (const d of stale) {
     const company = d.company ?? d.type;
     const key = `${company}|${d.bdo?.name ?? "—"}`;
@@ -185,6 +210,13 @@ function groupStale(stale: StaleDeal[]) {
     }
   }
   return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+}
+
+function staleHref(g: StaleGroup, byKey: CompanyMap) {
+  const co = byKey[g.company];
+  const base = co ? companyHref(co) : PIPELINE_HREF[g.type];
+  if (!base) return undefined;
+  return g.bdoName ? `${base}?bdo=${encodeURIComponent(g.bdoName)}` : base;
 }
 
 const RISK_WORDS = ["risk", "overdue", "off"];
@@ -258,11 +290,6 @@ function todayStamp() {
   return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-// ---- Ledger strip — signature element ------------------------------------
-// "Seven Companies, One Ledger." One tick per company, color-coded by
-// health, drawn in on load. This is the whole group's state at a glance,
-// living right next to the headline instead of buried behind a tab.
-
 function healthTickClass(health: CoSummary["health"] | undefined, dormant: boolean) {
   if (dormant) return "bg-border";
   switch (health) {
@@ -271,40 +298,6 @@ function healthTickClass(health: CoSummary["health"] | undefined, dormant: boole
     case "on-track": return "bg-foreground/70";
     default: return "bg-foreground/35";
   }
-}
-
-function LedgerStrip({ companies }: { companies: CoSummary[] }) {
-  if (companies.length === 0) return null;
-  const flagged = companies.filter((c) => c.health === "off-track" || c.health === "at-risk").length;
-  return (
-    <div className="flex flex-col items-end gap-1.5">
-      <motion.div
-        initial="hidden"
-        animate="visible"
-        variants={tickStagger}
-        className="flex items-stretch gap-[3px]"
-        role="img"
-        aria-label={`Health across ${companies.length} companies`}
-      >
-        {companies.map((c) => {
-          const dormant = c.active === 0 && c.revenue.received === 0;
-          return (
-            <motion.span
-              key={c.key}
-              variants={tick}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              style={{ transformOrigin: "bottom" }}
-              title={c.name}
-              className={`h-9 w-1 rounded-full ${healthTickClass(c.health, dormant)}`}
-            />
-          );
-        })}
-      </motion.div>
-      <span className="text-[11px] uppercase tracking-[0.1em] text-muted">
-        {companies.length} companies{flagged > 0 ? ` · ${flagged} need attention` : ""}
-      </span>
-    </div>
-  );
 }
 
 // ---- Quick nav (tab switcher, not a scroll anchor) -------------------------
@@ -321,8 +314,8 @@ function QuickNav({
   onSelect: (id: string) => void;
 }) {
   return (
-    <nav aria-label="Dashboard sections" className="sticky top-0 z-20 -mx-5 border-b border-border bg-background/85 px-5 backdrop-blur-md md:-mx-8 md:px-8">
-      <ul className="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Dashboard sections" className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
+      <ul className="flex gap-7 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((item) => {
           const active = item.id === activeId;
           return (
@@ -331,11 +324,13 @@ function QuickNav({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 py-3 text-xs font-semibold tracking-tight transition-colors ${
-                  active ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"
+                className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 py-3.5 text-sm font-medium tracking-tight transition-colors ${
+                  active
+                    ? "border-accent font-semibold text-foreground"
+                    : "border-transparent text-muted hover:text-foreground"
                 }`}
               >
-                <item.icon size={13} className={active ? "text-accent" : undefined} />
+                <item.icon size={16} strokeWidth={2} className={active ? "text-accent" : undefined} />
                 {item.label}
                 {typeof item.count === "number" && (
                   <span className={`tabular-nums ${active ? "text-accent" : "text-muted/70"}`}>{item.count}</span>
@@ -350,46 +345,59 @@ function QuickNav({
 }
 
 // ---- Attention glance — the dense view that fills the center ---------------
-// Feedback: too much empty beige between the headline and the actual
-// information. This puts the two things a Group Owner actually needs —
-// what's overdue, what's gone quiet — right on Overview, at a glance
-// density, instead of hiding them a tab away.
+// The two things a Group Owner actually needs — what's overdue, what's gone
+// quiet — sit right on Overview as two ruled columns, each row a link.
+
+function GlanceLabel({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+      <Icon size={14} strokeWidth={2} />
+      {children}
+    </p>
+  );
+}
 
 function AttentionGlance({
   deadlines,
   staleGroups,
   flags,
   breakdown,
+  byKey,
 }: {
   deadlines: Deadline[];
-  staleGroups: ReturnType<typeof groupStale>;
+  staleGroups: StaleGroup[];
   flags: FinancialFlag[];
   breakdown: string;
+  byKey: CompanyMap;
 }) {
   const topDeadlines = deadlines.slice(0, 3);
   const topStale = staleGroups.slice(0, 3);
   if (topDeadlines.length === 0 && topStale.length === 0 && flags.length === 0) return null;
 
+  const rowClass = "group flex items-center gap-3 py-3 text-sm transition-colors hover:text-accent";
+
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-border bg-surface px-6 py-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">At a glance</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">At a glance</h2>
         {breakdown && <span className="text-xs text-muted">{breakdown}</span>}
       </div>
-      <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+
+      <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2">
         {topDeadlines.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Deadlines</p>
-            <ul className="space-y-1.5">
+          <div className="sm:pr-8">
+            <GlanceLabel icon={Clock}>Deadlines</GlanceLabel>
+            <ul className="divide-y divide-border/70">
               {topDeadlines.map((d) => {
                 const urgent = URGENCY_URGENT.includes(d.urgency);
                 return (
                   <li key={d.id}>
-                    <Link href={deadlineLink(d)} className="flex items-baseline justify-between gap-3 text-sm hover:text-accent">
-                      <span className="min-w-0 truncate text-foreground">{d.businessName}</span>
+                    <Link href={deadlineLink(d)} className={rowClass}>
+                      <span className="min-w-0 flex-1 truncate text-foreground group-hover:text-accent">{d.businessName}</span>
                       <span className={`shrink-0 tabular-nums ${urgent ? "font-semibold text-accent" : "text-muted"}`}>
                         {urgencyLabel(d.urgency, d.daysUntil)}
                       </span>
+                      <ChevronRight size={14} className="shrink-0 text-muted" />
                     </Link>
                   </li>
                 );
@@ -397,27 +405,42 @@ function AttentionGlance({
             </ul>
           </div>
         )}
+
         {topStale.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Deals going quiet</p>
-            <ul className="space-y-1.5">
-              {topStale.map((g, i) => (
-                <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-foreground">
-                    {g.type} <span className="text-muted">· {g.count} deal{g.count === 1 ? "" : "s"}</span>
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums text-accent">{g.maxDays}d+ silent</span>
-                </li>
-              ))}
+          <div className={topDeadlines.length > 0 ? "sm:border-l sm:border-border/70 sm:pl-8" : ""}>
+            <GlanceLabel icon={Bell}>Deals going quiet</GlanceLabel>
+            <ul className="divide-y divide-border/70">
+              {topStale.map((g, i) => {
+                const href = staleHref(g, byKey);
+                const content = (
+                  <>
+                    <span className="min-w-0 flex-1 truncate text-foreground group-hover:text-accent">
+                      {g.type} <span className="text-muted">· {g.count} deal{g.count === 1 ? "" : "s"}</span>
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums text-accent">{silentLabel(g.maxDays)}</span>
+                    <ChevronRight size={14} className="shrink-0 text-muted" />
+                  </>
+                );
+                return (
+                  <li key={i}>
+                    {href ? (
+                      <Link href={href} className={rowClass}>{content}</Link>
+                    ) : (
+                      <div className={rowClass}>{content}</div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
+
         {flags.length > 0 && (
-          <div className="sm:col-span-2">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Financial signals</p>
-            <ul className="space-y-1.5">
+          <div className="border-t border-border/70 pt-5 sm:col-span-2">
+            <GlanceLabel icon={Flag}>Financial signals</GlanceLabel>
+            <ul className="divide-y divide-border/70">
               {flags.slice(0, 3).map((f) => (
-                <li key={f.id} className="flex items-baseline justify-between gap-3 text-sm">
+                <li key={f.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                   <span className="min-w-0 truncate text-foreground">{f.businessName}</span>
                   <span className="shrink-0 font-semibold text-accent">{FLAG_LABEL[f.kind]}</span>
                 </li>
@@ -480,9 +503,9 @@ function CEODashboard() {
   // Attention section header never imply different totals.
   const attentionCount = deadlines.length + stale.length + financialFlags.length;
   const attentionBreakdown = [
-    deadlines.length > 0 ? `${deadlines.length} deadline${deadlines.length === 1 ? "" : "s"}` : null,
-    stale.length > 0 ? `${stale.length} silent deal${stale.length === 1 ? "" : "s"}` : null,
-    financialFlags.length > 0 ? `${financialFlags.length} financial flag${financialFlags.length === 1 ? "" : "s"}` : null,
+    deadlines.length > 0 ? plural(deadlines.length, "deadline") : null,
+    stale.length > 0 ? `${plural(stale.length, "deal")} gone quiet` : null,
+    financialFlags.length > 0 ? plural(financialFlags.length, "financial flag") : null,
   ].filter(Boolean).join(" · ");
 
   const activeCompanies = useMemo(
@@ -502,7 +525,7 @@ function CEODashboard() {
     () =>
       [
         { id: "overview", label: "Overview", icon: Layers },
-        { id: "team-performance", label: "Team", icon: Gauge },
+        { id: "team-performance", label: "Team", icon: User },
         hasAttention ? { id: "attention", label: "Attention", icon: AlertTriangle, count: attentionCount } : null,
         { id: "company-health", label: "Companies", icon: Building2 },
         { id: "deal-ledgers", label: "Deals", icon: Target },
@@ -513,15 +536,21 @@ function CEODashboard() {
   if (exec.isLoading) return <BrandLoader fullScreen={false} label="Loading dashboard" />;
   if (exec.isError || !data)
     return (
-      <div className="mx-auto max-w-md p-12 text-center">
+      <div className="mx-auto max-w-md p-3 text-center">
         <p className="text-xl font-semibold text-foreground">Couldn&apos;t load the dashboard</p>
         <p className="mt-2 text-sm text-muted">Make sure the server is reachable, then refresh.</p>
       </div>
     );
 
+  const previewTrend =
+    process.env.NODE_ENV !== "production" &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("previewTrend");
+  const activeTrend = data.totals.activeTrend ?? (previewTrend ? PREVIEW_TREND : undefined);
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl space-y-8 px-5 py-10 md:px-8 md:py-14">
+      <div className="mx-auto max-w-5xl space-y-7 px-5 py-10 md:px-8 md:py-12">
         {/* ---- Masthead --------------------------------------------------- */}
         <motion.header
           initial="hidden"
@@ -530,33 +559,37 @@ function CEODashboard() {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-4"
         >
-          <div className="flex items-end justify-between gap-6">
-            <p className="text-[11px] uppercase tracking-[0.15em] text-muted tabular-nums">{todayStamp()}</p>
-            <LedgerStrip companies={data.companies} />
+          <div className="flex items-center justify-between gap-6 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+            <span className="flex items-center gap-2.5 tabular-nums">
+              <Calendar size={15} strokeWidth={1.75} />
+              {todayStamp()}
+            </span>
+            <span className="flex items-center gap-2.5">
+              <Building2 size={15} strokeWidth={1.75} />
+              {data.companies.length} companies
+            </span>
           </div>
 
-          <h1 className="text-[2rem] font-semibold leading-[1.15] tracking-tight text-foreground md:text-[2.75rem]">
+          <h1 className="text-[2.25rem] font-bold leading-[1.1] tracking-tight text-foreground md:text-[3.25rem]">
             {urgentCount > 0 ? (
               <>
-                <span className="font-serif italic text-accent">{urgentCount}</span> deadline{urgentCount === 1 ? "" : "s"} overdue or due today
+                <span className="text-accent">{urgentCount}</span> deadline{urgentCount === 1 ? "" : "s"} overdue or due today
               </>
             ) : deadlines.length > 0 ? (
               <>
-                <span className="font-serif italic text-accent">{deadlines.length}</span> deadline{deadlines.length === 1 ? "" : "s"} this week
+                <span className="text-accent">{deadlines.length}</span> deadline{deadlines.length === 1 ? "" : "s"} this week
               </>
             ) : (
               "Everything's on track"
             )}
           </h1>
 
-          <p className="max-w-xl text-sm leading-relaxed text-muted">
+          <p className="max-w-2xl text-base leading-relaxed text-muted">
             Across {data.companies.length} companies.
             {stale.length > 0 && (
-              <> Also, {stale.length} deal{stale.length === 1 ? "" : "s"} across the group haven&apos;t been touched in 14+ days.</>
+              <> Also, {plural(stale.length, "deal")} across the group {stale.length === 1 ? "hasn’t" : "haven’t"} been updated in over two weeks.</>
             )}
           </p>
-
-          <div className="border-t border-dashed border-border" />
 
           <AiSummaryCard endpoint="/dashboard/executive/summary" variant="strip" />
         </motion.header>
@@ -574,12 +607,19 @@ function CEODashboard() {
               exit="exit"
               variants={tabFade}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="space-y-8"
+              className="space-y-7"
             >
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                 <Stat icon={Layers} label="Deals" value={data.totals.deals} raw={data.totals.deals} />
-                <Stat icon={TrendingUp} label="Active" value={data.totals.active} raw={data.totals.active} />
-                <Stat icon={CheckCircle2} label="Closed won" value={data.totals.closedWon} raw={data.totals.closedWon} />
+                <Stat
+                  icon={TrendingUp}
+                  label="Active"
+                  value={data.totals.active}
+                  raw={data.totals.active}
+                  tone="positive"
+                  spark={activeTrend}
+                />
+                <Stat icon={Target} label="Closed won" value={data.totals.closedWon} raw={data.totals.closedWon} />
                 <Stat
                   icon={TrendingDown}
                   label="Outstanding"
@@ -594,6 +634,7 @@ function CEODashboard() {
                 staleGroups={staleGroups}
                 flags={financialFlags}
                 breakdown={attentionBreakdown}
+                byKey={byKey}
               />
 
               {/* Accounting engine — FR-16–18. Hidden, not stubbed, until the
@@ -654,7 +695,7 @@ function CEODashboard() {
               variants={tabFade}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             >
-              <SectionHeader icon={Gauge} label="Team performance" aside={kpiTotal > 0 ? `${kpiTotal} KPIs tracked` : undefined} />
+              <SectionHeader icon={User} label="Team performance" aside={kpiTotal > 0 ? `${kpiTotal} KPIs tracked` : undefined} />
               {kpiTotal === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted">
                   No staff KPIs set yet. Once your team adds targets, their standing shows up here.
@@ -750,12 +791,12 @@ function CEODashboard() {
                   <ul className="divide-y divide-dashed divide-border">
                     {visibleStaleGroups.map((g, i) => {
                       const co = byKey[g.company];
-                      const href = co ? companyHref(co) : PIPELINE_HREF[g.type];
+                      const href = staleHref(g, byKey);
                       const content = (
                         <div className="group flex items-center gap-3 py-3 text-sm transition-colors hover:bg-surface/60">
                           <span className="h-full w-[3px] self-stretch rounded-full bg-accent/60" aria-hidden />
                           <AlertTriangle size={14} className="shrink-0 text-accent" />
-                          <span className="shrink-0 font-semibold tabular-nums text-accent">{g.maxDays}d+ silent</span>
+                          <span className="shrink-0 font-semibold tabular-nums text-accent">{silentLabel(g.maxDays)}</span>
                           <span className="min-w-0 flex-1 truncate text-muted">
                             {g.count} {co?.name ?? g.type} deal{g.count === 1 ? "" : "s"}
                             {g.bdoName ? <> · {g.bdoName}</> : ""}
@@ -763,15 +804,7 @@ function CEODashboard() {
                           <ChevronRight size={14} className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
                       );
-                      return (
-                        <li key={i}>
-                          {href ? (
-                            <Link href={g.bdoName ? `${href}?bdo=${encodeURIComponent(g.bdoName)}` : href}>{content}</Link>
-                          ) : (
-                            content
-                          )}
-                        </li>
-                      );
+                      return <li key={i}>{href ? <Link href={href}>{content}</Link> : content}</li>;
                     })}
                   </ul>
                 </div>
@@ -919,35 +952,78 @@ function CEODashboard() {
 
 // ---- Subcomponents --------------------------------------------------------
 
+/** Tiny trend line for a stat card. Renders nothing under 2 points, so it
+ * simply doesn't appear until the API supplies real history. */
+function Sparkline({ data }: { data: number[] }) {
+  const gradId = `spark-${useId().replace(/:/g, "")}`;
+  if (data.length < 2) return null;
+
+  const w = 96;
+  const h = 40;
+  const pad = 2;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => [
+    pad + (i / (data.length - 1)) * (w - pad * 2),
+    h - pad - ((v - min) / span) * (h - pad * 2),
+  ]);
+  const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${h} L${pts[0][0].toFixed(1)},${h} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-24 shrink-0 text-emerald-600" aria-hidden>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function Stat({
   icon: Icon,
   label,
   value,
   raw,
   flag = false,
+  tone = "default",
+  spark,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
   raw: number;
   flag?: boolean;
+  /** "positive" swaps the icon chip to green — used for growth metrics. */
+  tone?: "default" | "positive";
+  spark?: number[];
 }) {
   const empty = raw === 0 && !flag;
+  const chip =
+    tone === "positive" ? "bg-emerald-500/10 text-emerald-600" : "bg-accent/10 text-accent";
   return (
     <div className="relative rounded-2xl border border-border bg-surface px-5 py-5">
       {flag && <span className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
-      <div className="flex items-center gap-2">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
-          <Icon size={13} strokeWidth={2.25} />
+      <div className="flex items-center gap-3">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${chip}`}>
+          <Icon size={16} strokeWidth={2.25} />
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">{label}</span>
       </div>
-      <div
-        className={`mt-2.5 text-2xl font-bold leading-none tracking-tight tabular-nums md:text-[1.75rem] ${
-          flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
-        }`}
-      >
-        {value}
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <div
+          className={`text-[2rem] font-bold leading-none tracking-tight md:text-[2.5rem] ${
+            flag ? "text-accent" : empty ? "text-muted" : "text-foreground"
+          }`}
+        >
+          {value}
+        </div>
+        {spark && spark.length > 1 && <Sparkline data={spark} />}
       </div>
     </div>
   );
@@ -992,7 +1068,7 @@ function DealList({
                 <p className="truncate text-xs text-muted">{d.company}</p>
               </div>
               <Tag value={risk ? d.dealHealth : d.dealStage} />
-              <span className="w-24 shrink-0 whitespace-nowrap text-right font-medium tabular-nums text-foreground">
+              <span className="w-28 shrink-0 whitespace-nowrap text-right font-medium tabular-nums text-foreground">
                 {fmt(d.amount)}
               </span>
             </li>

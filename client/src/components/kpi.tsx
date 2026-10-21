@@ -83,8 +83,8 @@ export function fmtKpiVal(v: number | null | undefined, unit: string) {
 const DAY = 86_400_000;
 // "Oct 2026", "Q4 2026", or "1 Jan 2027 – 31 Dec 2027" for a fixed window.
 export function windowLabel(w: KpiRow["window"], frequency?: string) {
-  const s = new Date(w.start);
-  if (w.windowed) {
+  const s = new Date(w?.start);
+  if (w?.windowed) {
     const e = new Date(new Date(w.end).getTime() - DAY);
     const f = (d: Date) => d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
     return `${f(s)} – ${f(e)}`;
@@ -167,7 +167,7 @@ export function PaceBar({ attainment, expected, status, className = "h-1.5" }: {
 
 // Work done on a KPI's linked tasks (a leading signal — it never changes the actual).
 export function WorkChip({ work }: { work: KpiRow["work"] }) {
-  if (!work.tasks) return <span className="text-[11px] text-muted/60">No tasks</span>;
+  if (!work?.tasks) return <span className="text-[11px] text-muted/60">No tasks</span>;
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted whitespace-nowrap" title="Weighted progress of the tasks linked to this KPI. A signal only — it never changes the actual.">
       <span className="tabular-nums text-foreground font-medium">{work.pct ?? 0}%</span> work · {work.done}/{work.tasks}

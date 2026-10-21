@@ -30,33 +30,38 @@ import {
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
-import { useCompanies, companyHref } from "@/lib/companies";
+import { useCompanies } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 
 /**
- * One nav per spec role (Group Owner / Business CEO / Staff). Stored roles fold into these via
+ * One nav per role (Group Owner / Business CEO / Staff). Stored roles fold into these via
  * accessLevel(): ADMIN and CEO are Group Owners; BDO and the retired titles are Staff.
+ *
+ * Copy rules for this file:
+ *  - Sentence case everywhere ("Group finances", not "Group Financials").
+ *  - Labels name the place ("Clients") or start with a verb for an action ("Assign tasks").
+ *  - Section titles say what the items are for, in plain words.
+ *  - `hint` is a one-line explanation shown on hover. Only add one when the label alone isn't enough.
  */
 
 /**
- * status: "live"  -> route + API already wired, safe to ship
- *         "soon"  -> nav slot exists per spec but backend/page isn't built yet
- *
- * I set these based on what was already in your file (marked live) vs.
- * what I added to match the spec doc (marked soon). Flip any of these
- * the moment the route is real — that's the whole point of the flag.
+ * status: "live" -> route + API already wired, safe to ship
+ *         "soon" -> nav slot exists but the page isn't built yet (shown greyed out, not clickable)
+ * Flip an item to "live" the moment its route is real.
  */
 type NavStatus = "live" | "soon";
 
 type IconType = typeof LayoutDashboard;
 
-type NavItem = { href: string; label: string; icon: IconType; status?: NavStatus };
+type NavItem = { href: string; label: string; icon: IconType; status?: NavStatus; hint?: string };
 type NavChild = { href: string; label: string; status?: NavStatus };
 type NavGroup = {
   label: string;
   icon: IconType;
   variant?: "branch"; // "branch" renders the trunk/twig connector style
   children: NavChild[];
+  /** Shown when the group has no children yet. */
+  empty?: { label: string; href: string };
 };
 type NavEntry = NavItem | NavGroup;
 type NavSection = { title?: string; items: NavEntry[] };
@@ -83,44 +88,64 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const complianceOn = level === "GROUP_OWNER"
     ? companies.some((c) => c.modules?.compliance)
     : !!companies.find((c) => c.key === user.bdoCompany)?.modules?.compliance;
-  const complianceItem: NavItem[] = complianceOn ? [{ href: "/compliance", label: "Compliance", icon: ShieldCheck, status: "live" }] : [];
+  const complianceItem: NavItem[] = complianceOn
+    ? [{ href: "/compliance", label: "Compliance", icon: ShieldCheck, status: "live", hint: "Compliance deadlines and tasks" }]
+    : [];
 
   // ---- Role-scoped nav content -------------------------------------------------
 
   const groupOwnerNav: NavSection[] = [
     {
-      items: [{ href: "/", label: "Pulse", icon: Activity, status: "live" }],
-    },
-    {
-      title: "The Grove",
       items: [
+        { href: "/", label: "Home", icon: Activity, status: "live", hint: "Alerts and activity across all your companies" },
         {
           label: "Companies",
           icon: Building2,
           variant: "branch",
           children: companies.map((c) => ({ href: `/dashboard/${c.slug}`, label: c.name, status: "live" })),
+          empty: { label: "Add your first company", href: "/admin/companies" },
         },
-        { href: "/leads", label: "All Leads", icon: Users, status: "live" },
-        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
-        ...complianceItem,
-        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
-        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
-        { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
-        { href: "/consolidated", label: "Group Financials", icon: Database, status: "live" },
-        { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
-        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
       ],
     },
     {
-      title: "Upkeep",
+      title: "Sales & contacts",
       items: [
-        { href: "/tasks", label: "Assign Tasks", icon: ListChecks, status: "live" },
-        { href: "/admin/companies", label: "Add a Company", icon: Building2, status: "live" },
-        { href: "/admin/team", label: "Team & Access", icon: UsersRound, status: "live" },
+        { href: "/leads", label: "All leads", icon: Users, status: "live", hint: "Every lead across your companies" },
+        { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
+        { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
       ],
     },
     {
-      items: [{ href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" }],
+      title: "Money",
+      items: [
+        { href: "/consolidated", label: "Group finances", icon: Database, status: "live", hint: "All your companies' numbers, combined" },
+        { href: "/investments", label: "Investments", icon: DollarSign, status: "soon" },
+      ],
+    },
+    {
+      title: "Performance",
+      items: [
+        { href: "/kpi-framework", label: "Company KPIs", icon: BarChart3, status: "live", hint: "Set targets and track progress, company by company" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live", hint: "KPIs assigned to people on your team" },
+      ],
+    },
+    {
+      title: "Risk & compliance",
+      items: [
+        ...complianceItem,
+        { href: "/risks", label: "Risks", icon: AlertTriangle, status: "live", hint: "What could go wrong, who owns it, and what's being done" },
+      ],
+    },
+    {
+      title: "Manage",
+      items: [
+        { href: "/tasks", label: "Assign tasks", icon: ListChecks, status: "live" },
+        { href: "/admin/team", label: "Team & access", icon: UsersRound, status: "live", hint: "Invite people and choose what each person can see" },
+        { href: "/admin/companies", label: "Add a company", icon: Building2, status: "live" },
+      ],
+    },
+    {
+      items: [{ href: "/help", label: "Help", icon: HelpCircle, status: "live", hint: "Guides and definitions" }],
     },
   ];
 
@@ -129,7 +154,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const businessCeoNav: NavSection[] = [
     {
       items: [
-        { href: ownCompany ? `/dashboard/${ownCompany.slug}` : "/", label: "Dashboard", icon: LayoutDashboard, status: "live" },
+        { href: ownCompany ? `/dashboard/${ownCompany.slug}` : "/", label: "Dashboard", icon: LayoutDashboard, status: "live", hint: "How your company is doing" },
         { href: "/alerts", label: "Alerts", icon: Bell, status: "soon" },
       ],
     },
@@ -137,47 +162,57 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       title: "Money",
       items: [
         { href: "/finance", label: "Finance", icon: DollarSign, status: "soon" },
-        { href: "/grant-loans", label: "Grants & Loans", icon: DollarSign, status: "live" },
+        { href: "/grant-loans", label: "Grants & loans", icon: DollarSign, status: "live" },
       ],
     },
     {
       title: "Work",
       items: [
-        { href: "/tasks", label: "Batch-Assign Tasks", icon: ListChecks, status: "live" },
+        { href: "/tasks", label: "Assign tasks", icon: ListChecks, status: "live", hint: "Assign tasks to several people at once" },
         { href: "/projects", label: "Projects", icon: FolderKanban, status: "live" },
-        ...complianceItem,
-        { href: "/risks", label: "Risk Register", icon: AlertTriangle, status: "live" },
+        { href: "/team", label: "Team", icon: UsersRound, status: "live" },
       ],
     },
     {
-      title: "People",
+      title: "Sales & contacts",
       items: [
         { href: "/leads", label: "Leads", icon: Users, status: "live" },
         { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
         { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
-        { href: "/team", label: "Team", icon: UsersRound, status: "live" },
-        { href: "/kpi-framework", label: "KPI Framework", icon: BarChart3, status: "live" },
-        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live" },
         { href: "/partnerships", label: "Partnerships", icon: Handshake, status: "live" },
       ],
     },
     {
-      items: [{ href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" }],
+      title: "Performance",
+      items: [
+        { href: "/kpi-framework", label: "Company KPIs", icon: BarChart3, status: "live", hint: "Set targets and track progress" },
+        { href: "/my-kpis", label: "Team KPIs", icon: Target, status: "live", hint: "KPIs assigned to people on your team" },
+      ],
+    },
+    {
+      title: "Risk & compliance",
+      items: [
+        ...complianceItem,
+        { href: "/risks", label: "Risks", icon: AlertTriangle, status: "live", hint: "What could go wrong, who owns it, and what's being done" },
+      ],
+    },
+    {
+      items: [{ href: "/help", label: "Help", icon: HelpCircle, status: "live", hint: "Guides and definitions" }],
     },
   ];
 
   const staffNav: NavSection[] = [
     {
       items: [
-        { href: "/overview", label: "Overview", icon: LayoutDashboard, status: "live" },
-        { href: "/tasks", label: "My Tasks", icon: ListChecks, status: "live" },
-        { href: "/leads", label: "My Leads", icon: Users, status: "live" },
+        { href: "/overview", label: "Home", icon: LayoutDashboard, status: "live", hint: "What needs your attention today" },
+        { href: "/tasks", label: "My tasks", icon: ListChecks, status: "live" },
+        { href: "/leads", label: "My leads", icon: Users, status: "live" },
         { href: "/sme", label: "Clients", icon: Briefcase, status: "live" },
-        ...complianceItem,
         { href: "/contacts", label: "Contacts", icon: Contact, status: "live" },
-        { href: "/risks", label: "My Risk Actions", icon: AlertTriangle, status: "live" },
+        ...complianceItem,
+        { href: "/risks", label: "My risk actions", icon: AlertTriangle, status: "live", hint: "Risk actions assigned to you" },
         { href: "/my-kpis", label: "My KPIs", icon: Target, status: "live" },
-        { href: "/help", label: "Help & Glossary", icon: HelpCircle, status: "live" },
+        { href: "/help", label: "Help", icon: HelpCircle, status: "live", hint: "Guides and definitions" },
       ],
     },
   ];
@@ -204,16 +239,12 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       )}
 
       <aside className={asideClass}>
-        <Brand portalLabel={portalLabel} onClose={onClose} />
+        <Brand onClose={onClose} />
 
-        <nav className="no-scrollbar flex-1 overflow-y-auto py-3 px-2.5">
+        <nav aria-label="Main" className="no-scrollbar flex-1 overflow-y-auto py-3 px-2.5">
           {nav.map((section, i) => (
-            <div key={section.title ?? `s${i}`} className={clsx(i > 0 && "mt-4")}>
-              {section.title && (
-                <div className="px-3 mb-1.5 text-[10px] font-semibold text-foreground/35 uppercase tracking-widest">
-                  {section.title}
-                </div>
-              )}
+            <div key={section.title ?? `s${i}`} className={clsx(i > 0 && "mt-5")}>
+              {section.title && <div className="type-colhead px-3 mb-1.5">{section.title}</div>}
               <div className="space-y-0.5">
                 {section.items.map((item) =>
                   "children" in item ? (
@@ -232,6 +263,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       label={item.label}
                       icon={item.icon}
                       status={item.status}
+                      hint={item.hint}
                       active={pathname === item.href}
                       onClick={onClose}
                     />
@@ -261,25 +293,23 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
 // ---- Subcomponents ---------------------------------------------------------
 
-function Brand({ portalLabel, onClose }: { portalLabel: string; onClose?: () => void }) {
+function Brand({ onClose }: { onClose?: () => void }) {
   return (
     <div className="px-5 py-5 bg-white border-b border-border flex items-center justify-between">
       <div className="flex items-center gap-3 min-w-0">
         <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden">
-          <Image src="/icon.png" alt="Trunqo" fill sizes="36px"  />
+          <Image src="/icon.png" alt="Trunqo" fill sizes="36px" />
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="w-1 h-1 rounded-full bg-accent shrink-0" />
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-widest leading-none truncate">
-              {portalLabel}
-            </span>
-          </div>
-          <div className="font-serif text-xl leading-none text-foreground truncate">Trunqo</div>
+        <div className="font-display text-xl font-semibold tracking-tight leading-none text-foreground truncate">
+          Trunqo
         </div>
       </div>
       {onClose && (
-        <button onClick={onClose} className="md:hidden p-1 text-muted hover:text-foreground transition-colors">
+        <button
+          onClick={onClose}
+          aria-label="Close menu"
+          className="md:hidden p-1 text-muted hover:text-foreground transition-colors"
+        >
           <X size={18} />
         </button>
       )}
@@ -290,7 +320,7 @@ function Brand({ portalLabel, onClose }: { portalLabel: string; onClose?: () => 
 function StatusBadge({ status }: { status?: NavStatus }) {
   if (status !== "soon") return null;
   return (
-    <span className="ml-auto shrink-0 text-[9px] font-semibold uppercase tracking-wider text-accent bg-accent/[0.08] border border-accent/25 rounded-full px-1.5 py-[1px]">
+    <span className="ml-auto shrink-0 text-xs font-medium text-accent bg-accent/[0.08] border border-accent/25 rounded-full px-2 py-px">
       Soon
     </span>
   );
@@ -301,6 +331,7 @@ function NavLink({
   label,
   icon: Icon,
   status,
+  hint,
   active,
   onClick,
 }: {
@@ -308,6 +339,7 @@ function NavLink({
   label: string;
   icon?: IconType;
   status?: NavStatus;
+  hint?: string;
   active: boolean;
   onClick?: () => void;
 }) {
@@ -316,8 +348,8 @@ function NavLink({
     return (
       <span
         aria-disabled="true"
-        title={`${label} is coming soon`}
-        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm border-l-2 border-transparent text-foreground/40 cursor-not-allowed select-none"
+        title={`${label} — coming soon`}
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-base border-l-2 border-transparent text-foreground/45 cursor-not-allowed select-none"
       >
         {Icon && <Icon size={16} strokeWidth={1.75} className="shrink-0" />}
         <span className="flex-1 truncate">{label}</span>
@@ -329,8 +361,10 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
+      title={hint}
+      aria-current={active ? "page" : undefined}
       className={clsx(
-        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors border-l-2",
+        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-base transition-colors border-l-2",
         active
           ? "bg-accent/10 border-accent text-accent font-medium"
           : "border-transparent text-foreground/70 hover:bg-primary/5 hover:text-foreground"
@@ -367,11 +401,15 @@ function CompanyBranchGroup({
     <div>
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-foreground/70 hover:bg-primary/5 hover:text-foreground transition-colors"
+        aria-expanded={isOpen}
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-base text-foreground/70 hover:bg-primary/5 hover:text-foreground transition-colors"
       >
         <Icon size={16} strokeWidth={1.75} className="shrink-0" />
         <span className="flex-1 text-left truncate">{item.label}</span>
-        <span className="w-5 h-5 shrink-0 rounded-full border border-accent/40 bg-surface flex items-center justify-center text-[10px] font-semibold text-foreground/80 tabular-nums">
+        <span
+          aria-label={`${item.children.length} ${item.label.toLowerCase()}`}
+          className="min-w-5 h-5 px-1.5 shrink-0 rounded-full border border-accent/40 bg-surface flex items-center justify-center text-xs font-medium text-foreground/80 tabular-nums"
+        >
           {item.children.length}
         </span>
         <ChevronDown
@@ -382,6 +420,15 @@ function CompanyBranchGroup({
 
       {isOpen && (
         <div className="relative ml-[19px] mt-0.5 pl-4 border-l border-border space-y-0.5">
+          {item.children.length === 0 && item.empty && (
+            <Link
+              href={item.empty.href}
+              onClick={onNavigate}
+              className="block pl-2 pr-3 py-1.5 rounded-lg text-sm text-accent hover:bg-accent/10 transition-colors"
+            >
+              {item.empty.label}
+            </Link>
+          )}
           {item.children.map((child) => {
             const active = pathname === child.href;
             return (
@@ -390,28 +437,29 @@ function CompanyBranchGroup({
                 {child.status === "soon" ? (
                   <span
                     aria-disabled="true"
-                    title={`${child.label} is coming soon`}
-                    className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-[13px] text-foreground/40 cursor-not-allowed select-none"
+                    title={`${child.label} — coming soon`}
+                    className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-sm text-foreground/45 cursor-not-allowed select-none"
                   >
                     <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-border" />
                     <span className="flex-1 truncate">{child.label}</span>
                     <StatusBadge status={child.status} />
                   </span>
                 ) : (
-                <Link
-                  href={child.href}
-                  onClick={onNavigate}
-                  className={clsx(
-                    "flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-[13px] transition-colors",
-                    active
-                      ? "bg-accent/10 text-accent font-medium"
-                      : "text-foreground/60 hover:bg-primary/5 hover:text-foreground"
-                  )}
-                >
-                  <span className={clsx("w-1.5 h-1.5 rounded-full shrink-0", active ? "bg-accent" : "bg-border")} />
-                  <span className="flex-1 truncate">{child.label}</span>
-                  <StatusBadge status={child.status} />
-                </Link>
+                  <Link
+                    href={child.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    className={clsx(
+                      "flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg text-sm transition-colors",
+                      active
+                        ? "bg-accent/10 text-accent font-medium"
+                        : "text-foreground/60 hover:bg-primary/5 hover:text-foreground"
+                    )}
+                  >
+                    <span className={clsx("w-1.5 h-1.5 rounded-full shrink-0", active ? "bg-accent" : "bg-border")} />
+                    <span className="flex-1 truncate">{child.label}</span>
+                    <StatusBadge status={child.status} />
+                  </Link>
                 )}
               </div>
             );
@@ -426,19 +474,19 @@ function UserFooter({ name, meta, onLogout }: { name: string | null; meta: strin
   return (
     <div className="px-3 py-3 border-t border-border">
       <div className="flex items-center gap-2.5 mb-2 px-1">
-        <div className="w-7 h-7 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
-          <UserCircle size={16} strokeWidth={1.75} />
+        <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <UserCircle size={18} strokeWidth={1.75} />
         </div>
         <div className="min-w-0">
-          <div className="text-xs font-medium text-foreground truncate">{name}</div>
-          <div className="text-[11px] text-muted truncate">{meta}</div>
+          <div className="text-sm font-medium text-foreground truncate">{name}</div>
+          <div className="text-xs text-muted truncate">{meta}</div>
         </div>
       </div>
       <button
         onClick={onLogout}
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-muted hover:bg-accent/10 hover:text-accent transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-muted hover:bg-accent/10 hover:text-accent transition-colors"
       >
-        <LogOut size={13} strokeWidth={1.75} />
+        <LogOut size={14} strokeWidth={1.75} />
         Sign out
       </button>
     </div>

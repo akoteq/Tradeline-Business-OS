@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
-import { Manrope, Instrument_Serif } from "next/font/google";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { AppShell } from "@/components/AppShell";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-instrument-serif",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  weight: "400",
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
 });
 
 const siteUrl = "https://trunqo.com";
@@ -91,7 +95,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
-  themeColor: "#f3eee4",
+  themeColor: "#f5f5f3",
 };
 
 export default function RootLayout({
@@ -102,9 +106,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${instrumentSerif.variable} h-full`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} h-full`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full antialiased bg-background text-foreground font-sans">
+      <body
+        className="min-h-full antialiased bg-background text-foreground font-sans"
+        suppressHydrationWarning
+      >
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>
