@@ -77,8 +77,8 @@ export default function OverviewPage() {
   }
 
   const first = (data?.person.name ?? user?.bdoName ?? "").trim().split(/\s+/)[0];
-  const trackedKpis = (kpis?.rows ?? []).filter((r) => r.status !== "NO_TARGET");
-  const kpiOrder: KpiStatus[] = ["OFF_TRACK", "AT_RISK", "STALE", "ON_TRACK", "ACHIEVED"];
+  const trackedKpis = (kpis?.rows ?? []).filter((r) => !["NO_TARGET", "DRAFT", "NOT_STARTED"].includes(r.status));
+  const kpiOrder: KpiStatus[] = ["OVERDUE", "OFF_TRACK", "AT_RISK", "STALE", "ON_TRACK", "ACHIEVED"];
   const kpiShown = [...trackedKpis].sort((a, b) => kpiOrder.indexOf(a.status) - kpiOrder.indexOf(b.status)).slice(0, 4);
 
   // What to work on, worst first. Only flags things the person can act on today.
@@ -86,7 +86,7 @@ export default function OverviewPage() {
   if (data) {
     const t = data.tasks, l = data.leads, d = data.deals;
     if (t.overdue) focus.push({ tone: "danger", text: `${t.overdue} task${t.overdue === 1 ? " is" : "s are"} overdue`, href: "/tasks" });
-    const behind = trackedKpis.filter((k) => k.status === "OFF_TRACK").length;
+    const behind = trackedKpis.filter((k) => k.status === "OFF_TRACK" || k.status === "OVERDUE").length;
     if (behind) focus.push({ tone: "danger", text: `${behind} KPI${behind === 1 ? " is" : "s are"} behind pace`, href: "/my-kpis" });
     if (l.followUpsDue) focus.push({ tone: "warning", text: `${l.followUpsDue} lead follow-up${l.followUpsDue === 1 ? " is" : "s are"} past due`, href: "/leads" });
     if (d.stale) focus.push({ tone: "warning", text: `${d.stale} deal${d.stale === 1 ? " hasn't" : "s haven't"} moved in 2+ weeks`, href: "#stale" });

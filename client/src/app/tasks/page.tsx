@@ -6,6 +6,7 @@ import { clsx } from "clsx";
 import {
   AlertCircle,
   ArrowRight,
+  Ban,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Target,
   Trash2,
   User,
   Users,
@@ -30,17 +32,20 @@ import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { useAuth } from "@/components/AuthProvider";
 import { isStaff, isGroupOwner } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
+import { KpiSheet, LogResult, type KpiRow } from "@/components/kpi";
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
 /* ------------------------------------------------------------------ */
 
+type TaskKpi = { id: string; metric: string; source: string; unit: string; aggregation: "SUM" | "LATEST" | "AVERAGE" | null };
 type Task = {
   id: string;
   year: number | null;
   priority: string;
   deliverable: string;
   targetDate: string | null;
+  startDate: string | null;
   bdoId: string | null;
   bdo: { name: string } | null;
   status: string;
@@ -53,13 +58,35 @@ type Task = {
   outcome: string | null;
   // Optional — if your API ever returns a category it is used, otherwise it is inferred from the title.
   category?: string | null;
+  // The KPI this work moves, and what the server works out from it.
+  kpiId: string | null;
+  kpi: TaskKpi | null;
+  weight: number | null;
+  progress: number | null;
+  completionCriteria: string | null;
+  completedAt: string | null;
+  dependsOn: string[];
+  blocked: boolean;
+  blockedBy: { id: string; deliverable: string }[];
+  overdue: boolean;
+  needsResult: boolean;
+  expenseActual: number | null;
+  revenueActual: number | null;
+  currency: string | null;
+  exchangeRate: number | null;
+  // The deal this work is for; money brought in is recorded as a payment on it.
+  dealId: string | null;
+  deal: { id: string; source: string; name: string } | null;
 };
 
+type DealOption = { id: string; source: string; name: string; stage: string; receivedGhs: number };
+
 type Bdo = { id: string; name: string; company: string };
+type Linkable = { id: string; metric: string; company: string; source: string; unit: string; kind: "PERSONAL" | "SCORECARD" | "COMPANY" };
 
 type TabKey = "all" | "mine" | "overdue" | "week" | "proposals";
 type SortKey = "soonest" | "latest" | "priority";
-type GroupKey = "overdue" | "progress" | "todo" | "done";
+type GroupKey = "overdue" | "blocked" | "progress" | "todo" | "done";
 
 const OUTCOME_OPTS = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "NO_RESPONSE"] as const;
 const OUTCOME_COLORS: Record<string, string> = {
@@ -70,8 +97,12 @@ const OUTCOME_COLORS: Record<string, string> = {
   NO_RESPONSE: "bg-amber-100 text-amber-700",
 };
 
-const PRIORITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+const PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW"];
+const STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
+const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
+const PRIORITY_RANK: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const PRIORITY_STYLES: Record<string, string> = {
+  URGENT: "bg-red-600 text-white",
   HIGH: "bg-red-50 text-red-600",
   MEDIUM: "bg-amber-50 text-amber-700",
   LOW: "bg-sky-50 text-sky-600",
@@ -81,6 +112,7 @@ const STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-amber-50 text-amber-600",
   COMPLETED: "bg-green-50 text-green-700",
   OVERDUE: "bg-red-50 text-red-600",
+  BLOCKED: "bg-amber-100 text-amber-800",
   CANCELLED: "bg-gray-100 text-gray-500",
 };
 
@@ -104,9 +136,14 @@ const dueTime = (t: Task) => {
   const d = new Date(t.targetDate);
   return isNaN(d.getTime()) ? null : d;
 };
+function apiError(err: unknown, fallback: string) {
+  return (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
+}
+
+// The server works out Overdue from the due date; the date check is a fallback.
 const isOverdue = (t: Task) => {
   if (isClosed(t)) return false;
-  if (t.status === "OVERDUE") return true;
+  if (t.overdue || t.status === "OVERDUE") return true;
   const d = dueTime(t);
   return !!d && d < startOfToday();
 };
@@ -128,7 +165,9 @@ const isDueThisWeek = (t: Task) => {
 };
 
 const groupOf = (t: Task): GroupKey =>
-  isClosed(t) ? "done" : isOverdue(t) ? "overdue" : t.status === "IN_PROGRESS" ? "progress" : "todo";
+  isClosed(t) ? "done" : isOverdue(t) ? "overdue" : t.blocked ? "blocked" : t.status === "IN_PROGRESS" ? "progress" : "todo";
+const shownStatus = (t: Task) => (isClosed(t) ? t.status : t.blocked ? "BLOCKED" : isOverdue(t) ? "OVERDUE" : t.status);
+const progressOf = (t: Task) => (t.status === "COMPLETED" ? 100 : t.progress ?? 0);
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Deliverable: FileText,
@@ -149,23 +188,6 @@ const categoryOf = (t: Task): string => {
   return "Deliverable";
 };
 
-const taskBody = (t: Task, over: Record<string, unknown> = {}) => ({
-  year: t.year,
-  priority: t.priority,
-  deliverable: t.deliverable,
-  status: t.status,
-  company: t.company,
-  notes: t.notes,
-  targetDate: t.targetDate ? t.targetDate.slice(0, 10) : null,
-  bdoId: t.bdoId,
-  type: t.type,
-  smeId: t.smeId,
-  clientName: t.clientName,
-  proposalValueGhs: t.proposalValueGhs,
-  outcome: t.outcome,
-  ...over,
-});
-
 const GROUPS: {
   key: GroupKey;
   title: string;
@@ -176,6 +198,7 @@ const GROUPS: {
   rowIcon: string;
 }[] = [
   { key: "overdue",  title: "Overdue",     Icon: AlertCircle,  header: "bg-gradient-to-r from-red-50 to-transparent",   iconWrap: "bg-red-500 text-white",     titleCls: "text-red-600",     rowIcon: "bg-red-50 text-red-500" },
+  { key: "blocked",  title: "Blocked",     Icon: Ban,          header: "bg-gradient-to-r from-amber-50 to-transparent", iconWrap: "bg-amber-500 text-white",   titleCls: "text-amber-700",   rowIcon: "bg-amber-50 text-amber-600" },
   { key: "progress", title: "In Progress", Icon: Clock,        header: "bg-gradient-to-r from-green-50 to-transparent", iconWrap: "bg-green-600 text-white",   titleCls: "text-green-700",   rowIcon: "bg-green-50 text-green-600" },
   { key: "todo",     title: "To Do",       Icon: Circle,       header: "bg-gradient-to-r from-gray-100/80 to-transparent", iconWrap: "bg-gray-500 text-white", titleCls: "text-gray-700",    rowIcon: "bg-gray-100 text-gray-500" },
   { key: "done",     title: "Completed",   Icon: CheckCircle2, header: "bg-gradient-to-r from-emerald-50 to-transparent", iconWrap: "bg-emerald-600 text-white", titleCls: "text-emerald-700", rowIcon: "bg-emerald-50 text-emerald-600" },
@@ -304,7 +327,7 @@ function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
   );
 }
 
-function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onToggle, onEdit, onDelete }: {
+function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onToggle, onEdit, onDelete, onLogResult }: {
   task: Task;
   group: (typeof GROUPS)[number];
   gridCols: string;
@@ -314,10 +337,12 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onLogResult: () => void;
 }) {
   const category = categoryOf(task);
   const Icon = CATEGORY_ICONS[category] ?? FileText;
   const overdue = isOverdue(task);
+  const pct = progressOf(task);
   return (
     <div
       className="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 lg:grid hover:bg-gray-50/60 transition-colors"
@@ -337,11 +362,33 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
         </span>
         <div className="min-w-0">
           <div className="text-[13px] font-medium text-gray-900 truncate" title={task.deliverable}>{task.deliverable}</div>
-          <div className="text-[11px] text-gray-400 truncate">{category} • {task.type === "PROPOSAL" ? "Proposal" : "Task"}</div>
+          <div className="text-[11px] text-gray-400 truncate">
+            {task.kpi ? (
+              <span className="inline-flex items-center gap-1 text-gray-600" title="The KPI this task moves"><Target size={11} className="text-accent" />{task.kpi.metric}</span>
+            ) : (
+              <>{category} • {task.type === "PROPOSAL" ? "Proposal" : "Task"}</>
+            )}
+            {task.deal && (
+              <span className="text-gray-500" title="The deal this task is for">
+                {" "}• {task.deal.name}{task.revenueActual ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${task.status === "COMPLETED" ? "in" : "expected"}` : ""}
+              </span>
+            )}
+          </div>
+          {task.blocked && task.blockedBy.length > 0 && (
+            <div className="text-[11px] text-amber-700 truncate" title={task.blockedBy.map((b) => b.deliverable).join(", ")}>
+              Waiting on {task.blockedBy.map((b) => `“${b.deliverable}”`).join(", ")}
+            </div>
+          )}
+          {task.completionCriteria && <div className="text-[11px] text-gray-400 truncate" title={task.completionCriteria}>Done when: {task.completionCriteria}</div>}
         </div>
       </div>
 
       <div><PriorityPill value={task.priority} /></div>
+
+      <div className="flex items-center gap-1.5" title={`Weight ${task.weight ?? 1} of 5`}>
+        <div className="h-1.5 flex-1 rounded-full bg-gray-100 min-w-[40px]"><div className="h-full rounded-full bg-accent/70" style={{ width: `${pct}%` }} /></div>
+        <span className="text-[11px] tabular-nums text-gray-500 w-8 text-right">{pct}%</span>
+      </div>
 
       {showCompany && <div className="text-[12.5px] text-gray-700 truncate">{companyName || "—"}</div>}
       {showBdo && <div className="text-[12.5px] text-gray-700 truncate">{task.bdo?.name ?? "—"}</div>}
@@ -351,7 +398,18 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
         {fmtDate(task.targetDate)}
       </div>
 
-      <div><StatusPill value={task.status} /></div>
+      <div className="flex flex-wrap items-center gap-1">
+        <StatusPill value={shownStatus(task)} />
+        {task.needsResult && (
+          <button
+            onClick={onLogResult}
+            className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100 whitespace-nowrap"
+            title="This finished task is linked to a KPI with no result logged"
+          >
+            Log result
+          </button>
+        )}
+      </div>
 
       <RowMenu onEdit={onEdit} onDelete={onDelete} />
     </div>
@@ -380,13 +438,17 @@ export default function TasksPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<Task | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [prompt, setPrompt] = useState<Task | null>(null);
   const qc = useQueryClient();
 
   const isProposalView = tab === "proposals";
 
   // BDO users are always scoped to their own tasks; admins/CEO use the filter bar.
+  // Blocked isn't a stored status: the server works it out from "Waits on".
+  const { status: statusFilter, ...rest } = filters;
   const effective = {
-    ...filters,
+    ...rest,
+    ...(statusFilter === "BLOCKED" ? { blocked: "1" } : { status: statusFilter }),
     type: isProposalView ? "PROPOSAL" : "TASK",
     ...(isBdo ? { bdoId: myBdoId ?? "" } : {}),
   };
@@ -410,14 +472,28 @@ export default function TasksPage() {
   });
   const clients = smeRes?.data ?? [];
 
+  // Tasks feed KPI work and results, so the KPI screens refresh with them.
+  // Money brought in on a linked task is a payment on its deal, so the deal screens refresh too.
+  const refresh = () => {
+    for (const key of ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "task-deal-options"]) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: refresh,
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ task, status }: { task: Task; status: string }) => api.put(`/tasks/${task.id}`, taskBody(task, { status })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    mutationFn: ({ task, status }: { task: Task; status: string }) => api.put(`/tasks/${task.id}`, { status }),
+    onSuccess: (res, { status }) => {
+      refresh();
+      // Finishing work that is linked to a manual KPI: ask whether it produced a result.
+      const saved = res.data as Task;
+      if (status === "COMPLETED" && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
+    },
+    onError: (err) => window.alert(apiError(err, "Couldn't update the task.")),
   });
 
   /* ---- derived numbers ---- */
@@ -426,6 +502,7 @@ export default function TasksPage() {
   const overdueN = data.filter(isOverdue).length;
   const upcomingN = data.filter((t) => isUpcoming(t, 7)).length;
   const notStartedN = data.filter((t) => t.status === "PENDING").length;
+  const blockedN = data.filter((t) => t.blocked).length;
   const mineN = myBdoId ? data.filter((t) => t.bdoId === myBdoId).length : 0;
   const weekN = data.filter(isDueThisWeek).length;
   const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
@@ -467,10 +544,11 @@ export default function TasksPage() {
     "24px",
     "minmax(0,2.4fr)",
     "84px",
+    "104px",
     ...(oneCompany ? [] : ["minmax(0,1.3fr)"]),
     ...(isBdo ? [] : ["minmax(0,1.2fr)"]),
     "132px",
-    "112px",
+    "150px",
     "28px",
   ].join(" ");
 
@@ -553,9 +631,10 @@ export default function TasksPage() {
           <Stat label="Win Rate" value={winRate === null ? "—" : `${winRate}%`} tone="green" />
         </div>
       ) : (
-        <div className="relative grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <RingStat value={`${completedN} / ${total}`} label="Completed" pct={pct(completedN)} ringClass="stroke-green-600" trackClass="stroke-green-100" labelClass="text-green-600" />
           <RingStat value={String(overdueN)} label="Overdue" pct={pct(overdueN)} ringClass="stroke-red-500" trackClass="stroke-red-100" labelClass="text-red-500" />
+          <RingStat value={String(blockedN)} label="Blocked" pct={pct(blockedN)} ringClass="stroke-amber-500" trackClass="stroke-amber-100" labelClass="text-amber-600" />
           <RingStat value={String(upcomingN)} label="Upcoming (7 days)" pct={pct(upcomingN)} ringClass="stroke-blue-500" trackClass="stroke-blue-100" labelClass="text-gray-500" />
           <RingStat value={String(notStartedN)} label="Not started" pct={pct(notStartedN)} ringClass="stroke-gray-400" trackClass="stroke-gray-200" labelClass="text-gray-500" />
         </div>
@@ -619,11 +698,11 @@ export default function TasksPage() {
       <div className="relative bg-white/90 border border-gray-200/80 rounded-2xl shadow-sm p-3 flex flex-wrap items-center gap-3">
         <FilterSelect value={filters.priority} onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}>
           <option value="">All Priorities</option>
-          {["HIGH", "MEDIUM", "LOW"].map((s) => <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>)}
+          {PRIORITIES.map((s) => <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>)}
         </FilterSelect>
         <FilterSelect value={filters.status} onChange={(v) => setFilters((f) => ({ ...f, status: v }))}>
           <option value="">All Statuses</option>
-          {["PENDING", "IN_PROGRESS", "COMPLETED", "OVERDUE", "CANCELLED"].map((s) => (
+          {["PENDING", "IN_PROGRESS", "BLOCKED", "OVERDUE", "COMPLETED", "CANCELLED"].map((s) => (
             <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
           ))}
         </FilterSelect>
@@ -705,6 +784,7 @@ export default function TasksPage() {
                       onToggle={() => toggleMutation.mutate({ task: t, status: t.status === "COMPLETED" ? "PENDING" : "COMPLETED" })}
                       onEdit={() => openEdit(t)}
                       onDelete={() => askDelete(t)}
+                      onLogResult={() => setPrompt(t)}
                     />
                   ))}
                 </div>
@@ -719,47 +799,77 @@ export default function TasksPage() {
           task={editing}
           bdos={bdos}
           clients={clients}
+          allTasks={data}
           isBdo={!!isBdo}
           oneCompany={oneCompany}
           myBdoId={myBdoId}
           defaultType={isProposalView ? "PROPOSAL" : "TASK"}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["tasks"] }); }}
+          onSaved={(saved, justCompleted) => {
+            setShowForm(false);
+            refresh();
+            // Finishing work that is linked to a manual KPI: ask whether it produced a result.
+            if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
+          }}
         />
       )}
+      {prompt && <ResultPrompt task={prompt} onClose={() => setPrompt(null)} onDone={() => { setPrompt(null); refresh(); }} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Add / edit popup (unchanged)                                        */
+/* Result prompt and add / edit popup                                  */
 /* ------------------------------------------------------------------ */
+
+// "Add a KPI result?" when linked work is finished. A prompt, not automatic: finished work is
+// not always a result (a proposal sent is not a deal closed).
+function ResultPrompt({ task, onClose, onDone }: { task: Task; onClose: () => void; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const k = task.kpi!;
+  const row = { definition: { id: k.id, metric: k.metric, unit: k.unit, source: k.source }, aggregation: k.aggregation ?? "SUM", bdoId: task.bdoId } as unknown as KpiRow;
+  const dismiss = async () => {
+    setBusy(true);
+    try { await api.post(`/tasks/${task.id}/dismiss-result`); onDone(); } catch { setBusy(false); }
+  };
+  return (
+    <KpiSheet
+      title={`Add a result for ${k.metric}?`}
+      subtitle={<>“{task.deliverable}” is done. If it produced a result, log it — it will be linked to this task.</>}
+      onClose={onClose}
+      footer={<button onClick={dismiss} disabled={busy} className="px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50">No result to log</button>}
+    >
+      <LogResult row={row} bdoId={task.bdoId} tasks={[{ id: task.id, deliverable: task.deliverable }]} defaultTaskId={task.id} onSaved={onDone} />
+    </KpiSheet>
+  );
+}
 
 // Trunqo design tokens for the task popup — same as the KPI and Team & Access popups.
 const inputClass = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
 const labelClass = "text-xs font-medium text-muted block mb-1";
 
-function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaultType, onClose, onSaved }: {
+function TaskFormModal({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdoId, defaultType, onClose, onSaved }: {
   task: Task | null;
   bdos: Bdo[];
   clients: ClientOption[];
+  allTasks: Task[];
   isBdo: boolean;
   oneCompany: boolean;
   myBdoId: string | null;
   defaultType: "TASK" | "PROPOSAL";
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved: Task, justCompleted: boolean) => void;
 }) {
   const { companies } = useCompanies();
   const { user } = useAuth();
-  // Staff always work in their own company — the server enforces it, so the form doesn't offer a choice.
   const ownCompany = oneCompany ? (user?.bdoCompany ?? null) : null;
   const [form, setForm] = useState({
     year: task?.year ?? new Date().getFullYear(),
     priority: task?.priority ?? "MEDIUM",
     deliverable: task?.deliverable ?? "",
     targetDate: task?.targetDate ? task.targetDate.slice(0, 10) : "",
-    status: task?.status ?? "PENDING",
+    startDate: task?.startDate ? task.startDate.slice(0, 10) : "",
+    status: task?.status === "OVERDUE" ? "PENDING" : task?.status ?? "PENDING",
     company: task?.company ?? ownCompany ?? "TRADELINE",
     bdoId: task?.bdoId ?? "",
     notes: task?.notes ?? "",
@@ -768,11 +878,40 @@ function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaul
     clientName: task?.clientName ?? "",
     proposalValueGhs: task?.proposalValueGhs != null ? String(task.proposalValueGhs) : "",
     outcome: task?.outcome ?? "DRAFT",
+    kpiId: task?.kpiId ?? "",
+    completionCriteria: task?.completionCriteria ?? "",
+    dependsOn: task?.dependsOn ?? [] as string[],
+    expenseActual: task?.expenseActual != null ? String(task.expenseActual) : "",
+    revenueActual: task?.revenueActual != null ? String(task.revenueActual) : "",
+    currency: task?.currency ?? "GHS",
+    exchangeRate: task?.exchangeRate && task.exchangeRate !== 1 ? String(task.exchangeRate) : "",
+    dealId: task?.dealId ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const set = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }));
+  const [showMoney, setShowMoney] = useState(!!(task?.expenseActual || task?.revenueActual));
+  const set = (k: string, v: string | number | string[]) => setForm((f) => ({ ...f, [k]: v }));
   const isProposal = form.type === "PROPOSAL";
+  const assignee = isBdo ? myBdoId : (form.bdoId || null);
+
+  // KPIs this work can serve: the assignee's own, their scorecard, and their company's.
+  const { data: linkable = [] } = useQuery<Linkable[]>({
+    queryKey: ["kpi-linkable", assignee ?? "", form.company],
+    queryFn: () => fetcher(`/kpi-framework/linkable?${new URLSearchParams({ ...(assignee ? { bdoId: assignee } : {}), company: form.company })}`),
+  });
+  const groups: [string, Linkable[]][] = [
+    ["Their KPIs", linkable.filter((k) => k.kind === "PERSONAL")],
+    ["Scorecard", linkable.filter((k) => k.kind === "SCORECARD")],
+    ["Company KPIs", linkable.filter((k) => k.kind === "COMPANY")],
+  ];
+  // Deals in the task's company this work can be for (the ones the person can see).
+  const { data: dealOpts = [] } = useQuery<DealOption[]>({
+    queryKey: ["task-deal-options", form.company],
+    queryFn: () => fetcher(`/tasks/deal-options?company=${encodeURIComponent(form.company)}`),
+    enabled: !!form.company,
+  });
+  const linkedDeal = dealOpts.find((d) => d.id === form.dealId) ?? (task?.deal && task.deal.id === form.dealId ? task.deal : null);
+  const depChoices = allTasks.filter((t) => t.id !== task?.id && t.type === "TASK" && t.status !== "CANCELLED");
 
   const save = async () => {
     if (!form.deliverable.trim()) { setError(`A ${isProposal ? "proposal title" : "task / deliverable"} is required.`); return; }
@@ -785,18 +924,29 @@ function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaul
       company: form.company,
       notes: form.notes || null,
       targetDate: form.targetDate || null,
-      bdoId: isBdo ? myBdoId : (form.bdoId || null),
+      startDate: form.startDate || null,
+      bdoId: assignee,
       type: form.type,
       smeId: isProposal ? (form.smeId || null) : null,
       clientName: isProposal ? (form.clientName || null) : null,
       proposalValueGhs: isProposal && form.proposalValueGhs ? Number(form.proposalValueGhs) : null,
       outcome: isProposal ? form.outcome : null,
+      kpiId: form.kpiId || null,
+      completionCriteria: form.completionCriteria || null,
+      dependsOn: form.dependsOn,
+      expenseActual: form.expenseActual === "" ? null : Number(form.expenseActual),
+      revenueActual: form.revenueActual === "" ? null : Number(form.revenueActual),
+      currency: form.currency,
+      exchangeRate: form.currency === "GHS" ? 1 : Number(form.exchangeRate) || null,
+      dealId: form.dealId || null,
     };
     try {
-      task ? await api.put(`/tasks/${task.id}`, body) : await api.post("/tasks", body);
-      onSaved();
-    } catch {
-      setError("Failed to save. Check the server.");
+      const res = task ? await api.put(`/tasks/${task.id}`, body) : await api.post("/tasks", body);
+      const saved = res.data as Task;
+      const kpi = saved.kpi ?? (linkable.find((k) => k.id === saved.kpiId) ? { ...linkable.find((k) => k.id === saved.kpiId)!, aggregation: null } as TaskKpi : null);
+      onSaved({ ...saved, kpi, bdoId: saved.bdoId ?? assignee }, form.status === "COMPLETED" && task?.status !== "COMPLETED");
+    } catch (err) {
+      setError(apiError(err, "Failed to save."));
     } finally {
       setSaving(false);
     }
@@ -804,36 +954,26 @@ function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaul
 
   return (
     <div className="fixed inset-0 bg-primary/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
-      <div className="bg-surface border border-border rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-surface border border-border rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] flex flex-col">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 shrink-0">
           <h2 className="font-serif text-lg text-foreground">{task ? "Edit" : "Add"} {isProposal ? "proposal" : "task"}</h2>
           <button onClick={onClose} className="text-muted hover:text-foreground transition-colors" aria-label="Close"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto">
-          {/* Type toggle */}
           <div>
             <label className={labelClass}>Type</label>
             <div className="flex rounded-lg border border-border overflow-hidden text-sm">
               {(["TASK", "PROPOSAL"] as const).map((t, i) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => set("type", t)}
-                  className={clsx(
-                    "flex-1 px-3 py-2 transition-colors",
-                    i > 0 && "border-l border-border",
-                    form.type === t ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5",
-                  )}
-                >
+                <button key={t} type="button" onClick={() => set("type", t)}
+                  className={clsx("flex-1 px-3 py-2 transition-colors", i > 0 && "border-l border-border", form.type === t ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5")}>
                   {t === "TASK" ? "Task" : "Proposal"}
                 </button>
               ))}
             </div>
           </div>
 
-          <div><label className={labelClass}>{isProposal ? "Proposal title" : "Task / deliverable"}</label><textarea value={form.deliverable} onChange={(e) => set("deliverable", e.target.value)} rows={2} className={inputClass + " resize-none"} /></div>
+          <div><label className={labelClass}>{isProposal ? "Proposal title" : "Task / deliverable"} *</label><textarea value={form.deliverable} onChange={(e) => set("deliverable", e.target.value)} rows={2} className={inputClass + " resize-none"} /></div>
 
-          {/* Proposal-only fields */}
           {isProposal && (
             <>
               <ClientSelect
@@ -854,18 +994,90 @@ function TaskFormModal({ task, bdos, clients, isBdo, oneCompany, myBdoId, defaul
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className={labelClass}>Year</label><input type="number" value={form.year} onChange={(e) => set("year", parseInt(e.target.value))} className={inputClass} /></div>
-            <div><label className={labelClass}>{isProposal ? "Due / sent date" : "Target date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className={inputClass} /></div>
-            <div><label className={labelClass}>Priority</label><select value={form.priority} onChange={(e) => set("priority", e.target.value)} className={inputClass}>{["HIGH","MEDIUM","LOW"].map((s) => <option key={s}>{s}</option>)}</select></div>
-            <div><label className={labelClass}>Status</label><select value={form.status} onChange={(e) => set("status", e.target.value)} className={inputClass}>{["PENDING","IN_PROGRESS","COMPLETED","OVERDUE","CANCELLED"].map((s) => <option key={s}>{s}</option>)}</select></div>
-            {/* Staff and Business CEOs always work in their own company, so they aren't asked. */}
             {!oneCompany && (
-              <div><label className={labelClass}>Company</label><select value={form.company} onChange={(e) => set("company", e.target.value)} className={inputClass}>{companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></div>
+              <div><label className={labelClass}>Company</label><select value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value, kpiId: "", dealId: "" }))} className={inputClass}>{companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></div>
             )}
             {!isBdo && (
-              <div><label className={labelClass}>BDO</label><select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className={inputClass}><option value="">— Unassigned —</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}</select></div>
+              <div><label className={labelClass}>Owner</label><select value={form.bdoId} onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value, kpiId: "" }))} className={inputClass}><option value="">— Unassigned —</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}</select></div>
             )}
           </div>
+
+          {/* The result this work moves */}
+          <div>
+            <label className={labelClass}>KPI it moves</label>
+            <select value={form.kpiId} onChange={(e) => set("kpiId", e.target.value)} className={inputClass}>
+              <option value="">— Not linked to a KPI —</option>
+              {groups.filter(([, ks]) => ks.length).map(([label, ks]) => (
+                <optgroup key={label} label={label}>
+                  {ks.map((k) => <option key={k.id} value={k.id}>{k.metric}{k.source === "AUTO" ? " (auto)" : ""}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          {/* The deal this work is for — money brought in lands on it as a payment */}
+          <div>
+            <label className={labelClass}>Deal it&apos;s for</label>
+            <select value={form.dealId} onChange={(e) => set("dealId", e.target.value)} className={inputClass}>
+              <option value="">— Not linked to a deal —</option>
+              {linkedDeal && !dealOpts.some((d) => d.id === linkedDeal.id) && <option value={linkedDeal.id}>{linkedDeal.name}</option>}
+              {dealOpts.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.stage.replace(/_/g, " ").toLowerCase()}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={labelClass}>Priority</label><select value={form.priority} onChange={(e) => set("priority", e.target.value)} className={inputClass}>{PRIORITIES.map((s) => <option key={s}>{s}</option>)}</select></div>
+            <div><label className={labelClass}>Status</label><select value={form.status} onChange={(e) => set("status", e.target.value)} className={inputClass}>{STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}</select></div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div><label className={labelClass}>Start date</label><input type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>{isProposal ? "Due / sent date" : "Due date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>Year</label><input type="number" value={form.year} onChange={(e) => set("year", parseInt(e.target.value))} className={inputClass} /></div>
+          </div>
+
+          <div><label className={labelClass}>Done when <span className="text-muted/60">(completion criteria)</span></label><input value={form.completionCriteria} onChange={(e) => set("completionCriteria", e.target.value)} className={inputClass} placeholder="e.g. Proposal sent and receipt confirmed by the client" /></div>
+
+          {depChoices.length > 0 && (
+            <div>
+              <label className={labelClass}>Waits on <span className="text-muted/60">(shows as Blocked until these are done)</span></label>
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-border divide-y divide-border/60">
+                {depChoices.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-primary/[0.03]">
+                    <input type="checkbox" checked={form.dependsOn.includes(t.id)} className="accent-[var(--color-accent)]"
+                      onChange={(e) => set("dependsOn", e.target.checked ? [...form.dependsOn, t.id] : form.dependsOn.filter((x) => x !== t.id))} />
+                    <span className="flex-1 truncate text-foreground">{t.deliverable}</span>
+                    <span className="text-[11px] text-muted">{t.status === "COMPLETED" ? "done" : t.bdo?.name ?? ""}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <button type="button" onClick={() => setShowMoney((s) => !s)} className="text-xs text-accent hover:underline">{showMoney ? "Hide" : "Add"} money spent / brought in</button>
+            {showMoney && (
+              <div className="mt-2 space-y-1.5">
+                <div className={clsx("grid gap-3", form.currency === "GHS" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
+                  <div><label className={labelClass}>Spent</label><input type="number" min="0" value={form.expenseActual} onChange={(e) => set("expenseActual", e.target.value)} className={inputClass} /></div>
+                  <div>
+                    <label className={labelClass}>Brought in</label>
+                    <input type="number" min="0" value={form.revenueActual} onChange={(e) => set("revenueActual", e.target.value)} disabled={!form.dealId && !form.revenueActual} className={inputClass + " disabled:opacity-50"} />
+                  </div>
+                  <div><label className={labelClass}>Currency</label><select value={form.currency} onChange={(e) => set("currency", e.target.value)} className={inputClass}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select></div>
+                  {form.currency !== "GHS" && (
+                    <div><label className={labelClass}>Rate to GHS</label><input type="number" min="0" step="any" value={form.exchangeRate} onChange={(e) => set("exchangeRate", e.target.value)} className={inputClass} placeholder="e.g. 15.2" /></div>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted">
+                  {form.dealId
+                    ? `When the task is marked Completed, the money brought in is recorded as a payment on ${linkedDeal?.name ?? "the deal"} and counts toward revenue received for the deal, the people on it, the company and the Group. Reopening the task takes it back off.`
+                    : "Link the deal this money came from (above) to record money brought in. It then counts as revenue received."}
+                </p>
+              </div>
+            )}
+          </div>
+
           <div><label className={labelClass}>Notes</label><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className={inputClass + " resize-none"} /></div>
           {error && <p className="text-red-600 text-sm bg-red-500/5 border border-red-200 px-3 py-2 rounded-lg">{error}</p>}
         </div>

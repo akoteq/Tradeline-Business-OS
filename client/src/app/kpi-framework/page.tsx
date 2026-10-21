@@ -8,51 +8,33 @@ import { useCompanies } from "@/lib/companies";
 import { useAuth } from "@/components/AuthProvider";
 import { accessLevel, isGroupOwner, isBusinessCeo, isManager, type AccessLevel } from "@/lib/auth";
 import {
-  KpiStatus, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
-  fmtKpiVal, PaceBar, AutoTag,
+  KpiStatus, KpiRow, KpiDef, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
+  fmtKpiVal, PaceBar, AutoTag, Tag, StatusPill, WorkChip, KpiSheet, KpiDetailSheet, windowLabel,
+  type ParentOpt, fitsUnder, ShareHint, FREQ_WORD,
 } from "@/components/kpi";
 import {
-  TrendingUp, Minus, Plus, Pencil, X, Settings2, Trash2,
+  TrendingUp, Minus, Plus, X, Settings2, Archive, Pencil,
   ChevronLeft, ChevronRight, ChevronDown, Lock, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown,
   MoreHorizontal, Calendar, Building2, Check, AlertTriangle, AlertCircle, Clock, CheckCircle2,
-  Target, MinusCircle, CalendarDays, Database, ShieldCheck, Users, FileText, Percent, Gauge, BarChart3,
+  Target, CalendarDays, Database, ShieldCheck, Users, FileText, Percent, Gauge, BarChart3,
+  FolderTree, Tags, List, GitBranch, CalendarX,
   type LucideIcon,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Def = {
-  id: string; metric: string; company: string; department: string | null; definition: string | null;
-  unit: string; higherIsBetter: boolean; frequency: string;
-  source: string; autoKey: string | null;
-};
-type AutoKey = { key: string; label: string; unit: string };
-type Entry = {
-  id: string; definitionId: string; period: string; current: number | null; target: number | null; start: number | null;
-  priority: string; actionPlan: string | null; decisionRequired: string | null;
-  executiveCommentary: string | null; dataSource: string | null; bdoId: string | null; company: string | null;
-  reviewStatus: ReviewStatus;
-};
-type AuditLog = {
-  id: string; action: string; field: string | null; previousValue: string | null; newValue: string | null;
-  reviewStatus: string | null; actorEmail: string | null; actorRole: string | null; note: string | null; createdAt: string;
-};
-
-type Status = KpiStatus;
-type ReviewStatus = "DRAFT" | "TARGET_SET" | "ACTUAL_SUBMITTED" | "VERIFIED" | "LOCKED";
-type BoardRow = {
-  definition: Def; entry: Entry | null;
-  current: number | null; target: number | null; variance: number; attainment: number | null;
-  expected: number | null; status: Status; trend: string;
-};
+type AutoKey = { key: string; label: string; unit: string; kind: string };
 type Dept = { department: string; count: number };
-type BdoLite = { id: string; name: string; company: string };
+type Category = { id: string; name: string; company: string; status: string; kpiCount: number };
+type Bdo = { id: string; name: string; company: string };
+type ReviewStatus = "DRAFT" | "TARGET_SET" | "ACTUAL_SUBMITTED" | "VERIFIED" | "LOCKED";
 type SortKey = "default" | "attain_asc" | "attain_desc" | "name";
+type View = "list" | "category" | "cascade";
+type CascadeNode = { row: KpiRow; children: CascadeNode[] };
 
 const UNIT_OPTS = ["COUNT", "CURRENCY", "PERCENT", "SCORE", "DAYS", "HOURS"];
 const FREQ_OPTS = ["WEEKLY", "MONTHLY", "QUARTERLY", "ANNUAL"];
-const STATUS_LIST = KPI_STATUS_LIST;
-const STATUS_STYLE = KPI_STATUS_STYLE;
-const STATUS_LABEL = KPI_STATUS_LABEL;
+const AGG_LABEL: Record<string, string> = { SUM: "Total of results", LATEST: "Latest reading", AVERAGE: "Average of readings" };
+const defaultAgg = (unit: string) => (unit === "COUNT" || unit === "CURRENCY" ? "SUM" : "LATEST");
 
 const REVIEW_STYLE: Record<ReviewStatus, string> = {
   DRAFT: "bg-foreground/5 text-muted",
@@ -62,7 +44,7 @@ const REVIEW_STYLE: Record<ReviewStatus, string> = {
   LOCKED: "bg-primary text-accent-foreground",
 };
 const REVIEW_LABEL: Record<ReviewStatus, string> = {
-  DRAFT: "Draft", TARGET_SET: "Target set", ACTUAL_SUBMITTED: "Submitted", VERIFIED: "Verified", LOCKED: "Locked",
+  DRAFT: "Open", TARGET_SET: "Target set", ACTUAL_SUBMITTED: "Submitted", VERIFIED: "Verified", LOCKED: "Locked",
 };
 
 // Mirrors TRANSITIONS in server/src/routes/kpiFramework.ts — the server is the authority,
@@ -81,28 +63,22 @@ const inputClass =
   "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-60";
 const selectClass =
   "text-sm bg-background border border-border rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40";
+const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
+const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
+const pickerClass =
+  "appearance-none bg-surface border border-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent";
 
-const fmtVal = fmtKpiVal;
-
-// Summary-card look per status. Keys are matched to KPI_STATUS_LIST; anything unknown falls back to neutral.
-const CARD_ORDER = ["BEHIND", "AT_RISK", "STALE", "ON_TRACK", "ACHIEVED", "NO_TARGET"];
+// Summary cards, worst first. The other statuses (Not started, No target, Draft) are in the filter menu.
+const CARD_STATUSES: KpiStatus[] = ["OVERDUE", "OFF_TRACK", "AT_RISK", "STALE", "ON_TRACK", "ACHIEVED"];
 type CardLook = { Icon: LucideIcon; card: string; icon: string; label: string };
-const CARD_NEUTRAL: CardLook = {
-  Icon: MinusCircle, card: "bg-surface border-border", icon: "bg-foreground/5 text-muted", label: "text-foreground/70",
-};
-const STATUS_CARD: Record<string, CardLook> = {
-  BEHIND: { Icon: AlertCircle, card: "bg-red-50/70 border-red-100", icon: "bg-red-100 text-red-500", label: "text-red-600" },
+const STATUS_CARD: Partial<Record<KpiStatus, CardLook>> = {
+  OVERDUE: { Icon: CalendarX, card: "bg-red-50/70 border-red-200", icon: "bg-red-600 text-white", label: "text-red-700" },
+  OFF_TRACK: { Icon: AlertCircle, card: "bg-red-50/70 border-red-100", icon: "bg-red-100 text-red-500", label: "text-red-600" },
   AT_RISK: { Icon: AlertTriangle, card: "bg-amber-50/70 border-amber-100", icon: "bg-amber-100 text-amber-600", label: "text-amber-600" },
   STALE: { Icon: Clock, card: "bg-surface border-border", icon: "bg-foreground/5 text-muted", label: "text-foreground/70" },
   ON_TRACK: { Icon: CheckCircle2, card: "bg-emerald-50/70 border-emerald-100", icon: "bg-emerald-100 text-emerald-600", label: "text-emerald-600" },
   ACHIEVED: { Icon: Target, card: "bg-sky-50/70 border-sky-100", icon: "bg-sky-100 text-sky-600", label: "text-sky-600" },
-  NO_TARGET: CARD_NEUTRAL,
 };
-// Match a status to a card look by its key, or failing that by its label ("Behind" → BEHIND),
-// so it still works if the server names a status differently (e.g. OFF_TRACK shown as "Behind").
-const statusKey = (s: string) =>
-  STATUS_CARD[s] ? s : ((STATUS_LABEL as Record<string, string>)[s] ?? s).toUpperCase().replace(/[\s-]+/g, "_");
-const cardRank = (s: string) => { const i = CARD_ORDER.indexOf(statusKey(s)); return i === -1 ? 99 : i; };
 
 const AVATAR_COLORS = [
   "bg-orange-600", "bg-indigo-600", "bg-emerald-600", "bg-rose-600", "bg-sky-600", "bg-amber-600", "bg-violet-600", "bg-teal-600",
@@ -117,6 +93,22 @@ function periodLabel(period: string) {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+// The period a recurring KPI's target is set for: "Week of 19 Oct 2026", "October 2026",
+// "Q4 2026" or "2026". A week is this week in the current month, else the month's last week
+// (as the server works it out).
+function periodLabelFor(period: string, frequency: string) {
+  const [y, m] = period.split("-").map(Number);
+  if (frequency === "WEEKLY") {
+    const now = new Date();
+    const day = now.getFullYear() === y && now.getMonth() === m - 1 ? now : new Date(y, m, 0);
+    const monday = new Date(day.getFullYear(), day.getMonth(), day.getDate() - ((day.getDay() + 6) % 7));
+    return `the week of ${monday.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+  }
+  if (frequency === "ANNUAL") return String(y);
+  if (frequency === "QUARTERLY") return `Q${Math.floor((m - 1) / 3) + 1} ${y}`;
+  return periodLabel(period);
+}
+
 // Newest first: 3 months ahead, then 2 years back. The selected period is always included.
 function buildMonthOptions(selected: string) {
   const now = new Date();
@@ -129,7 +121,7 @@ function buildMonthOptions(selected: string) {
   return values.map((v) => ({ value: v, label: periodLabel(v) }));
 }
 
-function kpiIcon(def: Def): LucideIcon {
+function kpiIcon(def: KpiDef): LucideIcon {
   const m = `${def.metric} ${def.department ?? ""}`.toLowerCase();
   if (/meeting|call|visit/.test(m)) return CalendarDays;
   if (/pipeline|deal|lead/.test(m)) return Database;
@@ -159,6 +151,15 @@ function TrendCell({ trend }: { trend: string }) {
   if (trend === "NEEDS_ATTENTION") return <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium"><ArrowDown size={14} /> Attention</span>;
   if (trend === "STABLE") return <span className="inline-flex items-center gap-1 text-muted text-xs font-medium"><Minus size={14} /> Stable</span>;
   return <span className="text-muted/50 text-xs">—</span>;
+}
+
+// Keeps the branches that hold a KPI of this company, with their parents for context.
+function pruneCascade(nodes: CascadeNode[], company: string): CascadeNode[] {
+  if (company === "GROUP") return nodes;
+  return nodes.flatMap((n) => {
+    const kids = pruneCascade(n.children, company);
+    return n.row.definition.company === company || kids.length ? [{ ...n, children: n.row.definition.company === company ? n.children : kids }] : [];
+  });
 }
 
 // ─── Floating menu (fixed-position so table overflow never clips it) ────────
@@ -265,6 +266,20 @@ function CompanyTabs({ options, value, onChange }: {
   );
 }
 
+function Picker({ icon: Icon, value, onChange, children, className }: {
+  icon: LucideIcon; value: string; onChange: (v: string) => void; children: ReactNode; className?: string;
+}) {
+  return (
+    <div className="relative inline-block">
+      <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={clsx(pickerClass, className)}>
+        {children}
+      </select>
+      <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function KpiFrameworkPage() {
   const { user } = useAuth();
@@ -274,88 +289,101 @@ export default function KpiFrameworkPage() {
   const canManage = isAdmin || !!ownCompany;
   const qc = useQueryClient();
   const { companies, byKey } = useCompanies();
+  const companyName = (k: string) => (k === "GROUP" ? "Group" : byKey[k]?.name ?? k);
 
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 20;
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [pickedCompany, setCompany] = useState("GROUP");
   const company = ownCompany ?? pickedCompany;
-  const [department, setDepartment] = useState<string>(""); // "" = all departments
-  const [statusFilter, setStatusFilter] = useState<Status | "">("");
+  const [department, setDepartment] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<KpiStatus | "">("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("default");
+  const [view, setView] = useState<View>("list");
   const [page, setPage] = useState(1);
-  const [editRow, setEditRow] = useState<BoardRow | null>(null);
+  const [openKpi, setOpenKpi] = useState<string | null>(null);
   const [showDefForm, setShowDefForm] = useState(false);
-  const [editDef, setEditDef] = useState<Def | null>(null);
+  const [editDef, setEditDef] = useState<KpiDef | null>(null);
+  const [editTarget, setEditTarget] = useState<KpiRow | null>(null);
+  const [showCategories, setShowCategories] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Company picker: Group + every active company (Group Owner); just their own (Business CEO).
+  // Links like /kpi-framework?view=cascade&kpi=<id> (alerts, the assistant) open a view or a KPI.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const v = q.get("view");
+    if (v === "cascade" || v === "category" || v === "list") setView(v);
+    const id = q.get("kpi");
+    if (id) setOpenKpi(id);
+  }, []);
+
   const companyOpts = ownCompany
     ? [{ key: ownCompany, name: byKey[ownCompany]?.name ?? ownCompany }]
     : [{ key: "GROUP", name: "Group" }, ...companies.map((c) => ({ key: c.key, name: c.name }))];
 
-  // Departments that exist within the selected company (optional sub-filter).
   const { data: departments = [] } = useQuery<Dept[]>({
     queryKey: ["kpi-departments", company],
     queryFn: () => fetcher(`/kpi-framework/departments?company=${company}`),
     enabled: !!user,
   });
-
-  // Owner names for the board (an entry only stores the BDO id). Managers only; falls back to "Unassigned".
-  const { data: bdos = [] } = useQuery<BdoLite[]>({
-    queryKey: ["bdos"],
-    queryFn: () => fetcher("/bdo"),
-    enabled: !!user && canManage,
-    retry: false,
-  });
-  const bdoName: Record<string, string> = Object.fromEntries(bdos.map((b) => [b.id, b.name]));
-
-  // Reset the department sub-filter whenever the company changes.
-  useEffect(() => { setDepartment(""); }, [company]);
-
-  const qp = new URLSearchParams({ period, company });
-  if (department) qp.set("department", department);
-
-  const { data: board = [], isLoading } = useQuery<BoardRow[]>({
-    queryKey: ["kpi-board", company, department, period],
-    queryFn: () => fetcher(`/kpi-framework/board?${qp}`),
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["kpi-categories", company],
+    queryFn: () => fetcher(`/kpi-framework/categories?company=${company}`),
     enabled: !!user,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["kpi-board"] });
-  const refreshAll = () => { qc.invalidateQueries({ queryKey: ["kpi-departments"] }); invalidate(); };
+  useEffect(() => { setDepartment(""); setCategoryId(""); }, [company]);
 
-  const deleteDef = useMutation({
+  const qp = new URLSearchParams({ period, company });
+  if (department) qp.set("department", department);
+  if (categoryId) qp.set("categoryId", categoryId);
+
+  const { data: board = [], isLoading, error } = useQuery<KpiRow[]>({
+    queryKey: ["kpi-board", company, department, categoryId, period],
+    queryFn: () => fetcher(`/kpi-framework/board?${qp}`),
+    enabled: !!user,
+  });
+  const { data: cascade = [], isLoading: cascadeLoading, error: cascadeError } = useQuery<CascadeNode[]>({
+    queryKey: ["kpi-cascade", period],
+    queryFn: () => fetcher(`/kpi-framework/cascade?period=${period}`),
+    enabled: !!user && view === "cascade",
+  });
+
+  const invalidate = () => { qc.invalidateQueries({ queryKey: ["kpi-board"] }); qc.invalidateQueries({ queryKey: ["kpi-cascade"] }); };
+  const refreshAll = () => {
+    qc.invalidateQueries({ queryKey: ["kpi-departments"] });
+    qc.invalidateQueries({ queryKey: ["kpi-categories"] });
+    invalidate();
+  };
+
+  const archiveDef = useMutation({
     mutationFn: (id: string) => api.delete(`/kpi-framework/definitions/${id}`),
     onSuccess: refreshAll,
   });
 
-  // One-tap +1 for manual count KPIs. Staff update their own KPIs from My KPIs instead.
-  const canQuickAdd = (r: BoardRow) =>
-    isManager(user) && r.definition.source !== "AUTO"
-    && r.definition.unit === "COUNT" && r.entry?.reviewStatus !== "LOCKED";
+  // One-tap +1 for manual totals.
+  const canQuickAdd = (r: KpiRow) =>
+    isManager(user) && r.definition.source !== "AUTO" && r.aggregation === "SUM"
+    && r.definition.unit === "COUNT" && r.entry?.reviewStatus !== "LOCKED" && r.status !== "DRAFT";
   const quickAdd = useMutation({
-    mutationFn: (r: BoardRow) => api.post("/kpi-framework/quick-update", {
-      definitionId: r.definition.id, period, delta: 1, bdoId: r.entry?.bdoId ?? null,
-    }),
+    mutationFn: (r: KpiRow) => api.post("/kpi-framework/quick-update", { definitionId: r.definition.id, period, delta: 1 }),
     onSuccess: invalidate,
     onError: (err) => window.alert(apiError(err, "Couldn't update the KPI.")),
   });
 
-  const counts = board.reduce(
-    (acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; },
-    {} as Record<string, number>,
-  );
-  const scored = board.filter((r) => r.attainment != null);
-  const avgAttainment = scored.length
-    ? Math.round(scored.reduce((s, r) => s + (r.attainment ?? 0), 0) / scored.length)
-    : null;
+  const counts = board.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
+  // Achievement covers every live KPI with a target, so a few good ones can't hide the rest.
+  const judged = board.filter((r) => r.status !== "DRAFT" && r.status !== "NOT_STARTED");
+  const scored = judged.filter((r) => r.attainment != null);
+  const avgAttainment = scored.length ? Math.round(scored.reduce((s, r) => s + Math.min(100, r.attainment ?? 0), 0) / scored.length) : null;
+  const withTarget = judged.filter((r) => r.target != null).length;
 
   // Status filter → search → sort.
   const q = search.trim().toLowerCase();
-  const ownerOf = (r: BoardRow) => (r.entry?.bdoId ? bdoName[r.entry.bdoId] ?? null : null);
   const filtered = board.filter((r) =>
     (!statusFilter || r.status === statusFilter) &&
-    (!q || [r.definition.metric, r.definition.department, r.definition.definition, ownerOf(r)]
+    (!q || [r.definition.metric, r.definition.department, r.definition.definition, r.owner?.name, r.category?.name, r.parent?.metric]
       .some((v) => (v ?? "").toLowerCase().includes(q))),
   );
   const rows = [...filtered].sort((a, b) => {
@@ -370,18 +398,26 @@ export default function KpiFrameworkPage() {
     return 0;
   });
 
-  // Client-side pagination of the board.
-  useEffect(() => { setPage(1); }, [company, department, period, statusFilter, search, sort]);
+  useEffect(() => { setPage(1); }, [company, department, categoryId, period, statusFilter, search, sort, view]);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
-  const pageRows = rows.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+  const pageRows = view === "category" ? rows : rows.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
 
-  const orderedStatuses = [...STATUS_LIST].sort((a, b) => cardRank(a as string) - cardRank(b as string));
+  // By-category view: one block per category (uncategorised last).
+  const groups = view === "category"
+    ? [...categories.map((c) => ({ key: c.id, name: c.name, rows: rows.filter((r) => r.category?.id === c.id) })),
+       { key: "none", name: "No category", rows: rows.filter((r) => !r.category) }].filter((g) => g.rows.length)
+    : [{ key: "all", name: "", rows: pageRows }];
+
+  const tree = pruneCascade(cascade, company);
+  const toggleBranch = (id: string) => setCollapsed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
   const monthOptions = buildMonthOptions(period);
   const iconBtn = (active: boolean) => clsx(
     "p-2.5 rounded-xl border bg-surface transition-colors",
     active ? "border-accent text-accent" : "border-border text-muted hover:text-foreground hover:bg-primary/5",
   );
+  const COLS = ["KPI", "Owner / Category", "Actual", "Target", "Attainment", "Work", "Status", "Trend", "Review", "Actions"];
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
@@ -390,50 +426,58 @@ export default function KpiFrameworkPage() {
         <div className="min-w-0">
           <p className="text-[11px] font-semibold text-muted uppercase tracking-[0.2em] mb-1">Performance</p>
           <h1 className="font-serif text-3xl md:text-5xl text-foreground tracking-tight">KPI Framework</h1>
-          <p className="text-sm text-muted mt-2">
-            {ownCompany && <>{byKey[ownCompany]?.name ?? ownCompany} · </>}Targets vs actuals for {periodLabel(period)}. Status is calculated against pace — the tick on each bar is where a KPI should be by today.
+          <p className="text-sm text-muted mt-2 max-w-3xl">
+            {ownCompany && <>{companyName(ownCompany)} · </>}Recurring KPIs show {periodLabel(period)}; KPIs with fixed dates show their whole window.
+            Status is judged against pace — the tick on each bar is where a KPI should be by today.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="appearance-none bg-surface border border-border rounded-xl pl-10 pr-10 py-2.5 text-sm text-foreground shadow-sm min-w-[190px] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
-            >
-              {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Picker icon={Calendar} value={period} onChange={setPeriod} className="min-w-[190px]">
+            {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </Picker>
           {canManage && (
-            <button
-              onClick={() => setShowDefForm(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-accent text-accent-foreground rounded-xl shadow-sm hover:opacity-90 transition-opacity"
-            >
+            <button onClick={() => setShowCategories(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl border border-border bg-surface text-foreground shadow-sm hover:bg-primary/5 transition-colors">
+              <Tags size={16} /> Categories
+            </button>
+          )}
+          {canManage && (
+            <button onClick={() => setShowDefForm(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-accent text-accent-foreground rounded-xl shadow-sm hover:opacity-90 transition-opacity">
               <Plus size={16} /> Add KPI
             </button>
           )}
         </div>
       </div>
 
-      {/* Company tabs + department */}
+      {/* Company tabs + category / department + view */}
       <div className="space-y-3">
         {!ownCompany && <CompanyTabs options={companyOpts} value={company} onChange={setCompany} />}
-        {departments.length > 0 && (
-          <div className="relative inline-block">
-            <Building2 size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className="appearance-none bg-surface border border-border rounded-xl pl-10 pr-10 py-3 text-sm text-foreground shadow-sm min-w-[240px] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
-            >
+        <div className="flex flex-wrap items-center gap-3">
+          {categories.length > 0 && view !== "cascade" && (
+            <Picker icon={Tags} value={categoryId} onChange={setCategoryId} className="min-w-[220px]">
+              <option value="">All Categories</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.kpiCount})</option>)}
+              <option value="none">No category</option>
+            </Picker>
+          )}
+          {departments.length > 0 && view !== "cascade" && (
+            <Picker icon={Building2} value={department} onChange={setDepartment} className="min-w-[220px]">
               <option value="">All Departments</option>
               {departments.map((d) => <option key={d.department} value={d.department}>{d.department} ({d.count})</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            </Picker>
+          )}
+          <div className="flex rounded-xl border border-border bg-surface shadow-sm overflow-hidden text-sm ml-auto">
+            {([["list", "List", List], ["category", "By category", FolderTree], ["cascade", "Cascade", GitBranch]] as const).map(([v, label, Icon], i) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                title={v === "cascade" ? "Group → company → person: how each target is shared down the chain" : undefined}
+                className={clsx("flex items-center gap-1.5 px-3.5 py-2.5 transition-colors", i > 0 && "border-l border-border", view === v ? "bg-primary text-accent-foreground font-medium" : "text-foreground/70 hover:bg-primary/5")}
+              >
+                <Icon size={15} /> {label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Summary — click a status to filter */}
@@ -441,13 +485,11 @@ export default function KpiFrameworkPage() {
         <div className="col-span-2 sm:col-span-4 lg:col-span-1 rounded-2xl bg-primary text-accent-foreground p-4 shadow-sm flex flex-col">
           <div className="flex items-center gap-2.5">
             <BarChart3 size={20} className="opacity-80" />
-            <span className="text-sm font-medium opacity-90">Average Attainment</span>
+            <span className="text-sm font-medium opacity-90">Achievement</span>
           </div>
           <div className="text-4xl font-semibold tabular-nums mt-2">{avgAttainment != null ? `${avgAttainment}%` : "—"}</div>
           <div className="text-xs opacity-60 mt-0.5">
-            {scored.length
-              ? `Based on ${scored.length} of ${board.length} KPI${board.length === 1 ? "" : "s"} with a target set`
-              : "No targets set yet"}
+            {judged.length ? `${withTarget} of ${judged.length} live KPI${judged.length === 1 ? "" : "s"} have a target` : "No live KPIs yet"}
           </div>
           <div className="mt-auto pt-3">
             <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
@@ -455,13 +497,13 @@ export default function KpiFrameworkPage() {
             </div>
           </div>
         </div>
-        {orderedStatuses.map((s) => {
+        {CARD_STATUSES.map((s) => {
           const active = statusFilter === s;
-          const look = STATUS_CARD[statusKey(s as string)] ?? CARD_NEUTRAL;
+          const look = STATUS_CARD[s]!;
           return (
             <button
               key={s}
-              onClick={() => setStatusFilter(active ? "" : s)}
+              onClick={() => { setStatusFilter(active ? "" : s); if (view === "cascade") setView("list"); }}
               title={KPI_STATUS_HINT[s]}
               className={clsx(
                 "rounded-2xl border p-4 text-left transition-all shadow-sm",
@@ -473,7 +515,7 @@ export default function KpiFrameworkPage() {
                 <span className={clsx("h-8 w-8 rounded-full grid place-items-center shrink-0", look.icon)}>
                   <look.Icon size={16} />
                 </span>
-                <span className={clsx("text-sm font-semibold truncate", look.label)}>{STATUS_LABEL[s]}</span>
+                <span className={clsx("text-sm font-semibold truncate", look.label)}>{KPI_STATUS_LABEL[s]}</span>
               </div>
               <div className="text-3xl font-semibold text-foreground tabular-nums mt-3">{counts[s] ?? 0}</div>
               <div className="text-xs text-muted mt-0.5 leading-snug">{KPI_STATUS_HINT[s]}</div>
@@ -482,232 +524,330 @@ export default function KpiFrameworkPage() {
         })}
       </div>
 
-      {/* Board */}
-      <div className="rounded-2xl border border-border bg-surface shadow-sm">
-        <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold text-foreground">
-              {rows.length} KPI{rows.length === 1 ? "" : "s"}
-              {statusFilter && <span className="text-muted font-normal text-sm"> · {STATUS_LABEL[statusFilter]}</span>}
-            </span>
-            {statusFilter && (
-              <button onClick={() => setStatusFilter("")} className="text-xs text-muted hover:text-accent transition-colors">
-                Clear filter
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:flex-none sm:w-72">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search KPIs..."
-                className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
-              />
+      {view === "cascade" ? (
+        <CascadeView
+          tree={tree}
+          isLoading={cascadeLoading}
+          error={cascadeError}
+          collapsed={collapsed}
+          onToggle={toggleBranch}
+          onOpen={setOpenKpi}
+          companyName={companyName}
+          scopeName={companyName(company)}
+        />
+      ) : (
+        /* Board */
+        <div className="rounded-2xl border border-border bg-surface shadow-sm">
+          <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-semibold text-foreground">
+                {rows.length} KPI{rows.length === 1 ? "" : "s"}
+                {statusFilter && <span className="text-muted font-normal text-sm"> · {KPI_STATUS_LABEL[statusFilter]}</span>}
+              </span>
+              {statusFilter && (
+                <button onClick={() => setStatusFilter("")} className="text-xs text-muted hover:text-accent transition-colors">Clear filter</button>
+              )}
             </div>
-            <Menu
-              trigger={({ toggle }) => (
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none sm:w-72">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search KPIs, owners, categories..."
+                  className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+                />
+              </div>
+              <Menu trigger={({ toggle }) => (
                 <button onClick={toggle} className={iconBtn(!!statusFilter)} title="Filter by status" aria-label="Filter by status"><Filter size={16} /></button>
-              )}
-            >
-              {(close) => (
-                <>
-                  <MenuItem active={!statusFilter} onClick={() => { setStatusFilter(""); close(); }}>All statuses</MenuItem>
-                  {orderedStatuses.map((s) => (
-                    <MenuItem key={s} active={statusFilter === s} onClick={() => { setStatusFilter(s); close(); }}>{STATUS_LABEL[s]}</MenuItem>
-                  ))}
-                </>
-              )}
-            </Menu>
-            <Menu
-              trigger={({ toggle }) => (
+              )}>
+                {(close) => (
+                  <>
+                    <MenuItem active={!statusFilter} onClick={() => { setStatusFilter(""); close(); }}>All statuses</MenuItem>
+                    {KPI_STATUS_LIST.map((s) => (
+                      <MenuItem key={s} active={statusFilter === s} onClick={() => { setStatusFilter(s); close(); }}>{KPI_STATUS_LABEL[s]}</MenuItem>
+                    ))}
+                  </>
+                )}
+              </Menu>
+              <Menu trigger={({ toggle }) => (
                 <button onClick={toggle} className={iconBtn(sort !== "default")} title="Sort" aria-label="Sort"><ArrowUpDown size={16} /></button>
-              )}
-            >
-              {(close) => (
-                <>
-                  <MenuItem active={sort === "default"} onClick={() => { setSort("default"); close(); }}>Default order</MenuItem>
-                  <MenuItem active={sort === "attain_asc"} onClick={() => { setSort("attain_asc"); close(); }}>Attainment: low → high</MenuItem>
-                  <MenuItem active={sort === "attain_desc"} onClick={() => { setSort("attain_desc"); close(); }}>Attainment: high → low</MenuItem>
-                  <MenuItem active={sort === "name"} onClick={() => { setSort("name"); close(); }}>Name A–Z</MenuItem>
-                </>
-              )}
-            </Menu>
+              )}>
+                {(close) => (
+                  <>
+                    <MenuItem active={sort === "default"} onClick={() => { setSort("default"); close(); }}>Default order</MenuItem>
+                    <MenuItem active={sort === "attain_asc"} onClick={() => { setSort("attain_asc"); close(); }}>Attainment: low → high</MenuItem>
+                    <MenuItem active={sort === "attain_desc"} onClick={() => { setSort("attain_desc"); close(); }}>Attainment: high → low</MenuItem>
+                    <MenuItem active={sort === "name"} onClick={() => { setSort("name"); close(); }}>Name A–Z</MenuItem>
+                  </>
+                )}
+              </Menu>
+            </div>
           </div>
-        </div>
 
-        <div className="overflow-x-auto border-t border-border">
-          <table className="w-full text-sm min-w-[1040px]">
-            <thead className="border-b border-border">
-              <tr>
-                {["KPI", "Owner / Department", "Actual", "Target", "Attainment", "Status", "Trend", "Review", "Actions"].map((h) => (
-                  <th
-                    key={h}
-                    className={clsx(
-                      "px-4 py-3 text-[10.5px] font-semibold text-muted uppercase tracking-wider whitespace-nowrap",
-                      h === "Actions" ? "text-right pr-5" : "text-left",
-                      h === "KPI" && "pl-5",
-                    )}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {isLoading ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted">Loading…</td></tr>
-              ) : rows.length === 0 ? (
+          <div className="overflow-x-auto border-t border-border">
+            <table className="w-full text-sm min-w-[1180px]">
+              <thead className="border-b border-border">
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
-                    <p className="text-muted">{board.length === 0 ? "No KPIs set up for this company yet." : "No KPIs match this filter."}</p>
-                    {canManage && board.length === 0 && (
-                      <button onClick={() => setShowDefForm(true)} className="mt-3 text-sm font-medium text-accent hover:underline">
-                        Add the first KPI
-                      </button>
-                    )}
-                  </td>
+                  {COLS.map((h) => (
+                    <th
+                      key={h}
+                      className={clsx(
+                        "px-4 py-3 text-[10.5px] font-semibold text-muted uppercase tracking-wider whitespace-nowrap",
+                        h === "Actions" ? "text-right pr-5" : "text-left",
+                        h === "KPI" && "pl-5",
+                      )}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ) : pageRows.map((r) => {
-                const Icon = kpiIcon(r.definition);
-                const owner = ownerOf(r);
-                return (
-                  <tr key={r.definition.id} className="hover:bg-primary/[0.03] transition-colors">
-                    <td className="pl-5 pr-4 py-4">
-                      <button onClick={() => setEditRow(r)} className="flex items-center gap-3 text-left group">
-                        <span className="h-10 w-10 rounded-full bg-foreground/5 text-foreground/80 grid place-items-center shrink-0">
-                          <Icon size={17} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="font-semibold text-foreground group-hover:text-accent transition-colors flex items-center gap-1.5">
-                            {r.definition.metric}
-                            {r.definition.source === "AUTO" && <AutoTag />}
-                          </span>
-                          <span className="block text-xs text-muted truncate max-w-[240px]">
-                            {r.definition.definition || r.definition.frequency.toLowerCase()}
-                          </span>
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2.5">
-                        {owner ? (
-                          <span className={clsx("h-8 w-8 rounded-full grid place-items-center text-[11px] font-semibold text-white shrink-0", avatarColor(owner))}>
-                            {initials(owner)}
-                          </span>
-                        ) : (
-                          <span className="h-8 w-8 rounded-full grid place-items-center bg-foreground/5 text-muted shrink-0"><Users size={14} /></span>
-                        )}
-                        <div className="min-w-0">
-                          <div className={clsx("text-[13px] font-medium truncate max-w-[160px]", owner ? "text-foreground" : "text-muted")}>{owner ?? "Unassigned"}</div>
-                          <div className="text-xs text-muted truncate max-w-[160px]">{r.definition.department ?? "—"}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 font-medium text-foreground tabular-nums whitespace-nowrap">{fmtVal(r.current, r.definition.unit)}</td>
-                    <td className="px-4 py-4 text-foreground/80 tabular-nums whitespace-nowrap">{fmtVal(r.target, r.definition.unit)}</td>
-                    <td className="px-4 py-4 min-w-[150px]">
-                      {r.attainment != null ? (
-                        <div className="w-36">
-                          <div className="text-xs font-medium tabular-nums text-foreground mb-1">{r.attainment}%</div>
-                          <div className="flex"><PaceBar attainment={r.attainment} expected={r.expected} status={r.status} /></div>
-                        </div>
-                      ) : <span className="text-muted/50">—</span>}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span title={KPI_STATUS_HINT[r.status]} className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_STYLE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap"><TrendCell trend={r.attainment != null ? r.trend : ""} /></td>
-                    <td className="px-4 py-4">
-                      {r.entry ? <ReviewBadge value={r.entry.reviewStatus} /> : <span className="text-muted/50 text-xs">—</span>}
-                    </td>
-                    <td className="pl-4 pr-5 py-4">
-                      <div className="flex items-center gap-0.5 justify-end">
-                        {canQuickAdd(r) && (
-                          <button
-                            onClick={() => quickAdd.mutate(r)}
-                            disabled={quickAdd.isPending}
-                            title="Add 1 to the actual"
-                            className="px-1.5 py-0.5 mr-1 rounded-md border border-border text-xs font-medium text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
-                          >
-                            +1
-                          </button>
-                        )}
-                        <IconButton title="Enter target / actual" onClick={() => setEditRow(r)}><Pencil size={15} /></IconButton>
-                        {canManage && (
-                          <Menu
-                            width={176}
-                            trigger={({ toggle }) => (
-                              <IconButton title="More actions" onClick={toggle}><MoreHorizontal size={16} /></IconButton>
-                            )}
-                          >
-                            {(close) => (
-                              <>
-                                <MenuItem icon={<Settings2 size={14} />} onClick={() => { close(); setEditDef(r.definition); }}>Edit KPI</MenuItem>
-                                <MenuItem
-                                  icon={<Trash2 size={14} />}
-                                  danger
-                                  onClick={() => {
-                                    close();
-                                    if (window.confirm(`Delete KPI "${r.definition.metric}"? This removes it from the framework.`)) deleteDef.mutate(r.definition.id);
-                                  }}
-                                >
-                                  Delete KPI
-                                </MenuItem>
-                              </>
-                            )}
-                          </Menu>
-                        )}
-                      </div>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {isLoading ? (
+                  <tr><td colSpan={COLS.length} className="px-4 py-10 text-center text-muted">Loading…</td></tr>
+                ) : error ? (
+                  <tr><td colSpan={COLS.length} className="px-4 py-10 text-center text-red-600">{apiError(error, "Couldn't load KPIs.")}</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLS.length} className="px-4 py-12 text-center">
+                      <p className="text-muted">{board.length === 0 ? "No KPIs set up for this company yet." : "No KPIs match this filter."}</p>
+                      {canManage && board.length === 0 && (
+                        <button onClick={() => setShowDefForm(true)} className="mt-3 text-sm font-medium text-accent hover:underline">Add the first KPI</button>
+                      )}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {rows.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-sm">
-            <span className="text-muted">
-              {(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, rows.length)} of {rows.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={pageSafe <= 1}
-                className="p-1.5 rounded-lg border border-border text-foreground hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed"
-              ><ChevronLeft size={16} /></button>
-              <span className="px-2 text-muted">Page {pageSafe} of {totalPages}</span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={pageSafe >= totalPages}
-                className="p-1.5 rounded-lg border border-border text-foreground hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed"
-              ><ChevronRight size={16} /></button>
-            </div>
+                ) : groups.map((g) => (
+                  <BoardGroup key={g.key} name={g.name} rows={g.rows} colSpan={COLS.length}>
+                    {g.rows.map((r) => {
+                      const Icon = kpiIcon(r.definition);
+                      const owner = r.owner?.name ?? null;
+                      return (
+                        <tr key={r.definition.id} className="hover:bg-primary/[0.03] transition-colors">
+                          <td className="pl-5 pr-4 py-4">
+                            <button onClick={() => setOpenKpi(r.definition.id)} className="flex items-center gap-3 text-left group">
+                              <span className="h-10 w-10 rounded-full bg-foreground/5 text-foreground/80 grid place-items-center shrink-0">
+                                <Icon size={17} />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="font-semibold text-foreground group-hover:text-accent transition-colors flex items-center gap-1.5 flex-wrap">
+                                  {r.definition.metric}
+                                  {r.definition.source === "AUTO" && <AutoTag />}
+                                  {r.definition.state === "DRAFT" && <Tag>Draft</Tag>}
+                                  {r.children.count > 0 && <Tag title="KPIs under this one">{r.children.count} under</Tag>}
+                                </span>
+                                <span className="block text-xs text-muted truncate max-w-[280px]">
+                                  {[r.parent ? `↳ ${r.parent.metric} (${companyName(r.parent.company)})` : null, windowLabel(r.window, r.definition.frequency)].filter(Boolean).join(" · ")}
+                                </span>
+                              </span>
+                            </button>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2.5">
+                              {owner ? (
+                                <span className={clsx("h-8 w-8 rounded-full grid place-items-center text-[11px] font-semibold text-white shrink-0", avatarColor(owner))}>{initials(owner)}</span>
+                              ) : (
+                                <span className="h-8 w-8 rounded-full grid place-items-center bg-foreground/5 text-muted shrink-0"><Users size={14} /></span>
+                              )}
+                              <div className="min-w-0">
+                                <div className={clsx("text-[13px] font-medium truncate max-w-[160px]", owner ? "text-foreground" : "text-muted")}>{owner ?? "Unassigned"}</div>
+                                <div className="text-xs text-muted truncate max-w-[160px]">{r.category?.name ?? r.definition.department ?? "—"}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 font-medium text-foreground tabular-nums whitespace-nowrap">{fmtKpiVal(r.current, r.definition.unit)}</td>
+                          <td className="px-4 py-4 text-foreground/80 tabular-nums whitespace-nowrap" title={r.targetCarried ? "Carried over from an earlier period" : undefined}>
+                            {fmtKpiVal(r.target, r.definition.unit)}{r.targetCarried && <span className="text-muted/60">*</span>}
+                          </td>
+                          <td className="px-4 py-4 min-w-[150px]">
+                            {r.attainment != null ? (
+                              <div className="w-36">
+                                <div className="text-xs font-medium tabular-nums text-foreground mb-1">{r.attainment}%</div>
+                                <div className="flex"><PaceBar attainment={r.attainment} expected={r.expected} status={r.status} /></div>
+                              </div>
+                            ) : <span className="text-muted/50">—</span>}
+                          </td>
+                          <td className="px-4 py-4"><WorkChip work={r.work} /></td>
+                          <td className="px-4 py-4"><StatusPill status={r.status} className="px-2.5 py-1" /></td>
+                          <td className="px-4 py-4 whitespace-nowrap"><TrendCell trend={r.attainment != null ? r.trend : ""} /></td>
+                          <td className="px-4 py-4">{r.entry ? <ReviewBadge value={r.entry.reviewStatus as ReviewStatus} /> : <span className="text-muted/50 text-xs">—</span>}</td>
+                          <td className="pl-4 pr-5 py-4">
+                            <div className="flex items-center gap-0.5 justify-end">
+                              {canQuickAdd(r) && (
+                                <button onClick={() => quickAdd.mutate(r)} disabled={quickAdd.isPending} title="Log +1"
+                                  className="px-1.5 py-0.5 mr-1 rounded-md border border-border text-xs font-medium text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50">+1</button>
+                              )}
+                              <IconButton title="Open — results, work and the chain" onClick={() => setOpenKpi(r.definition.id)}><Pencil size={15} /></IconButton>
+                              {canManage && (
+                                <Menu width={210} trigger={({ toggle }) => (
+                                  <IconButton title="More actions" onClick={toggle}><MoreHorizontal size={16} /></IconButton>
+                                )}>
+                                  {(close) => (
+                                    <>
+                                      {!r.window.windowed && (
+                                        <MenuItem icon={<Target size={14} />} onClick={() => { close(); setEditTarget(r); }}>Target for {periodLabelFor(period, r.definition.frequency)}</MenuItem>
+                                      )}
+                                      <MenuItem icon={<Settings2 size={14} />} onClick={() => { close(); setEditDef(r.definition); }}>Edit KPI</MenuItem>
+                                      <MenuItem
+                                        icon={<Archive size={14} />}
+                                        danger
+                                        onClick={() => {
+                                          close();
+                                          if (window.confirm(`Archive KPI "${r.definition.metric}"? Its history is kept; KPIs under it are unlinked.`)) archiveDef.mutate(r.definition.id);
+                                        }}
+                                      >
+                                        Archive KPI
+                                      </MenuItem>
+                                    </>
+                                  )}
+                                </Menu>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </BoardGroup>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          {view === "list" && rows.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-border text-sm">
+              <span className="text-muted">{(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, rows.length)} of {rows.length}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe <= 1} className="p-1.5 rounded-lg border border-border text-foreground hover:bg-primary/5 disabled:opacity-40"><ChevronLeft size={16} /></button>
+                <span className="px-2 text-muted">Page {pageSafe} of {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe >= totalPages} className="p-1.5 rounded-lg border border-border text-foreground hover:bg-primary/5 disabled:opacity-40"><ChevronRight size={16} /></button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {editRow && (
-        <EntryModal
-          row={editRow}
+      {openKpi && (
+        <KpiDetailSheet
+          kpiId={openKpi}
           period={period}
-          company={company}
-          role={user?.role ?? ""}
-          onClose={() => setEditRow(null)}
-          onSaved={invalidate}
+          onClose={() => setOpenKpi(null)}
+          onChanged={invalidate}
+          onOpen={setOpenKpi}
+          companyName={companyName}
+          extra={(row) => <ReviewPanel row={row} role={user?.role ?? ""} onChanged={() => { invalidate(); qc.invalidateQueries({ queryKey: ["kpi-detail"] }); }} />}
         />
+      )}
+      {editTarget && (
+        <PeriodTargetSheet row={editTarget} period={period} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); invalidate(); }} />
       )}
       {(showDefForm || editDef) && (
         <DefinitionModal
           editDef={editDef}
           departments={departments}
+          categories={categories}
           companyOpts={companyOpts}
           defaultCompany={company}
+          period={period}
           onClose={() => { setShowDefForm(false); setEditDef(null); }}
           onSaved={() => { setShowDefForm(false); setEditDef(null); refreshAll(); }}
         />
+      )}
+      {showCategories && <CategoriesModal company={company} companyName={companyName(company)} onClose={() => setShowCategories(false)} onChanged={refreshAll} />}
+    </div>
+  );
+}
+
+function BoardGroup({ name, rows, colSpan, children }: { name: string; rows: KpiRow[]; colSpan: number; children: ReactNode }) {
+  if (!name) return <>{children}</>;
+  const c = rows.reduce((m, r) => { m[r.status] = (m[r.status] ?? 0) + 1; return m; }, {} as Record<string, number>);
+  return (
+    <>
+      <tr className="bg-background/70">
+        <td colSpan={colSpan} className="px-5 py-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wider">{name}</span>
+            <span className="text-[11px] text-muted">{rows.length} KPI{rows.length === 1 ? "" : "s"}</span>
+            {(["OVERDUE", "OFF_TRACK", "AT_RISK", "ON_TRACK", "ACHIEVED"] as KpiStatus[]).filter((s) => c[s]).map((s) => (
+              <span key={s} className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${KPI_STATUS_STYLE[s]}`}>{c[s]} {KPI_STATUS_LABEL[s]}</span>
+            ))}
+          </div>
+        </td>
+      </tr>
+      {children}
+    </>
+  );
+}
+
+// ─── Cascade: Group → company → person ──────────────────────────────────────
+// Each level counts the results in its own scope and window; the note under a parent shows
+// how much of its target the KPIs below it have taken.
+function CascadeView({ tree, isLoading, error, collapsed, onToggle, onOpen, companyName, scopeName }: {
+  tree: CascadeNode[]; isLoading: boolean; error: unknown; collapsed: Set<string>;
+  onToggle: (id: string) => void; onOpen: (id: string) => void; companyName: (k: string) => string; scopeName: string;
+}) {
+  const box = "rounded-2xl border border-border bg-surface shadow-sm px-4 py-12 text-center text-muted";
+  if (isLoading) return <div className={box}>Loading the cascade…</div>;
+  if (error) return <div className={clsx(box, "text-red-600")}>{apiError(error, "Couldn't load the cascade.")}</div>;
+  if (!tree.length) {
+    return <div className={box}>No KPIs in {scopeName}&apos;s cascade yet. Add a Group KPI, then company and personal KPIs that are &quot;part of&quot; it.</div>;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted px-1">One goal shared down the chain. Deals won and money received move every level at once.</p>
+      {tree.map((n) => <Branch key={n.row.definition.id} node={n} depth={0} collapsed={collapsed} onToggle={onToggle} onOpen={onOpen} companyName={companyName} />)}
+    </div>
+  );
+}
+
+function Branch({ node, depth, collapsed, onToggle, onOpen, companyName }: {
+  node: CascadeNode; depth: number; collapsed: Set<string>; onToggle: (id: string) => void; onOpen: (id: string) => void; companyName: (k: string) => string;
+}) {
+  const r = node.row;
+  const d = r.definition;
+  const id = d.id;
+  const isOpen = !collapsed.has(id);
+  const level = d.ownerBdoId ? "Person" : d.company === "GROUP" ? "Group" : companyName(d.company);
+  const c = r.children;
+  const allocPct = c.count && r.target ? Math.min(100, Math.round(((c.allocated ?? 0) / r.target) * 100)) : null;
+  const Icon = kpiIcon(d);
+
+  return (
+    <div className={clsx(depth === 0 && "rounded-2xl border border-border bg-surface shadow-sm p-3")}>
+      <div className={clsx("flex items-start gap-2 rounded-xl px-2 py-2.5 hover:bg-primary/[0.03]", depth > 0 && "border-l-2 border-border/70 ml-5 pl-3")}>
+        <button onClick={() => onToggle(id)} className={clsx("mt-2.5 text-muted hover:text-foreground", !node.children.length && "invisible")} aria-label={isOpen ? "Collapse" : "Expand"}>
+          {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+        <span className="h-9 w-9 rounded-full bg-foreground/5 text-foreground/80 grid place-items-center shrink-0"><Icon size={16} /></span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={clsx("text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
+              level === "Group" ? "bg-primary text-accent-foreground" : level === "Person" ? "bg-foreground/5 text-foreground/70" : "bg-accent/10 text-accent")}>
+              {level === "Person" ? (r.owner?.name ?? "Person") : level}
+            </span>
+            <button onClick={() => onOpen(id)} className="font-semibold text-foreground hover:text-accent text-left">{d.metric}</button>
+            {d.source === "AUTO" && <AutoTag />}
+            {d.state === "DRAFT" && <Tag>Draft</Tag>}
+            <StatusPill status={r.status} />
+            <span className="text-[11px] text-muted">{windowLabel(r.window, d.frequency)}{r.owner && level !== "Person" ? ` · ${r.owner.name}` : ""}</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+            <span className="text-sm tabular-nums text-foreground font-medium whitespace-nowrap">{fmtKpiVal(r.current, d.unit)} <span className="text-muted font-normal">/ {fmtKpiVal(r.target, d.unit)}</span></span>
+            <div className="flex items-center gap-2 w-48">
+              <PaceBar attainment={r.attainment} expected={r.expected} status={r.status} />
+              <span className="text-xs tabular-nums text-muted w-9 text-right">{r.attainment != null ? `${r.attainment}%` : "—"}</span>
+            </div>
+            <WorkChip work={r.work} />
+            {allocPct != null && (
+              <span className={clsx("text-[11px] whitespace-nowrap", c.over ? "text-red-600 font-medium" : "text-muted")} title="Share of the target taken by the KPIs under it">
+                {c.over ? `Over-allocated by ${fmtKpiVal(-(c.unallocated ?? 0), d.unit)}` : `${allocPct}% allocated · ${fmtKpiVal(c.unallocated, d.unit)} free`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {isOpen && node.children.length > 0 && (
+        <div className={clsx(depth === 0 ? "mt-1" : "ml-5")}>
+          {node.children.map((k) => <Branch key={k.row.definition.id} node={k} depth={depth + 1} collapsed={collapsed} onToggle={onToggle} onOpen={onOpen} companyName={companyName} />)}
+        </div>
       )}
     </div>
   );
@@ -722,38 +862,11 @@ function ReviewBadge({ value }: { value: ReviewStatus }) {
   );
 }
 
-function IconButton({ title, onClick, danger, children }: { title: string; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
+function IconButton({ title, onClick, danger, children }: { title: string; onClick: () => void; danger?: boolean; children: ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={clsx(
-        "p-1.5 rounded-lg text-muted transition-colors",
-        danger ? "hover:text-red-600 hover:bg-red-500/10" : "hover:text-accent hover:bg-accent/10",
-      )}
-    >
+    <button onClick={onClick} title={title} className={clsx("p-1.5 rounded-lg text-muted transition-colors", danger ? "hover:text-red-600 hover:bg-red-500/10" : "hover:text-accent hover:bg-accent/10")}>
       {children}
     </button>
-  );
-}
-
-function Modal({ title, subtitle, onClose, footer, children, wide }: {
-  title: React.ReactNode; subtitle?: string; onClose: () => void; footer: React.ReactNode; children: React.ReactNode; wide?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 bg-primary/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
-      <div className={clsx("bg-surface rounded-2xl shadow-xl border border-border w-full max-h-[90vh] flex flex-col", wide ? "max-w-lg" : "max-w-md")}>
-        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 shrink-0">
-          <div className="min-w-0">
-            <h2 className="font-serif text-lg text-foreground flex items-center gap-2">{title}</h2>
-            {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
-          </div>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors shrink-0"><X size={18} /></button>
-        </div>
-        <div className="p-5 space-y-4 overflow-y-auto">{children}</div>
-        <div className="px-5 py-3 border-t border-border flex flex-wrap justify-end gap-2 shrink-0">{footer}</div>
-      </div>
-    </div>
   );
 }
 
@@ -766,211 +879,194 @@ function ErrorNote({ message }: { message: string }) {
   return <p className="text-red-600 text-sm bg-red-500/5 border border-red-200 px-3 py-2 rounded-lg">{message}</p>;
 }
 
-const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
-const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
-
-// ─── Entry editor: set target; actual is typed for MANUAL, live for AUTO ───
-function EntryModal({ row, period, company, role, onClose, onSaved }: {
-  row: BoardRow; period: string; company: string; role: string; onClose: () => void; onSaved: () => void;
-}) {
-  const { definition, current } = row;
-  const isAuto = definition.source === "AUTO";
-  const [entry, setEntry] = useState<Entry | null>(row.entry);
-  const [form, setForm] = useState({
-    current: row.entry?.current != null ? String(row.entry.current) : "",
-    target: row.entry?.target != null ? String(row.entry.target) : "",
-    start: row.entry?.start != null ? String(row.entry.start) : "",
-    actionPlan: row.entry?.actionPlan ?? "",
-  });
+// ─── Review workflow for the period (submit → verify → lock) ────────────────
+function ReviewPanel({ row, role, onChanged }: { row: KpiRow; role: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const review: ReviewStatus = entry?.reviewStatus ?? "DRAFT";
-  const locked = review === "LOCKED";
-  const actions = entry
-    ? TRANSITIONS.filter((t) => t.from.includes(review) && (!t.levels || t.levels.includes(accessLevel(role))))
-    : [];
-
-  const { data: audit = [], refetch: refetchAudit } = useQuery<AuditLog[]>({
-    queryKey: ["kpi-audit", entry?.id],
-    queryFn: () => fetcher(`/kpi-framework/entries/${entry!.id}/audit`),
-    enabled: !!entry,
-  });
-
-  const save = async () => {
-    setBusy(true); setError("");
-    const body = {
-      definitionId: definition.id,
-      period: `${period}-01`,
-      // AUTO KPIs never store an actual — it's computed live.
-      current: isAuto ? null : (form.current !== "" ? Number(form.current) : null),
-      target: form.target !== "" ? Number(form.target) : null,
-      start: form.start !== "" ? Number(form.start) : null,
-      actionPlan: form.actionPlan || null,
-      company,
-      bdoId: entry?.bdoId ?? null,
-    };
-    try {
-      const res = entry
-        ? await api.put(`/kpi-framework/entries/${entry.id}`, body)
-        : await api.post("/kpi-framework/entries", body);
-      setEntry(res.data);
-      onSaved();
-      refetchAudit();
-    } catch (err) {
-      setError(apiError(err, "Failed to save."));
-    } finally { setBusy(false); }
-  };
-
+  const entry = row.entry;
+  if (!entry) return null;
+  const review = (entry.reviewStatus ?? "DRAFT") as ReviewStatus;
+  const actions = TRANSITIONS.filter((t) => t.from.includes(review) && (!t.levels || t.levels.includes(accessLevel(role))));
   const transition = async (action: string) => {
-    if (!entry) return;
     setBusy(true); setError("");
-    try {
-      const res = await api.post(`/kpi-framework/entries/${entry.id}/transition`, { action });
-      setEntry(res.data);
-      onSaved();
-      refetchAudit();
-    } catch (err) {
-      setError(apiError(err, "Failed to update review status."));
-    } finally { setBusy(false); }
+    try { await api.post(`/kpi-framework/entries/${entry.id}/transition`, { action }); onChanged(); }
+    catch (err) { setError(apiError(err, "Couldn't update the review status.")); }
+    finally { setBusy(false); }
   };
-
   return (
-    <Modal
-      title={<>{definition.metric}{isAuto && <AutoTag />}</>}
-      subtitle={[definition.department, periodLabel(period), definition.unit.toLowerCase()].filter(Boolean).join(" · ")}
-      onClose={onClose}
-      footer={
-        <>
-          {actions.map((t) => (
-            <button key={t.action} onClick={() => transition(t.action)} disabled={busy} className={btnSecondary}>
-              {t.label}
-            </button>
-          ))}
-          <span className="flex-1" />
-          <button onClick={onClose} className={btnSecondary}>Close</button>
-          <button onClick={save} disabled={busy || locked} className={btnPrimary}>{busy ? "Saving…" : "Save"}</button>
-        </>
-      }
-    >
-      <div className="flex items-center justify-between">
-        <ReviewBadge value={review} />
-        {!entry && <span className="text-[11px] text-muted">Save once to start the review workflow.</span>}
-      </div>
-
-      {definition.definition && (
-        <p className="text-xs text-muted bg-background border border-border rounded-lg p-3 leading-relaxed">{definition.definition}</p>
-      )}
-      {locked && (
-        <p className="text-xs text-foreground bg-foreground/5 rounded-lg px-3 py-2 flex items-center gap-1.5">
-          <Lock size={12} /> This scorecard is locked. An admin must reopen it before values can change.
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Actual {isAuto && <span className="text-sky-700">(auto)</span>}</Label>
-          {isAuto ? (
-            <div className="w-full border border-sky-200 rounded-lg px-3 py-2 text-sm bg-sky-500/5 text-sky-800 tabular-nums">{fmtVal(current, definition.unit)}</div>
-          ) : (
-            <input type="number" value={form.current} onChange={(e) => set("current", e.target.value)} disabled={locked} className={inputClass} />
-          )}
-        </div>
-        <div>
-          <Label>Target</Label>
-          <input type="number" value={form.target} onChange={(e) => set("target", e.target.value)} disabled={locked} className={inputClass} />
-        </div>
-        <div className="col-span-2">
-          <Label>Start value <span className="text-muted/60">(optional — e.g. spend starting at 4,000 to cut to 2,500)</span></Label>
-          <input type="number" value={form.start} onChange={(e) => set("start", e.target.value)} disabled={locked} className={inputClass} placeholder="Measure progress from this value" />
-        </div>
-      </div>
-      {isAuto && (
-        <p className="text-[11px] text-sky-700 bg-sky-500/5 rounded-lg px-3 py-2">
-          The actual is calculated live from your deals, leads, referrals & partnerships. Just set the target.
-        </p>
-      )}
-
-      <div>
-        <Label>Note</Label>
-        <textarea
-          value={form.actionPlan}
-          onChange={(e) => set("actionPlan", e.target.value)}
-          rows={2}
-          className={inputClass + " resize-none"}
-          placeholder="Optional action plan / context"
-        />
-      </div>
-
-      <ErrorNote message={error} />
-
-      {entry && audit.length > 0 && (
-        <div className="pt-1">
-          <p className="text-xs font-semibold text-muted mb-2">Change history</p>
-          <ul className="space-y-1.5 max-h-40 overflow-y-auto border-l border-border pl-3">
-            {audit.map((l) => (
-              <li key={l.id} className="text-[11px] text-muted">
-                <span className="text-muted/60 mr-2">{new Date(l.createdAt).toLocaleDateString()}</span>
-                <span className="font-medium text-foreground">{l.action.replace(/_/g, " ")}</span>
-                {l.field
-                  ? <> — {l.field}: <span className="line-through">{l.previousValue || "—"}</span> → {l.newValue || "—"}</>
-                  : l.previousValue && l.newValue && <> — {l.previousValue.replace(/_/g, " ").toLowerCase()} → {l.newValue.replace(/_/g, " ").toLowerCase()}</>}
-                {l.actorEmail && <span className="text-muted/70"> · {l.actorEmail}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Modal>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
+      <span className="text-xs text-muted">Review</span>
+      <ReviewBadge value={review} />
+      <span className="flex-1" />
+      {actions.map((t) => (
+        <button key={t.action} onClick={() => transition(t.action)} disabled={busy} className="px-2.5 py-1 text-xs rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50">{t.label}</button>
+      ))}
+      {error && <p className="w-full text-xs text-red-600">{error}</p>}
+    </div>
   );
 }
 
-// ─── Add / Edit KPI definition (admin) ──────────────────────────────────────
-function DefinitionModal({ editDef, departments, companyOpts, defaultCompany, onClose, onSaved }: {
-  editDef?: Def | null; departments: Dept[]; companyOpts: { key: string; name: string }[]; defaultCompany: string; onClose: () => void; onSaved: () => void;
+// ─── Target for one period of a recurring KPI ───────────────────────────────
+function PeriodTargetSheet({ row, period, onClose, onSaved }: { row: KpiRow; period: string; onClose: () => void; onSaved: () => void }) {
+  const [target, setTarget] = useState(row.target != null && !row.targetCarried ? String(row.target) : row.target != null ? String(row.target) : "");
+  const [start, setStart] = useState(row.start != null ? String(row.start) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setBusy(true); setError("");
+    try {
+      await api.post("/kpi-framework/quick-update", { definitionId: row.definition.id, period, target, start });
+      onSaved();
+    } catch (err) { setError(apiError(err, "Failed to save.")); setBusy(false); }
+  };
+  return (
+    <KpiSheet
+      title={row.definition.metric}
+      subtitle={`Target for ${periodLabelFor(period, row.definition.frequency)}${row.targetCarried ? " · currently carried over from an earlier period" : ""}`}
+      onClose={onClose}
+      footer={<><button onClick={onClose} className={btnSecondary}>Cancel</button><button onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : "Save target"}</button></>}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Target *</Label><input type="number" value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass} autoFocus /></div>
+        <div><Label>Baseline <span className="text-muted/60">(optional)</span></Label><input type="number" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} placeholder="Progress from" /></div>
+      </div>
+      <p className="text-[11px] text-muted">The target carries forward to later periods until it is changed.</p>
+      <ErrorNote message={error} />
+    </KpiSheet>
+  );
+}
+
+// ─── Categories (per company) ───────────────────────────────────────────────
+function CategoriesModal({ company, companyName, onClose, onChanged }: { company: string; companyName: string; onClose: () => void; onChanged: () => void }) {
+  const qc = useQueryClient();
+  const { data: cats = [] } = useQuery<Category[]>({ queryKey: ["kpi-categories", company, "all"], queryFn: () => fetcher(`/kpi-framework/categories?company=${company}&all=1`) });
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["kpi-categories"] }); onChanged(); };
+  const add = async () => {
+    if (!name.trim()) return;
+    setError("");
+    try { await api.post("/kpi-framework/categories", { company, name }); setName(""); refresh(); }
+    catch (err) { setError(apiError(err, "Couldn't add the category.")); }
+  };
+  const update = async (c: Category, body: Record<string, unknown>) => {
+    try { await api.put(`/kpi-framework/categories/${c.id}`, body); refresh(); }
+    catch (err) { setError(apiError(err, "Couldn't update the category.")); }
+  };
+  return (
+    <KpiSheet title="KPI categories" subtitle={`${companyName} · group KPIs by what they're about, e.g. Sales & Business Development, Delivery`} onClose={onClose}>
+      <div className="flex gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} className={inputClass} placeholder="New category name" />
+        <button onClick={add} className={btnPrimary}>Add</button>
+      </div>
+      <ErrorNote message={error} />
+      <ul className="divide-y divide-border/60">
+        {cats.map((c) => (
+          <li key={c.id} className="py-2 flex items-center gap-2">
+            <input defaultValue={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && update(c, { name: e.target.value })} className={clsx(inputClass, "py-1.5", c.status === "ARCHIVED" && "opacity-50")} />
+            <span className="text-[11px] text-muted whitespace-nowrap">{c.kpiCount} KPI{c.kpiCount === 1 ? "" : "s"}</span>
+            <button onClick={() => update(c, { status: c.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED" })} className="text-xs text-muted hover:text-accent whitespace-nowrap">
+              {c.status === "ARCHIVED" ? "Restore" : "Archive"}
+            </button>
+          </li>
+        ))}
+        {cats.length === 0 && <li className="py-3 text-sm text-muted">No categories yet.</li>}
+      </ul>
+    </KpiSheet>
+  );
+}
+
+// ─── Add / Edit KPI definition ──────────────────────────────────────────────
+function DefinitionModal({ editDef, departments, categories, companyOpts, defaultCompany, period, onClose, onSaved }: {
+  editDef?: KpiDef | null; departments: Dept[]; categories: Category[]; companyOpts: { key: string; name: string }[];
+  defaultCompany: string; period: string; onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!editDef;
   const { data: autoKeys = [] } = useQuery<AutoKey[]>({ queryKey: ["kpi-auto-keys"], queryFn: () => fetcher("/kpi-framework/auto-keys") });
+  const { data: people = [] } = useQuery<Bdo[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
+  const day = (s: string | null | undefined) => (s ? s.slice(0, 10) : "");
   const [form, setForm] = useState({
     metric: editDef?.metric ?? "",
     company: editDef?.company ?? defaultCompany ?? "GROUP",
     department: editDef?.department ?? "",
+    categoryId: editDef?.categoryId ?? "",
+    ownerId: editDef?.ownerId ?? "",
+    parentId: editDef?.parentId ?? "",
     definition: editDef?.definition ?? "",
     unit: editDef?.unit ?? "COUNT",
     higherIsBetter: editDef?.higherIsBetter ?? true,
     frequency: editDef?.frequency ?? "MONTHLY",
     source: editDef?.source ?? "MANUAL",
     autoKey: editDef?.autoKey ?? "",
+    aggregation: editDef?.aggregation ?? "",
+    windowed: !!(editDef?.startDate && editDef?.endDate),
+    startDate: day(editDef?.startDate),
+    endDate: day(editDef?.endDate),
+    targetValue: editDef?.targetValue != null ? String(editDef.targetValue) : "",
+    startValue: editDef?.startValue != null ? String(editDef.startValue) : "",
+    periodTarget: "",
+    state: editDef?.state ?? "ACTIVE",
+    milestones: (editDef?.milestones ?? []).map((m) => ({ date: day(m.date), target: String(m.target) })),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Picking an auto-feed also sets a sensible unit.
+  const { data: parents = [] } = useQuery<ParentOpt[]>({
+    queryKey: ["kpi-parents", form.company, editDef?.id ?? "", period],
+    queryFn: () => fetcher(`/kpi-framework/parents?company=${form.company}&period=${period}${editDef ? `&excludeId=${editDef.id}` : ""}`),
+  });
+  const { data: formCats = categories } = useQuery<Category[]>({
+    queryKey: ["kpi-categories", form.company],
+    queryFn: () => fetcher(`/kpi-framework/categories?company=${form.company}`),
+  });
+  // Same unit, and tracked as often as this KPI or less often, so results roll up.
+  const fits = (p: ParentOpt) => p.unit === form.unit && (form.windowed || fitsUnder(p, form.frequency));
+  const parentChoices = parents.filter((p) => fits(p) || p.id === form.parentId);
+  const pickFrequency = (frequency: string) => setForm((f) => {
+    const p = parents.find((x) => x.id === f.parentId);
+    return { ...f, frequency, parentId: p && !fitsUnder(p, frequency) ? "" : f.parentId };
+  });
+  const owners = people.filter((p) => form.company === "GROUP" || p.company === form.company);
+  const parent = parents.find((p) => p.id === form.parentId);
+
   const pickAutoKey = (key: string) => {
     const ak = autoKeys.find((a) => a.key === key);
     setForm((f) => ({ ...f, autoKey: key, unit: ak?.unit ?? f.unit }));
   };
+  const pickParent = (id: string) => set("parentId", id);
 
   const save = async () => {
     if (!form.metric.trim()) { setError("Metric name is required."); return; }
     if (form.source === "AUTO" && !form.autoKey) { setError("Pick which data feeds this auto KPI."); return; }
+    if (form.windowed && (!form.startDate || !form.endDate)) { setError("Give the window a start and an end date."); return; }
     setSaving(true); setError("");
-    const body = {
+    const body: Record<string, unknown> = {
       metric: form.metric,
       company: form.company,
       department: form.department || null,
+      categoryId: form.categoryId || null,
+      ownerId: form.ownerId || null,
+      parentId: form.parentId || null,
       definition: form.definition || null,
       unit: form.unit,
       higherIsBetter: form.higherIsBetter,
       frequency: form.frequency,
       source: form.source,
       autoKey: form.source === "AUTO" ? (form.autoKey || null) : null,
+      state: form.state,
+      startDate: form.windowed ? form.startDate : null,
+      endDate: form.windowed ? form.endDate : null,
+      targetValue: form.windowed ? (form.targetValue === "" ? null : form.targetValue) : null,
+      startValue: form.windowed ? (form.startValue === "" ? null : form.startValue) : null,
+      milestones: form.windowed ? form.milestones.filter((m) => m.date && m.target !== "") : [],
+      period,
     };
+    if (form.source !== "AUTO") body.aggregation = form.aggregation || null;
+    if (!form.windowed && form.periodTarget !== "") body.target = form.periodTarget;
     try {
-      if (isEdit) await api.put(`/kpi-framework/definitions/${editDef!.id}`, body);
-      else await api.post("/kpi-framework/definitions", body);
+      if (isEdit) await api.put(`/kpi-framework/definitions/${editDef!.id}?period=${period}`, body);
+      else await api.post(`/kpi-framework/definitions?period=${period}`, body);
       onSaved();
     } catch (err) {
       setError(apiError(err, "Failed to save."));
@@ -978,47 +1074,76 @@ function DefinitionModal({ editDef, departments, companyOpts, defaultCompany, on
   };
 
   return (
-    <Modal
+    <KpiSheet
       wide
       title={isEdit ? "Edit KPI" : "Add KPI"}
+      subtitle="What result we want, who owns it, what it rolls up into, and the target."
       onClose={onClose}
       footer={
         <>
           <button onClick={onClose} className={btnSecondary}>Cancel</button>
-          <button onClick={save} disabled={saving || !form.metric.trim()} className={btnPrimary}>
-            {saving ? "Saving…" : isEdit ? "Save changes" : "Add KPI"}
-          </button>
+          <button onClick={save} disabled={saving || !form.metric.trim()} className={btnPrimary}>{saving ? "Saving…" : isEdit ? "Save changes" : "Add KPI"}</button>
         </>
       }
     >
       <div>
         <Label>Metric name *</Label>
-        <input value={form.metric} onChange={(e) => set("metric", e.target.value)} className={inputClass} placeholder="e.g. Advisory Revenue" />
+        <input value={form.metric} onChange={(e) => set("metric", e.target.value)} className={inputClass} placeholder="e.g. Revenue Received" />
       </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {companyOpts.length > 1 && (
-        <div>
-          <Label>Company *</Label>
-          <select value={form.company} onChange={(e) => set("company", e.target.value)} className={selectClass + " w-full py-2"}>
-            {companyOpts.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-          </select>
-        </div>
+          <div>
+            <Label>Company *</Label>
+            <select value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value, categoryId: "", ownerId: "", parentId: "" }))} className={selectClass + " w-full py-2"}>
+              {companyOpts.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+            </select>
+          </div>
         )}
         <div>
-          <Label>Department <span className="text-muted/60">(optional)</span></Label>
+          <Label>Category</Label>
+          <select value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)} className={selectClass + " w-full py-2"}>
+            <option value="">— None —</option>
+            {formCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label>Owner <span className="text-muted/60">(accountable)</span></Label>
+          <select value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)} className={selectClass + " w-full py-2"}>
+            <option value="">— Nobody yet —</option>
+            {owners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label>Department <span className="text-muted/60">(label)</span></Label>
           <input value={form.department} onChange={(e) => set("department", e.target.value)} list="dept-list" className={inputClass} />
           <datalist id="dept-list">{departments.map((d) => <option key={d.department} value={d.department} />)}</datalist>
         </div>
+      </div>
+
+      <div>
+        <Label>Part of <span className="text-muted/60">(the KPI this one takes a share of)</span></Label>
+        <select value={form.parentId} onChange={(e) => pickParent(e.target.value)} className={selectClass + " w-full py-2"}>
+          <option value="">— Top level —</option>
+          {parentChoices.map((p) => (
+            <option key={p.id} value={p.id}>{p.company === "GROUP" ? "Group" : p.company} · {p.metric}{p.targetValue != null ? ` (target ${p.targetValue.toLocaleString()}${p.startDate && p.endDate ? "" : ` a ${FREQ_WORD[p.frequency] ?? "period"}`})` : ""}</option>
+          ))}
+        </select>
+        {parents.length > parentChoices.length && <p className="text-[11px] text-muted mt-1">Only KPIs in the same unit, tracked as often as this one or less often, are listed, so results can roll up.</p>}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label>Unit</Label>
           <select value={form.unit} onChange={(e) => set("unit", e.target.value)} className={selectClass + " w-full py-2"}>
-            {UNIT_OPTS.map((u) => <option key={u} value={u}>{u}</option>)}
+            {UNIT_OPTS.map((u) => <option key={u} value={u}>{u === "CURRENCY" ? "GHS" : u}</option>)}
           </select>
         </div>
         <div>
-          <Label>Frequency</Label>
-          <select value={form.frequency} onChange={(e) => set("frequency", e.target.value)} className={selectClass + " w-full py-2"}>
-            {FREQ_OPTS.map((f) => <option key={f} value={f}>{f}</option>)}
+          <Label>State</Label>
+          <select value={form.state} onChange={(e) => set("state", e.target.value)} className={selectClass + " w-full py-2"}>
+            <option value="ACTIVE">Active — judged and counted</option>
+            <option value="DRAFT">Draft — not judged yet</option>
           </select>
         </div>
       </div>
@@ -1026,37 +1151,62 @@ function DefinitionModal({ editDef, departments, companyOpts, defaultCompany, on
       {/* Source: manual vs auto-computed */}
       <div>
         <Label>How is the actual measured?</Label>
-        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
-          {[["MANUAL", "Entered manually"], ["AUTO", "Auto from data"]].map(([key, label], i) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => set("source", key)}
-              className={clsx(
-                "flex-1 px-3 py-2 transition-colors",
-                i > 0 && "border-l border-border",
-                form.source === key ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented value={form.source} options={[["MANUAL", "From logged results"], ["AUTO", "Auto from data"]]} onChange={(v) => set("source", v)} />
       </div>
-      {form.source === "AUTO" && (
+      {form.source === "AUTO" ? (
         <div>
           <Label>Data feed *</Label>
           <select value={form.autoKey} onChange={(e) => pickAutoKey(e.target.value)} className={selectClass + " w-full py-2"}>
             <option value="">— Select a feed —</option>
             {autoKeys.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
           </select>
-          <p className="text-[11px] text-sky-700 mt-1">The actual updates automatically; you only set the target.</p>
+          <p className="text-[11px] text-sky-700 mt-1">Counted for this KPI&apos;s company (or the whole group) inside its window — deals, payments, leads and tasks update it automatically.</p>
+        </div>
+      ) : (
+        <div>
+          <Label>Actual is the…</Label>
+          <select value={form.aggregation || defaultAgg(form.unit)} onChange={(e) => set("aggregation", e.target.value)} className={selectClass + " w-full py-2"} disabled={isEdit && editDef?.state === "ACTIVE"}>
+            {["SUM", "LATEST", "AVERAGE"].map((a) => <option key={a} value={a}>{AGG_LABEL[a]}</option>)}
+          </select>
+          {isEdit && editDef?.state === "ACTIVE" && <p className="text-[11px] text-muted mt-1">Locked once a KPI is live.</p>}
         </div>
       )}
 
+      {/* Period + target. New KPIs recur weekly, monthly, quarterly or yearly; the date fields
+          only show when editing an older KPI that was set up with fixed dates. */}
+      <div className="rounded-xl border border-border p-3 space-y-3">
+        {form.windowed ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Start date *</Label><input type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} className={inputClass} /></div>
+              <div><Label>End date *</Label><input type="date" value={form.endDate} onChange={(e) => set("endDate", e.target.value)} className={inputClass} /></div>
+              <div><Label>Target for the window {form.state === "ACTIVE" && "*"}</Label><input type="number" value={form.targetValue} onChange={(e) => set("targetValue", e.target.value)} className={inputClass} placeholder="e.g. 5000000" /></div>
+              <div><Label>Baseline <span className="text-muted/60">(optional)</span></Label><input type="number" value={form.startValue} onChange={(e) => set("startValue", e.target.value)} className={inputClass} /></div>
+            </div>
+            {parent?.startDate && <p className="text-[11px] text-muted">The parent runs {day(parent.startDate)} to {day(parent.endDate)} — this window must sit inside it.</p>}
+            <Milestones value={form.milestones} onChange={(m) => set("milestones", m)} />
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Frequency</Label>
+              <select value={form.frequency} onChange={(e) => pickFrequency(e.target.value)} className={selectClass + " w-full py-2"}>
+                {FREQ_OPTS.map((f) => <option key={f} value={f}>{f.charAt(0) + f.slice(1).toLowerCase()}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Target for {periodLabelFor(period, form.frequency)} {!isEdit && form.state === "ACTIVE" && "*"}</Label>
+              <input type="number" value={form.periodTarget} onChange={(e) => set("periodTarget", e.target.value)} className={inputClass} placeholder={isEdit ? "Leave blank to keep" : ""} />
+            </div>
+            <div className="col-span-2 -mt-2"><ShareHint parent={parent} frequency={form.frequency} onUse={(v) => set("periodTarget", String(v))} /></div>
+            <p className="col-span-2 text-[11px] text-muted">The target carries forward to later {form.frequency === "WEEKLY" ? "weeks" : form.frequency === "ANNUAL" ? "years" : form.frequency === "QUARTERLY" ? "quarters" : "months"} until it is changed.</p>
+          </div>
+        )}
+      </div>
+
       <label className="flex items-start gap-2 text-sm text-foreground">
         <input type="checkbox" checked={form.higherIsBetter} onChange={(e) => set("higherIsBetter", e.target.checked)} className="mt-0.5 accent-[var(--color-accent)]" />
-        <span>Higher is better <span className="text-muted text-xs">(uncheck for metrics like cycle time or overdue counts)</span></span>
+        <span>Higher is better <span className="text-muted text-xs">(uncheck for spend, cycle time or overdue counts)</span></span>
       </label>
       <div>
         <Label>Description</Label>
@@ -1064,6 +1214,38 @@ function DefinitionModal({ editDef, departments, companyOpts, defaultCompany, on
       </div>
 
       <ErrorNote message={error} />
-    </Modal>
+    </KpiSheet>
+  );
+}
+
+// Stepping stones inside the window (e.g. 2 deals by week 2): pace follows them instead of a straight line.
+function Milestones({ value, onChange }: { value: { date: string; target: string }[]; onChange: (v: { date: string; target: string }[]) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Milestones <span className="text-muted/60">(optional — for lumpy KPIs)</span></Label>
+        <button type="button" onClick={() => onChange([...value, { date: "", target: "" }])} className="text-xs text-accent hover:underline">+ Add</button>
+      </div>
+      {value.map((m, i) => (
+        <div key={i} className="flex gap-2 items-center">
+          <input type="date" value={m.date} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)))} className={inputClass} />
+          <input type="number" value={m.target} placeholder="Total by then" onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, target: e.target.value } : x)))} className={inputClass} />
+          <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))} className="p-1 text-muted hover:text-red-600"><X size={14} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({ value, options, onChange }: { value: T; options: readonly (readonly [T, string])[] | [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+      {options.map(([key, label], i) => (
+        <button key={key} type="button" onClick={() => onChange(key)}
+          className={clsx("flex-1 px-3 py-2 transition-colors", i > 0 && "border-l border-border", value === key ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5")}>
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -33,7 +33,16 @@ type StaleDeal = {
   bdo: { id: string; name: string } | null;
 };
 
-type AlertsResponse = { deadlines: Deadline[]; stale: StaleDeal[] };
+// KPIs behind pace (kpiRisks) and early warnings (kpiSignals): slipping, quiet for a week,
+// over-allocated, or finished linked work with no result logged.
+type KpiAlert = {
+  id: string; metric: string; owner: string | null; company: string; bdoId: string | null;
+  reason?: string; detail?: string; type?: "AT_RISK" | "STALE" | "OVER_ALLOCATED" | "NO_RESULT";
+};
+
+type AlertsResponse = { deadlines: Deadline[]; stale: StaleDeal[]; kpiRisks?: KpiAlert[]; kpiSignals?: KpiAlert[] };
+
+const SIGNAL_LABEL: Record<string, string> = { AT_RISK: "At risk", STALE: "Quiet", OVER_ALLOCATED: "Over-allocated", NO_RESULT: "No result" };
 
 const URGENCY_STYLES: Record<Urgency, string> = {
   overdue: "bg-red-100 text-red-800 border-red-200",
@@ -98,7 +107,12 @@ export function Alerts() {
 
   const deadlines = data?.deadlines ?? [];
   const stale = data?.stale ?? [];
-  const totalCount = deadlines.length + stale.length;
+  const kpiAlerts = [
+    ...(data?.kpiRisks ?? []).map((k) => ({ ...k, label: "Behind", text: k.reason ?? "" })),
+    ...(data?.kpiSignals ?? []).map((k) => ({ ...k, label: SIGNAL_LABEL[k.type ?? ""] ?? "KPI", text: k.detail ?? "" })),
+  ];
+  const kpiHref = isBdo ? "/my-kpis" : "/kpi-framework";
+  const totalCount = deadlines.length + stale.length + kpiAlerts.length;
 
   // The dashboard is now the primary alert surface (see CEODashboard), so this
   // no longer force-opens a full-screen modal every session — it starts as a
@@ -178,6 +192,29 @@ export function Alerts() {
           </div>
         </div>
       )}
+
+      {kpiAlerts.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            KPIs ({kpiAlerts.length})
+          </p>
+          <div className="space-y-1.5">
+            {kpiAlerts.slice(0, 25).map((k, i) => (
+              <Link key={`${k.id}-${k.bdoId ?? ""}-${k.label}-${i}`} href={kpiHref} onClick={() => setView("banner")} className="block hover:opacity-80">
+                <div className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{k.metric}{k.owner ? ` · ${k.owner}` : ""}</p>
+                    <p className="text-xs text-gray-400 truncate">{k.text}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${k.label === "Behind" ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                    {k.label}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -211,6 +248,8 @@ export function Alerts() {
           {deadlines.length > 0 && `${deadlines.length} deadline${deadlines.length !== 1 ? "s" : ""} coming up`}
           {deadlines.length > 0 && stale.length > 0 && " · "}
           {stale.length > 0 && `${stale.length} deal${stale.length !== 1 ? "s" : ""} need${stale.length === 1 ? "s" : ""} attention`}
+          {(deadlines.length > 0 || stale.length > 0) && kpiAlerts.length > 0 && " · "}
+          {kpiAlerts.length > 0 && `${kpiAlerts.length} KPI alert${kpiAlerts.length !== 1 ? "s" : ""}`}
         </button>
         <button
           onClick={() => setView("popup")}

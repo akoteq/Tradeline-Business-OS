@@ -10,6 +10,7 @@ import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
 import Link from "next/link";
 import { X, Sparkles } from "lucide-react";
+import { DealPayments } from "@/components/DealPayments";
 
 type BapxDeal = {
   id: string;
@@ -391,6 +392,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
           {deal.keyTopics && <LongField label="Key Topics" value={deal.keyTopics} />}
           {deal.callOutcome && <LongField label="Call Outcome / Updates" value={deal.callOutcome} />}
           {deal.nextSteps && <LongField label="Next Steps" value={deal.nextSteps} />}
+          <DealPayments source="BAPX" dealId={deal.id} />
           <CoachBox deal={deal} />
         </div>
       </div>

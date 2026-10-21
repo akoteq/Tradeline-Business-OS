@@ -14,6 +14,10 @@ export type Company = {
   isActive: boolean;
   modules?: { compliance?: boolean; complianceOpportunities?: boolean };
   clientFields?: ClientField[];
+  // KPI settings: status lines (fractions of pace) and who gets credit for shared deals.
+  kpiOnTrackLine?: number;
+  kpiAtRiskLine?: number;
+  dealCreditMode?: "OWNER" | "SHARED" | "SPLIT";
 };
 
 export type ClientField = { key: string; label: string; type: "TEXT" | "LONGTEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN"; options?: string[]; required?: boolean; section?: string };
