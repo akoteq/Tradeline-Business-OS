@@ -1,1 +1,1 @@
-export * from "@/components/wizard/fields";
+export * from "./fields";

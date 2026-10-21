@@ -144,3 +144,17 @@ export default function KpiFrameworkPage() {
     </div>
   );
 }
+function apiError(err: Error, fallback: string): string {
+  const error = err as Error & {
+    response?: { data?: { message?: unknown; error?: unknown; detail?: unknown } | string };
+  };
+  const data = error.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  if (data && typeof data === "object") {
+    for (const value of [data.message, data.error, data.detail]) {
+      if (typeof value === "string" && value.trim()) return value;
+    }
+  }
+  return error.message?.trim() || fallback;
+}
+
