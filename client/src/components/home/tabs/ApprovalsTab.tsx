@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, Target } from "lucide-react";
 import { api } from "@/lib/api";
+import { TaskEvidence } from "@/components/TaskEvidence";
 import { plural } from "../format";
 import { TabPanel } from "../TabPanel";
 import type { CompanyMap, PendingApproval } from "../types";
@@ -122,6 +123,10 @@ export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[
                     {t.notes && <li>Notes: {t.notes}</li>}
                   </ul>
                 )}
+
+                <div className="mt-3">
+                  <TaskEvidence items={t.attachments} />
+                </div>
 
                 {rejecting === t.id && (
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">

@@ -1,26 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { X, Lock, Users, UserCheck, Phone, Mail, MessageCircle, CalendarClock } from "lucide-react";
+import { Building2, CalendarClock, Lock, Mail, MessageCircle, Pencil, Phone, UserCheck, Users, X } from "lucide-react";
 import { PriorityBadge } from "@/components/Badges";
 import { StatusBadge, VisibilityBadge } from "./badges";
 import type { LeadActions } from "./useLeadActions";
 import { EDITABLE_STATUSES, STATUS_COLORS, STATUS_LABEL, apiError, followUpInfo, whatsappLink, type Lead } from "./lib";
 
-const TONE = { late: "text-red-600", soon: "text-amber-700", ok: "text-foreground" };
-const actionBtn = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-subtle/50";
+/**
+ * A lead's details, in a side panel styled like the rest of the app's sheets: the business up
+ * top, then what to do next (contact, follow-up, stage), then the record itself. Actions that
+ * change the lead sit in a footer that stays put while the panel scrolls.
+ */
+
+const TONE = {
+  late: { text: "text-red-600", card: "border-red-200 bg-red-500/[0.04]", icon: "bg-red-500/10 text-red-600" },
+  soon: { text: "text-amber-700", card: "border-amber-200 bg-amber-500/[0.05]", icon: "bg-amber-500/10 text-amber-700" },
+  ok: { text: "text-foreground", card: "border-border bg-background", icon: "bg-accent/10 text-accent" },
+};
+const pillBtn = "inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent/40 hover:text-accent";
+const fmtDate = (v: string, opts: Intl.DateTimeFormatOptions) => new Date(v).toLocaleDateString("en-GH", opts);
+
+function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{title}</h3>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, onChanged }: {
   lead: Lead; canEdit: boolean; canShare: boolean; actions: LeadActions;
   onClose: () => void; onEdit: () => void; onChanged: (lead: Lead) => void;
 }) {
   const isPublic = lead.visibility === "PUBLIC";
+  const closed = !!lead.archivedAt;
   const follow = followUpInfo(lead.followUpDate);
+  const tone = TONE[follow?.tone ?? "ok"];
   const wa = whatsappLink(lead.phone);
+  const added = lead.dateAdded || lead.createdAt;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const run = async (job: () => Promise<Lead | null>, failure: string) => {
     setBusy(true); setError("");
@@ -29,54 +61,83 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
     finally { setBusy(false); }
   };
 
+  const details: [string, ReactNode][] = [
+    ["Contact", lead.contactPerson],
+    ["Role", lead.roleTitle],
+    ["Phone", lead.phone && <a href={`tel:${lead.phone}`} className="hover:text-accent hover:underline">{lead.phone}</a>],
+    ["Email", lead.email && <a href={`mailto:${lead.email}`} className="break-all hover:text-accent hover:underline">{lead.email}</a>],
+    ["Owner", lead.bdo?.name ?? "Unassigned"],
+    ["Source", lead.source],
+    ["Added", added && fmtDate(added, { day: "numeric", month: "short", year: "numeric" })],
+    ["Biz ID", lead.bizId],
+  ];
+  const showFooter = !closed && (canEdit || canShare);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-primary/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label={lead.businessName} className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-surface shadow-2xl">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-foreground">{lead.businessName}</h2>
-            <p className="mt-0.5 text-xs text-muted">{[lead.bizId, lead.contactPerson, lead.roleTitle].filter(Boolean).join(" · ") || "No contact added yet"}</p>
+      <div role="dialog" aria-modal="true" aria-label={lead.businessName} className="relative flex h-full w-full max-w-lg flex-col border-l border-border bg-surface shadow-2xl">
+        {/* Header */}
+        <div className="shrink-0 border-b border-border px-5 py-4">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-accent/10 text-accent"><Building2 size={20} /></span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-serif text-xl leading-tight text-foreground">{lead.businessName}</h2>
+              <p className="mt-0.5 truncate text-xs text-muted">
+                {[lead.contactPerson, lead.roleTitle].filter(Boolean).join(" · ") || "No contact added yet"}
+              </p>
+            </div>
+            <button onClick={onClose} className="-mr-1 rounded-lg p-1 text-muted transition-colors hover:bg-foreground/5 hover:text-foreground" aria-label="Close"><X size={18} /></button>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {canEdit && <button onClick={onEdit} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-opacity hover:opacity-90">Edit</button>}
-            <button onClick={onClose} className="text-muted transition-colors hover:text-foreground" aria-label="Close"><X size={18} /></button>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-14">
+            <StatusBadge value={lead.status} />
+            {lead.priority && <PriorityBadge value={lead.priority} />}
+            <VisibilityBadge value={lead.visibility} />
           </div>
         </div>
 
-        <div className="space-y-4 p-4">
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge value={lead.status} />
-            <VisibilityBadge value={lead.visibility} />
-            {lead.priority && <PriorityBadge value={lead.priority} />}
-          </div>
+        {/* Body */}
+        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+          {closed && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-500/5 px-4 py-3 text-sm text-foreground">
+              Converted to a customer on {fmtDate(lead.convertedAt ?? lead.archivedAt!, { day: "numeric", month: "short", year: "numeric" })}. This lead is archived.{" "}
+              <Link href="/sme" className="font-medium text-accent hover:underline">View clients</Link>
+            </div>
+          )}
 
           {(lead.phone || lead.email) && (
             <div className="flex flex-wrap gap-2">
-              {lead.phone && <a href={`tel:${lead.phone}`} className={actionBtn}><Phone size={15} /> Call</a>}
-              {wa && <a href={wa} target="_blank" rel="noreferrer" className={actionBtn}><MessageCircle size={15} /> WhatsApp</a>}
-              {lead.email && <a href={`mailto:${lead.email}`} className={actionBtn}><Mail size={15} /> Email</a>}
+              {lead.phone && <a href={`tel:${lead.phone}`} className={pillBtn}><Phone size={14} /> Call</a>}
+              {wa && <a href={wa} target="_blank" rel="noreferrer" className={pillBtn}><MessageCircle size={14} /> WhatsApp</a>}
+              {lead.email && <a href={`mailto:${lead.email}`} className={pillBtn}><Mail size={14} /> Email</a>}
             </div>
           )}
 
-          {!lead.archivedAt && (
-            <div className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
-              <CalendarClock size={18} className="shrink-0 text-muted" />
-              <div className="min-w-0 flex-1">
-                {follow ? (
-                  <>
-                    <div className={clsx("text-sm font-medium", TONE[follow.tone])}>Follow up: {follow.text}</div>
-                    <div className="text-xs text-muted">{new Date(lead.followUpDate!).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</div>
-                  </>
-                ) : <div className="text-sm text-muted">No follow-up yet. Set one so this lead doesn&apos;t go cold.</div>}
+          {!closed && (
+            <Section title="Next follow-up">
+              <div className={clsx("flex items-center gap-3 rounded-xl border px-4 py-3", tone.card)}>
+                <span className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-lg", tone.icon)}><CalendarClock size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  {follow ? (
+                    <>
+                      <p className={clsx("text-sm font-semibold", tone.text)}>{follow.text}</p>
+                      <p className="text-xs text-muted">{fmtDate(lead.followUpDate!, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted">No follow-up yet. Set one so this lead doesn&apos;t go cold.</p>
+                  )}
+                </div>
+                {canEdit && (
+                  <button onClick={onEdit} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10">
+                    {follow ? "Change" : "Set one"}
+                  </button>
+                )}
               </div>
-              {canEdit && <button onClick={onEdit} className="shrink-0 text-xs font-medium text-accent hover:underline">{follow ? "Change" : "Set one"}</button>}
-            </div>
+            </Section>
           )}
 
-          {canEdit && !lead.archivedAt && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted">Move to</p>
+          {canEdit && !closed && (
+            <Section title="Stage">
               <div className="flex flex-wrap gap-1.5">
                 {EDITABLE_STATUSES.map((s) => (
                   <button
@@ -89,57 +150,60 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
                   >{STATUS_LABEL[s]}</button>
                 ))}
               </div>
-            </div>
+            </Section>
           )}
 
-          {lead.archivedAt ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 px-3 py-2.5 text-sm text-foreground">
-              Converted to a customer on {new Date(lead.convertedAt ?? lead.archivedAt).toLocaleDateString()}. This lead is archived.{" "}
-              <Link href="/sme" className="font-medium text-accent hover:underline">View clients</Link>
-            </div>
-          ) : (canEdit || canShare) && (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {canEdit && (
-                <button onClick={() => run(() => actions.convert(lead), "Couldn't convert this lead.")} disabled={busy} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50">
-                  <UserCheck size={15} /> Convert to customer
-                </button>
-              )}
-              {canShare && (
-                <button onClick={() => run(() => actions.visibility(lead), "Couldn't change who can see this lead.")} disabled={busy} className={clsx(actionBtn, "disabled:opacity-50")}>
-                  {isPublic ? <Lock size={15} /> : <Users size={15} />}
-                  {isPublic ? "Make private" : "Share with team"}
-                </button>
-              )}
-            </div>
-          )}
-          {!lead.archivedAt && !canEdit && <p className="text-xs text-muted">Shared by your Business CEO. Only its owner can edit or convert it.</p>}
+          <Section title="Details">
+            <dl className="divide-y divide-border/70 rounded-xl border border-border">
+              {details.map(([label, value]) => (
+                <div key={label} className="grid grid-cols-[6.5rem_1fr] gap-3 px-4 py-2.5 text-sm">
+                  <dt className="text-muted">{label}</dt>
+                  <dd className={clsx("min-w-0 break-words", value ? "text-foreground" : "text-muted/60")}>{value || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+          </Section>
+
+          <Section title="Notes" aside={canEdit && !closed && <button onClick={onEdit} className="text-xs font-medium text-accent hover:underline">{lead.notes ? "Edit" : "Add notes"}</button>}>
+            {lead.notes
+              ? <p className="whitespace-pre-wrap rounded-xl border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground">{lead.notes}</p>
+              : <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">Nothing written down yet.</p>}
+          </Section>
+
+          {!closed && !canEdit && <p className="text-xs text-muted">Shared by your Business CEO. Only its owner can edit or convert it.</p>}
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-500/5 px-3 py-2 text-sm text-red-600">{error}</p>}
-
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <Item label="Email" value={lead.email} />
-            <Item label="Phone" value={lead.phone} />
-            <Item label="Owner" value={lead.bdo?.name} />
-            <Item label="Source" value={lead.source} />
-            <Item label="Added" value={lead.dateAdded ? new Date(lead.dateAdded).toLocaleDateString() : null} />
-          </dl>
-
-          {lead.notes && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted">Notes</p>
-              <p className="whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-sm leading-relaxed text-foreground">{lead.notes}</p>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-function Item({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words text-foreground">{value ?? "—"}</dd>
+        {/* Footer: the actions that change the lead */}
+        {showFooter && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+            {canShare && (
+              <button
+                onClick={() => run(() => actions.visibility(lead), "Couldn't change who can see this lead.")} disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-primary/5 disabled:opacity-50"
+              >
+                {isPublic ? <Lock size={15} /> : <Users size={15} />}
+                {isPublic ? "Make private" : "Share with team"}
+              </button>
+            )}
+            <div className="ml-auto flex gap-2">
+              {canEdit && (
+                <button
+                  onClick={() => run(() => actions.convert(lead), "Couldn't convert this lead.")} disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-500/5 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  <UserCheck size={15} /> Convert
+                </button>
+              )}
+              {canEdit && (
+                <button onClick={onEdit} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90">
+                  <Pencil size={14} /> Edit lead
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -63,7 +63,23 @@ export type Task = {
   approvedByEmail: string | null;
   rejectedReason: string | null;
   rejectedByEmail: string | null;
+  // Links and files that go with the work. Files are stored in Cloudinary.
+  attachments?: TaskAttachment[];
 };
+
+export type TaskAttachment = {
+  kind: "LINK" | "FILE";
+  name: string;
+  url: string;
+  publicId?: string | null;
+  resourceType?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+  addedAt?: string;
+};
+
+export const fmtFileSize = (n?: number | null) =>
+  !n ? "" : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
 // A task waiting for approval, with the results its owner logged from it.
 export type ApprovalTask = Task & { pendingResults: { value: number; date: string; note: string | null }[] };
@@ -202,8 +218,6 @@ export const groupOf = (t: Task): GroupKey =>
   isClosed(t) ? "done" : isOverdue(t) ? "overdue" : t.blocked ? "blocked" : t.status === "IN_PROGRESS" ? "progress" : "todo";
 
 export const shownStatus = (t: Task) => (isClosed(t) ? t.status : t.blocked ? "BLOCKED" : isOverdue(t) ? "OVERDUE" : t.status);
-
-export const progressOf = (t: Task) => (t.status === "COMPLETED" ? 100 : t.progress ?? 0);
 
 /* ------------------------------------------------------------------ */
 /* Categories and groups                                               */

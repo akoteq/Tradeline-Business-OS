@@ -24,7 +24,7 @@ export function LeadRow({ lead: l, iconTone, canEdit, canShare, h }: { lead: Lea
     <li onClick={() => h.onOpen(l)} className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle/50">
       <span className={clsx("grid h-9 w-9 shrink-0 place-items-center rounded-full", iconTone)}><Building2 size={16} /></span>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-[1.6_1_0%]">
         <div className="flex items-center gap-1.5">
           <button onClick={(e) => { e.stopPropagation(); h.onOpen(l); }} className="truncate text-left text-sm font-medium text-foreground transition-colors group-hover:text-accent">
             {l.businessName}
@@ -39,9 +39,10 @@ export function LeadRow({ lead: l, iconTone, canEdit, canShare, h }: { lead: Lea
         </div>
       </div>
 
-      <div className="hidden w-20 shrink-0 md:block">{l.priority ? <PriorityBadge value={l.priority} /> : <span className="text-muted/60">—</span>}</div>
+      {/* Priority, owner and follow-up are read-only here: clicking them does nothing rather than opening the lead. */}
+      <div className="hidden min-w-[5rem] flex-[0.6_1_0%] cursor-default md:block" onClick={(e) => e.stopPropagation()}>{l.priority ? <PriorityBadge value={l.priority} /> : <span className="text-muted/60">—</span>}</div>
 
-      <div className="hidden w-32 shrink-0 items-center gap-2 lg:flex">
+      <div className="hidden min-w-[8rem] flex-[1_1_0%] cursor-default items-center gap-2 lg:flex" onClick={(e) => e.stopPropagation()}>
         {l.bdo ? (
           <>
             <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-foreground/[0.06] text-xs font-medium text-foreground/70">{initials(l.bdo.name)}</span>
@@ -50,9 +51,9 @@ export function LeadRow({ lead: l, iconTone, canEdit, canShare, h }: { lead: Lea
         ) : <span className="text-sm text-muted">Unassigned</span>}
       </div>
 
-      <div className="hidden w-36 shrink-0 items-center gap-1.5 text-sm sm:flex">
+      <div className="hidden min-w-[9.5rem] flex-[1_1_0%] cursor-default items-center gap-1.5 text-sm sm:flex" onClick={(e) => e.stopPropagation()}>
         <CalendarDays size={14} className="shrink-0 text-muted" />
-        {f ? <span className={clsx("truncate", TONE[f.tone])}>{f.text}</span> : <span className="text-muted">—</span>}
+        {f ? <span className={clsx("whitespace-nowrap", TONE[f.tone])}>{f.text}</span> : <span className="text-muted">—</span>}
       </div>
 
       <div className="w-32 shrink-0" onClick={(e) => e.stopPropagation()}>

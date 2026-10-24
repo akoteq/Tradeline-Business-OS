@@ -15,6 +15,7 @@ import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
 import { ResultPrompt } from "./components/ResultPrompt";
 import { ApprovalsList } from "./components/ApprovalsList";
+import { ReviewModal } from "./components/ReviewModal";
 import { ConfirmDialog, FilterSelect, OutcomeBadge, RingStat, Stat } from "./components/TaskBits";
 import {
   COLLAPSED_ROWS,
@@ -72,6 +73,7 @@ export default function TasksPage() {
   const [showForm, setShowForm] = useState(false);
   const [prompt, setPrompt] = useState<Task | null>(null);
   const [toDelete, setToDelete] = useState<Task | null>(null);
+  const [reviewing, setReviewing] = useState<Task | null>(null);
   const [notice, setNotice] = useState("");
   const qc = useQueryClient();
 
@@ -197,11 +199,11 @@ export default function TasksPage() {
     "24px",
     "minmax(0,2.4fr)",
     "84px",
-    "104px",
     ...(oneCompany ? [] : ["minmax(0,1.3fr)"]),
     ...(isBdo ? [] : ["minmax(0,1.2fr)"]),
     "132px",
-    "150px",
+    // Status, plus "Review" or "Awaiting approval" beside it
+    "190px",
     "28px",
   ].join(" ");
 
@@ -453,6 +455,7 @@ export default function TasksPage() {
                       onEdit={() => openEdit(t)}
                       onDelete={() => setToDelete(t)}
                       onLogResult={() => setPrompt(t)}
+                      onReview={isBdo ? undefined : () => setReviewing(t)}
                     />
                   ))}
                 </div>
@@ -479,6 +482,16 @@ export default function TasksPage() {
             // Finishing work that is linked to a manual KPI: ask whether it produced a result.
             if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
           }}
+        />
+      )}
+
+      {reviewing && (
+        <ReviewModal
+          // The approvals feed carries the results logged with the task; use it when it has this one.
+          task={approvals.find((a) => a.id === reviewing.id) ?? reviewing}
+          companyName={oneCompany || !reviewing.company ? "" : (byKey[reviewing.company]?.name ?? reviewing.company)}
+          onClose={() => setReviewing(null)}
+          onDone={() => { setReviewing(null); refresh(); }}
         />
       )}
 

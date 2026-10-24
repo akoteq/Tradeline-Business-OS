@@ -10,6 +10,8 @@ export type Lead = {
   contactPerson: string | null; roleTitle: string | null; status: string; source: string | null;
   bdoId: string | null; bdo: { id: string; name: string } | null; priority: string | null;
   dateAdded: string | null; followUpDate: string | null; notes: string | null;
+  /** When the record was created; stands in for dateAdded on older leads without one. */
+  createdAt?: string;
   visibility: "PRIVATE" | "PUBLIC" | null; smeId: string | null; convertedAt: string | null; archivedAt: string | null;
 };
 export type BdoOption = { id: string; name: string; company: string };
@@ -156,10 +158,12 @@ export function formToBody(f: LeadForm, canAssign: boolean) {
     ...f,
     bdoId: f.bdoId || null, email: f.email || null, phone: f.phone || null, contactPerson: f.contactPerson || null,
     roleTitle: f.roleTitle || null, source: f.source || null, priority: f.priority || null,
-    dateAdded: f.dateAdded || null, followUpDate: f.followUpDate || null, notes: f.notes || null,
+    followUpDate: f.followUpDate || null, notes: f.notes || null,
   };
   // Staff always own their leads — the server assigns them, so don't send a pick.
   if (!canAssign) delete body.bdoId;
+  // The server stamps the date a lead was added.
+  delete body.dateAdded;
   return body;
 }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ClipboardCheck, Target } from "lucide-react";
 import { api } from "@/lib/api";
 import { apiError, fmtDate, type ApprovalTask } from "./task-utils";
+import { TaskEvidence } from "@/components/TaskEvidence";
 
 /**
  * Work staff finished, waiting for a manager. Approving makes its money, its "on time" count and
@@ -92,6 +93,7 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
               {t.completionCriteria && <li>Done when: {t.completionCriteria}</li>}
               {t.notes && <li>Notes: {t.notes}</li>}
             </ul>
+            <TaskEvidence items={t.attachments} />
             {rejecting === t.id && (
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <input

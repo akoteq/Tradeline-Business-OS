@@ -87,6 +87,10 @@ export default function LeadsPage() {
   };
 
   const openAdd = () => { setEditing(null); setShowForm(true); };
+  // From the "may already be a lead" list: close the form and open the existing lead.
+  const openExisting = (id: string) => {
+    fetcher(`/leads/${id}`).then((l: Lead) => { setShowForm(false); setDetail(l); }).catch(() => {});
+  };
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -107,7 +111,7 @@ export default function LeadsPage() {
       {showForm && (
         <AddLeadSheet
           lead={editing} bdos={bdos} canAssign={canShare}
-          onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); invalidate(); }}
+          onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); invalidate(); }} onOpenLead={openExisting}
         />
       )}
       {detail && (

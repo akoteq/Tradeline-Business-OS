@@ -1,4 +1,5 @@
 import type { useCompanies } from "@/lib/companies";
+import type { TaskAttachment } from "@/app/tasks/components/task-utils";
 
 // ---- API shapes -------------------------------------------------------------
 
@@ -97,6 +98,8 @@ export type PendingApproval = {
   kpi: { metric: string } | null;
   deal: { id: string; name: string } | null;
   pendingResults: { value: number; date: string; note: string | null }[];
+  /** Links and files the owner attached: what the approver checks. */
+  attachments?: TaskAttachment[];
 };
 
 // ---- View models ------------------------------------------------------------
