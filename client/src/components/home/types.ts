@@ -79,6 +79,26 @@ export type Exec = {
   leads?: LeadsSummary;
 };
 
+/** A task staff finished that waits for approval before it counts (GET /tasks/approvals). */
+export type PendingApproval = {
+  id: string;
+  deliverable: string;
+  company: string;
+  bdo: { id: string; name: string } | null;
+  completedAt: string | null;
+  targetDate: string | null;
+  submittedAt: string | null;
+  /** Set when this is a change to already-approved work; the approved version counts until then. */
+  approvedAt: string | null;
+  revenueActual: number | null;
+  currency: string | null;
+  completionCriteria: string | null;
+  notes: string | null;
+  kpi: { metric: string } | null;
+  deal: { id: string; name: string } | null;
+  pendingResults: { value: number; date: string; note: string | null }[];
+};
+
 // ---- View models ------------------------------------------------------------
 
 export type CompanyMap = ReturnType<typeof useCompanies>["byKey"];
