@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { ParentOpt } from "@/components/kpi";
 
 export type KpiForm = {
-  metric: string; company: string; categoryId: string; ownerId: string; department: string;
+  metric: string; company: string; departmentId: string; ownerId: string;
   parentId: string; unit: string; state: string; source: string; autoKey: string;
   aggregation: string; windowed: boolean; startDate: string; endDate: string;
   targetValue: string; startValue: string; milestones: { date: string; target: string }[];
@@ -18,9 +18,8 @@ export type KpiFormCtx = {
   isEdit: boolean;
   lockedAggregation: boolean;            // isEdit && editDef?.state === "ACTIVE"
   companyOpts: { key: string; name: string }[];
-  categories: { id: string; name: string }[];
   owners: { id: string; name: string }[];
-  departments: { department: string }[];
+  departments: { id: string; name: string }[];
   parent?: ParentOpt;
   parentChoices: ParentOpt[];
   hiddenParents: boolean;                // parents.length > parentChoices.length

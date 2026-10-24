@@ -6,7 +6,7 @@ import { api, fetcher } from "@/lib/api";
 import { fitsUnder, type KpiDef, type ParentOpt } from "@/components/kpi";
 import {
   AGG_LABEL, FREQ_OPTS, UNIT_OPTS, apiError, defaultAgg, periodLabelFor,
-  type AutoKey, type Bdo, type Category, type CompanyOpt, type Dept,
+  type AutoKey, type Bdo, type CompanyOpt, type Department,
 } from "./lib";
 import type { KpiForm } from "./types";
 import { AddKpiSheet } from "./AddKpiSheet";
@@ -15,8 +15,8 @@ const day = (s: string | null | undefined) => (s ? s.slice(0, 10) : "");
 
 // Everything data-related for the Add / Edit KPI flow lives here (queries, form state, save).
 // What the person sees and how the steps flow is in AddKpiSheet and the Step files.
-export function AddKpiModal({ editDef, departments, categories, companyOpts, defaultCompany, period, onClose, onSaved }: {
-  editDef?: KpiDef | null; departments: Dept[]; categories: Category[]; companyOpts: CompanyOpt[];
+export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany, period, onClose, onSaved }: {
+  editDef?: KpiDef | null; departments: Department[]; companyOpts: CompanyOpt[];
   defaultCompany: string; period: string; onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!editDef;
@@ -26,8 +26,7 @@ export function AddKpiModal({ editDef, departments, categories, companyOpts, def
   const [form, setForm] = useState<KpiForm>({
     metric: editDef?.metric ?? "",
     company: editDef?.company ?? defaultCompany ?? "GROUP",
-    department: editDef?.department ?? "",
-    categoryId: editDef?.categoryId ?? "",
+    departmentId: editDef?.departmentId ?? "",
     ownerId: editDef?.ownerId ?? "",
     parentId: editDef?.parentId ?? "",
     definition: editDef?.definition ?? "",
@@ -54,9 +53,9 @@ export function AddKpiModal({ editDef, departments, categories, companyOpts, def
     queryKey: ["kpi-parents", form.company, editDef?.id ?? "", period],
     queryFn: () => fetcher(`/kpi-framework/parents?company=${form.company}&period=${period}${editDef ? `&excludeId=${editDef.id}` : ""}`),
   });
-  const { data: formCats = categories } = useQuery<Category[]>({
-    queryKey: ["kpi-categories", form.company],
-    queryFn: () => fetcher(`/kpi-framework/categories?company=${form.company}`),
+  const { data: formDepts = departments } = useQuery<Department[]>({
+    queryKey: ["kpi-departments", form.company],
+    queryFn: () => fetcher(`/kpi-framework/departments?company=${form.company}`),
   });
 
   // Same unit, and tracked as often as this KPI or less often, so results roll up.
@@ -83,8 +82,7 @@ export function AddKpiModal({ editDef, departments, categories, companyOpts, def
     const body: Record<string, unknown> = {
       metric: form.metric,
       company: form.company,
-      department: form.department || null,
-      categoryId: form.categoryId || null,
+      departmentId: form.departmentId || null,
       ownerId: form.ownerId || null,
       parentId: form.parentId || null,
       definition: form.definition || null,
@@ -121,7 +119,7 @@ export function AddKpiModal({ editDef, departments, categories, companyOpts, def
       ctx={{
         form, set, setForm, isEdit,
         lockedAggregation: isEdit && editDef?.state === "ACTIVE",
-        companyOpts, categories: formCats, owners, departments,
+        companyOpts, owners, departments: formDepts,
         parent, parentChoices, hiddenParents: parents.length > parentChoices.length,
         autoKeys, unitOpts: UNIT_OPTS, freqOpts: FREQ_OPTS, aggLabels: AGG_LABEL, defaultAgg,
         periodLabel: periodLabelFor(period, form.frequency),

@@ -37,6 +37,7 @@ export function LeadsTable({
     { key: "contactPerson", label: "Contact", render: (r: Lead) => r.contactPerson ?? "—" },
     { key: "roleTitle", label: "Role", render: (r: Lead) => r.roleTitle ?? "—" },
     { key: "email", label: "Email", render: (r: Lead) => r.email ?? "—" },
+    { key: "phone", label: "Phone", render: (r: Lead) => r.phone ? <span className="whitespace-nowrap">{r.phone}</span> : "—" },
     { key: "status", label: "Stage", render: (r: Lead) => <StatusBadge value={r.status} />, sortable: true },
     {
       key: "followUpDate", label: "Follow up",

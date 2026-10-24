@@ -10,9 +10,9 @@ import { KpiRow, KpiDef, KpiStatus, KpiDetailSheet } from "@/components/kpi";
 import { KpiSummary } from "./components/KpiSummary";
 import { KpiBoard } from "./components/KpiBoard";
 import { KpiHierarchy } from "./components/KpiHierarchy";
-import { ReviewPanel, PeriodTargetSheet, CategoriesModal } from "./components/KpiDialogs";
+import { ReviewPanel, PeriodTargetSheet, DepartmentsModal } from "./components/KpiDialogs";
 import { KpiHeader } from "./components/KpiHeader";
-import { Category, Dept, normRows, View } from "./components/lib";
+import { Department, normRows, View } from "./components/lib";
 import { AddKpiModal } from "./components/AddKpiModal";
 
 export default function KpiFrameworkPage() {
@@ -28,21 +28,21 @@ export default function KpiFrameworkPage() {
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
   const [pickedCompany, setCompany] = useState("GROUP");
   const company = ownCompany ?? pickedCompany;
-  const [department, setDepartment] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [statusFilter, setStatusFilter] = useState<KpiStatus | "">("");
   const [view, setView] = useState<View>("list");
   const [openKpi, setOpenKpi] = useState<string | null>(null);
   const [showAddKpi, setShowAddKpi] = useState(false);
   const [editDef, setEditDef] = useState<KpiDef | null>(null);
   const [editTarget, setEditTarget] = useState<KpiRow | null>(null);
-  const [showCategories, setShowCategories] = useState(false);
+  const [showDepartments, setShowDepartments] = useState(false);
 
   // Links like /kpi-framework?view=cascade&kpi=<id> (alerts, the assistant) open a view or a KPI.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const v = q.get("view");
-    if (v === "cascade" || v === "category" || v === "list") setView(v);
+    if (v === "cascade" || v === "department" || v === "list") setView(v);
+    else if (v === "category") setView("department"); // old links
     const id = q.get("kpi");
     if (id) setOpenKpi(id);
   }, []);
@@ -51,25 +51,19 @@ export default function KpiFrameworkPage() {
     ? [{ key: ownCompany, name: byKey[ownCompany]?.name ?? ownCompany }]
     : [{ key: "GROUP", name: "Group" }, ...companies.map((c) => ({ key: c.key, name: c.name }))];
 
-  const { data: departments = [] } = useQuery<Dept[]>({
+  const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ["kpi-departments", company],
     queryFn: () => fetcher(`/kpi-framework/departments?company=${company}`),
     enabled: !!user,
   });
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ["kpi-categories", company],
-    queryFn: () => fetcher(`/kpi-framework/categories?company=${company}`),
-    enabled: !!user,
-  });
 
-  useEffect(() => { setDepartment(""); setCategoryId(""); }, [company]);
+  useEffect(() => { setDepartmentId(""); }, [company]);
 
   const qp = new URLSearchParams({ period, company });
-  if (department) qp.set("department", department);
-  if (categoryId) qp.set("categoryId", categoryId);
+  if (departmentId) qp.set("departmentId", departmentId);
 
   const { data: board = [], isLoading, error } = useQuery<KpiRow[]>({
-    queryKey: ["kpi-board", company, department, categoryId, period],
+    queryKey: ["kpi-board", company, departmentId, period],
     queryFn: async () => normRows((await fetcher(`/kpi-framework/board?${qp}`)) as KpiRow[]),
     enabled: !!user,
   });
@@ -77,7 +71,6 @@ export default function KpiFrameworkPage() {
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["kpi-board"] }); qc.invalidateQueries({ queryKey: ["kpi-cascade"] }); };
   const refreshAll = () => {
     qc.invalidateQueries({ queryKey: ["kpi-departments"] });
-    qc.invalidateQueries({ queryKey: ["kpi-categories"] });
     invalidate();
   };
 
@@ -95,10 +88,9 @@ export default function KpiFrameworkPage() {
       <KpiHeader
         ownCompany={ownCompany} companyName={companyName}
         period={period} onPeriod={setPeriod}
-        canManage={canManage} onCategories={() => setShowCategories(true)} onAdd={() => setShowAddKpi(true)}
+        canManage={canManage} onDepartments={() => setShowDepartments(true)} onAdd={() => setShowAddKpi(true)}
         companyOpts={companyOpts} company={company} onCompany={setCompany}
-        categories={categories} categoryId={categoryId} onCategory={setCategoryId}
-        departments={departments} department={department} onDepartment={setDepartment}
+        departments={departments} departmentId={departmentId} onDepartment={setDepartmentId}
         view={view} onView={setView}
       />
 
@@ -111,9 +103,9 @@ export default function KpiFrameworkPage() {
         <KpiHierarchy period={period} company={company} companyName={companyName} onOpen={setOpenKpi} />
       ) : (
         <KpiBoard
-          board={board} isLoading={isLoading} error={error} categories={categories} view={view}
+          board={board} isLoading={isLoading} error={error} departments={departments} view={view}
           statusFilter={statusFilter} onStatusFilter={setStatusFilter}
-          resetKey={`${company}|${department}|${categoryId}|${period}`}
+          resetKey={`${company}|${departmentId}|${period}`}
           period={period} canManage={canManage} companyName={companyName}
           onOpen={setOpenKpi} onSetTarget={setEditTarget} onEdit={setEditDef} onArchive={archive}
           onAdd={() => setShowAddKpi(true)} onChanged={invalidate}
@@ -132,14 +124,14 @@ export default function KpiFrameworkPage() {
       )}
       {(showAddKpi || editDef) && (
         <AddKpiModal
-          editDef={editDef} departments={departments} categories={categories} companyOpts={companyOpts}
+          editDef={editDef} departments={departments} companyOpts={companyOpts}
           defaultCompany={company} period={period}
           onClose={() => { setShowAddKpi(false); setEditDef(null); }}
           onSaved={() => { setShowAddKpi(false); setEditDef(null); refreshAll(); }}
         />
       )}
-      {showCategories && (
-        <CategoriesModal company={company} companyName={companyName(company)} onClose={() => setShowCategories(false)} onChanged={refreshAll} />
+      {showDepartments && (
+        <DepartmentsModal company={company} companyName={companyName(company)} onClose={() => setShowDepartments(false)} onChanged={refreshAll} />
       )}
     </div>
   );

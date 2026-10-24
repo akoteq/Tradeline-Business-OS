@@ -77,14 +77,28 @@ type Task = {
   // The deal this work is for; money brought in is recorded as a payment on it.
   dealId: string | null;
   deal: { id: string; source: string; name: string } | null;
+  // Approval: work staff finish counts toward KPIs only once their Business CEO or the Group
+  // Owner approves it. approvedAt set + PENDING = a change to approved work is waiting.
+  approval: "PENDING" | "APPROVED" | "REJECTED" | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  approvedByEmail: string | null;
+  rejectedReason: string | null;
+  rejectedByEmail: string | null;
 };
+
+// A task waiting for approval, with the results its owner logged from it.
+type ApprovalTask = Task & { pendingResults: { value: number; date: string; note: string | null }[] };
+
+// Whether a completed task's money and results count yet.
+const counts = (t: Task) => t.status === "COMPLETED" && (t.approval !== "PENDING" || !!t.approvedAt) && t.approval !== "REJECTED";
 
 type DealOption = { id: string; source: string; name: string; stage: string; receivedGhs: number };
 
 type Bdo = { id: string; name: string; company: string };
 type Linkable = { id: string; metric: string; company: string; source: string; unit: string; kind: "PERSONAL" | "SCORECARD" | "COMPANY" };
 
-type TabKey = "all" | "mine" | "overdue" | "week" | "proposals";
+type TabKey = "all" | "mine" | "overdue" | "week" | "proposals" | "approvals";
 type SortKey = "soonest" | "latest" | "priority";
 type GroupKey = "overdue" | "blocked" | "progress" | "todo" | "done";
 
@@ -370,7 +384,7 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
             )}
             {task.deal && (
               <span className="text-gray-500" title="The deal this task is for">
-                {" "}• {task.deal.name}{task.revenueActual ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${task.status === "COMPLETED" ? "in" : "expected"}` : ""}
+                {" "}• {task.deal.name}{task.revenueActual ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${counts(task) ? "in" : task.status === "COMPLETED" ? "awaiting approval" : "expected"}` : ""}
               </span>
             )}
           </div>
@@ -380,6 +394,11 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
             </div>
           )}
           {task.completionCriteria && <div className="text-[11px] text-gray-400 truncate" title={task.completionCriteria}>Done when: {task.completionCriteria}</div>}
+          {task.rejectedReason && task.approval !== "PENDING" && (
+            <div className="text-[11px] text-red-600 truncate" title={task.rejectedReason}>
+              {task.approval === "APPROVED" ? "Change rejected" : "Rejected"}{task.rejectedByEmail ? ` by ${task.rejectedByEmail}` : ""}: {task.rejectedReason}
+            </div>
+          )}
         </div>
       </div>
 
@@ -400,6 +419,14 @@ function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, onT
 
       <div className="flex flex-wrap items-center gap-1">
         <StatusPill value={shownStatus(task)} />
+        {task.approval === "PENDING" && (
+          <span
+            className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-sky-50 text-sky-700 whitespace-nowrap"
+            title={task.approvedAt ? "A change to this approved task is waiting for approval; the approved version counts until then." : "Doesn't count toward KPIs until it's approved."}
+          >
+            {task.approvedAt ? "Change awaiting approval" : "Awaiting approval"}
+          </span>
+        )}
         {task.needsResult && (
           <button
             onClick={onLogResult}
@@ -441,7 +468,18 @@ export default function TasksPage() {
   const [prompt, setPrompt] = useState<Task | null>(null);
   const qc = useQueryClient();
 
+  // Managers approve the work staff finish; the alerts link here with ?view=approvals.
+  const { data: approvals = [] } = useQuery<ApprovalTask[]>({
+    queryKey: ["tasks", "approvals"],
+    queryFn: () => fetcher("/tasks/approvals"),
+    enabled: !!user && !isBdo,
+  });
+  useEffect(() => {
+    if (!isBdo && new URLSearchParams(window.location.search).get("view") === "approvals") setTab("approvals");
+  }, [isBdo]);
+
   const isProposalView = tab === "proposals";
+  const isApprovalView = tab === "approvals";
 
   // BDO users are always scoped to their own tasks; admins/CEO use the filter bar.
   // Blocked isn't a stored status: the server works it out from "Waits on".
@@ -475,7 +513,7 @@ export default function TasksPage() {
   // Tasks feed KPI work and results, so the KPI screens refresh with them.
   // Money brought in on a linked task is a payment on its deal, so the deal screens refresh too.
   const refresh = () => {
-    for (const key of ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "task-deal-options"]) {
+    for (const key of ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "task-deal-options", "alerts"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -591,6 +629,7 @@ export default function TasksPage() {
     { key: "overdue", label: "Overdue", count: isProposalView ? null : overdueN, badge: "bg-red-50 text-red-600" },
     { key: "week", label: "Due This Week", count: isProposalView ? null : weekN, badge: "" },
     { key: "proposals", label: "Proposals", count: isProposalView ? total : null, badge: "" },
+    ...(isBdo ? [] : [{ key: "approvals" as TabKey, label: "Awaiting approval", count: approvals.length, badge: approvals.length ? "bg-sky-50 text-sky-700" : "" }]),
   ];
 
   return (
@@ -730,7 +769,9 @@ export default function TasksPage() {
       </div>
 
       {/* Body */}
-      {isProposalView ? (
+      {isApprovalView ? (
+        <ApprovalsList tasks={approvals} oneCompany={oneCompany} companyName={(k) => byKey[k]?.name ?? k} onChanged={refresh} />
+      ) : isProposalView ? (
         <DataTable
           columns={proposalColumns}
           data={visible}
@@ -835,12 +876,109 @@ function ResultPrompt({ task, onClose, onDone }: { task: Task; onClose: () => vo
   return (
     <KpiSheet
       title={`Add a result for ${k.metric}?`}
-      subtitle={<>“{task.deliverable}” is done. If it produced a result, log it — it will be linked to this task.</>}
+      subtitle={<>“{task.deliverable}” is done. If it produced a result, log it — it will be linked to this task{task.approval === "PENDING" ? " and counts once the task is approved" : ""}.</>}
       onClose={onClose}
       footer={<button onClick={dismiss} disabled={busy} className="px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 disabled:opacity-50">No result to log</button>}
     >
       <LogResult row={row} bdoId={task.bdoId} tasks={[{ id: task.id, deliverable: task.deliverable }]} defaultTaskId={task.id} onSaved={onDone} />
     </KpiSheet>
+  );
+}
+
+// Work staff finished, waiting for a manager. Approving makes its money, its "on time" count and
+// the results logged from it count; rejecting sends it back with the reason (or, for a change to
+// already-approved work, keeps the approved version).
+function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
+  tasks: ApprovalTask[]; oneCompany: boolean; companyName: (key: string) => string; onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+
+  const review = async (t: ApprovalTask, action: "approve" | "reject") => {
+    setBusy(t.id);
+    try {
+      await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : {});
+      setRejecting(null); setReason("");
+      onChanged();
+    } catch (err) {
+      window.alert(apiError(err, `Couldn't ${action} the task.`));
+    } finally { setBusy(null); }
+  };
+
+  if (!tasks.length) {
+    return (
+      <div className="relative bg-white/90 border border-gray-200/80 rounded-2xl shadow-sm py-14 text-center text-sm text-gray-500">
+        Nothing waiting for approval.
+      </div>
+    );
+  }
+  return (
+    <div className="relative space-y-3">
+      {tasks.map((t) => {
+        const money = t.revenueActual ? `${t.currency && t.currency !== "GHS" ? t.currency : "GHS"} ${t.revenueActual.toLocaleString()}` : null;
+        return (
+          <section key={t.id} className="bg-white/90 border border-gray-200/80 rounded-2xl shadow-sm p-4 space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">{t.deliverable}</p>
+                <p className="text-xs text-gray-500">
+                  {t.bdo?.name ?? "Unassigned"}{!oneCompany && t.company ? ` · ${companyName(t.company)}` : ""}
+                  {t.completedAt ? ` · done ${fmtDate(t.completedAt)}` : ""}
+                  {t.targetDate ? ` · due ${fmtDate(t.targetDate)}` : ""}
+                  {t.approvedAt ? " · change to approved work" : ""}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => { setRejecting(rejecting === t.id ? null : t.id); setReason(""); }}
+                  disabled={busy === t.id}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => review(t, "approve")}
+                  disabled={busy === t.id}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy === t.id ? "Saving…" : "Approve"}
+                </button>
+              </div>
+            </div>
+            <ul className="text-xs text-gray-600 space-y-0.5">
+              {t.kpi && <li><Target size={11} className="inline text-accent mr-1" />KPI: {t.kpi.metric}</li>}
+              {t.deal && <li>Deal: {t.deal.name}{money ? ` · brought in ${money}` : ""}</li>}
+              {!t.deal && money && <li>Brought in {money}</li>}
+              {t.pendingResults.map((r, i) => (
+                <li key={i}>Result logged: {r.value.toLocaleString()} on {fmtDate(r.date)}{r.note ? ` — ${r.note}` : ""}</li>
+              ))}
+              {t.completionCriteria && <li>Done when: {t.completionCriteria}</li>}
+              {t.notes && <li className="text-gray-500">Notes: {t.notes}</li>}
+            </ul>
+            {rejecting === t.id && (
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <input
+                  autoFocus
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Why? They'll see this so they know what to fix."
+                  maxLength={500}
+                  className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                />
+                <button
+                  onClick={() => review(t, "reject")}
+                  disabled={busy === t.id || !reason.trim()}
+                  className="px-3 py-2 text-xs font-semibold rounded-lg bg-red-600 text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  Send back
+                </button>
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -915,6 +1053,10 @@ function TaskFormModal({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdo
 
   const save = async () => {
     if (!form.deliverable.trim()) { setError(`A ${isProposal ? "proposal title" : "task / deliverable"} is required.`); return; }
+    if (!isProposal) {
+      if (!form.startDate || !form.targetDate) { setError("Enter a start date and an end date."); return; }
+      if (form.targetDate < form.startDate) { setError("The end date cannot be before the start date."); return; }
+    }
     setSaving(true); setError("");
     const body = {
       year: form.year,
@@ -1031,8 +1173,8 @@ function TaskFormModal({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdo
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div><label className={labelClass}>Start date</label><input type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} className={inputClass} /></div>
-            <div><label className={labelClass}>{isProposal ? "Due / sent date" : "Due date"}</label><input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>Start date{isProposal ? "" : " *"}</label><input type="date" required={!isProposal} value={form.startDate} max={form.targetDate || undefined} onChange={(e) => set("startDate", e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>{isProposal ? "Due / sent date" : "End date *"}</label><input type="date" required={!isProposal} value={form.targetDate} min={isProposal ? undefined : form.startDate || undefined} onChange={(e) => set("targetDate", e.target.value)} className={inputClass} /></div>
             <div><label className={labelClass}>Year</label><input type="number" value={form.year} onChange={(e) => set("year", parseInt(e.target.value))} className={inputClass} /></div>
           </div>
 
@@ -1071,7 +1213,7 @@ function TaskFormModal({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdo
                 </div>
                 <p className="text-[11px] text-muted">
                   {form.dealId
-                    ? `When the task is marked Completed, the money brought in is recorded as a payment on ${linkedDeal?.name ?? "the deal"} and counts toward revenue received for the deal, the people on it, the company and the Group. Reopening the task takes it back off.`
+                    ? `When the task is marked Completed${isBdo ? " and your Business CEO approves it" : ""}, the money brought in is recorded as a payment on ${linkedDeal?.name ?? "the deal"} and counts toward revenue received for the deal, the people on it, the company and the Group. Reopening the task takes it back off.`
                     : "Link the deal this money came from (above) to record money brought in. It then counts as revenue received."}
                 </p>
               </div>

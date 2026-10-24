@@ -33,7 +33,7 @@ export function StepBasics({ ctx, onEnter }: { ctx: KpiFormCtx; onEnter: () => v
           <Label>Which company?</Label>
           <select
             value={form.company}
-            onChange={(e) => setForm((f) => ({ ...f, company: e.target.value, categoryId: "", ownerId: "", parentId: "" }))}
+            onChange={(e) => setForm((f) => ({ ...f, company: e.target.value, departmentId: "", ownerId: "", parentId: "" }))}
             className={selectClass}
           >
             {companyOpts.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
