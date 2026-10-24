@@ -15,6 +15,8 @@ import {
   ChevronDown,
   LogOut,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   UsersRound,
   HelpCircle,
   Target,
@@ -70,7 +72,11 @@ type NavSection = { title?: string; items: NavEntry[] };
 
 const AUTH_PATHS = ["/login", "/change-password"];
 
-type SidebarProps = { mobileOpen?: boolean; onClose?: () => void };
+type SidebarProps = {
+  mobileOpen?: boolean; onClose?: () => void;
+  /** Desktop only: the sidebar is folded down to a slim rail. */
+  hidden?: boolean; onToggleHidden?: () => void;
+};
 
 // A link is active on its own page and on pages nested under it (/tasks/123 keeps "Assign tasks" lit).
 // Home ("/") only matches exactly, or it would light up everywhere.
@@ -81,14 +87,14 @@ function isActive(pathname: string, href: string) {
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
-export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
+export default function Sidebar({ mobileOpen = false, onClose, hidden = false, onToggleHidden }: SidebarProps) {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const { companies } = useCompanies();
   const [open, setOpen] = useState<string[]>(["Companies"]);
 
   if (AUTH_PATHS.includes(pathname)) return null;
-  if (loading) return <aside className="hidden md:flex w-64 min-h-screen bg-surface shrink-0" />;
+  if (loading) return <aside className={clsx("hidden md:flex min-h-screen bg-surface shrink-0", hidden ? "w-[68px]" : "w-64")} />;
   if (!user) return null;
 
   const toggle = (label: string) =>
@@ -225,12 +231,20 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   const portalLabel = ACCESS_LEVEL_LABEL[level];
 
+  // Folded on desktop, the sidebar narrows to an icon rail; the phone drawer always shows in full.
+  const rail = hidden;
   const asideClass = clsx(
-    "w-64 bg-[linear-gradient(180deg,#ffffff_0%,#fdf9f6_55%,#fcede5_100%)] text-foreground flex flex-col shrink-0 z-40 border-r border-border h-screen",
-    "fixed inset-y-0 left-0 transition-transform duration-200",
+    "w-64 bg-[linear-gradient(180deg,#ffffff_0%,#fdf9f6_55%,#fcede5_100%)] text-foreground flex flex-col shrink-0 z-40 border-r border-border h-screen overflow-hidden",
+    "fixed inset-y-0 left-0 transition-[width,transform] duration-300 ease-in-out motion-reduce:transition-none",
     "md:sticky md:top-0 md:translate-x-0",
-    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+    rail ? "md:w-[68px]" : "md:w-64"
   );
+  // Expanding from the rail opens the group too, so a click on Companies lands on its list.
+  const openGroup = (label: string) => {
+    if (rail) { onToggleHidden?.(); setOpen((o) => (o.includes(label) ? o : [...o, label])); }
+    else toggle(label);
+  };
 
   return (
     <>
@@ -243,11 +257,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       )}
 
       <aside className={asideClass}>
-        <Brand onClose={onClose} />
+        <Brand onClose={onClose} onToggle={onToggleHidden} rail={rail} />
 
         <nav
           aria-label="Main"
-          className="no-scrollbar flex-1 overflow-y-auto select-none pt-4 pb-6 px-3"
+          className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden select-none pt-4 pb-6 px-3"
           style={{
             // Soft fade at the bottom edge so a clipped item reads as "scroll for more", not a cut-off bug.
             maskImage: "linear-gradient(to bottom, #000 calc(100% - 20px), transparent)",
@@ -257,7 +271,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           {nav.map((section, i) => (
             <div key={section.title ?? `s${i}`} className={clsx(i > 0 && "mt-4 pt-4 border-t border-border")}>
               {section.title && (
-                <div className="px-3 mb-2 text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/55">
+                <div className={clsx("px-3 mb-2 text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/55 whitespace-nowrap", fade(rail))}>
                   {section.title}
                 </div>
               )}
@@ -268,9 +282,10 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       key={item.label}
                       item={item}
                       isOpen={open.includes(item.label)}
-                      onToggle={() => toggle(item.label)}
+                      onToggle={() => openGroup(item.label)}
                       pathname={pathname}
                       onNavigate={onClose}
+                      rail={rail}
                     />
                   ) : (
                     <NavLink
@@ -281,6 +296,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                       hint={item.hint}
                       active={isActive(pathname, item.href)}
                       onClick={onClose}
+                      rail={rail}
                     />
                   )
                 )}
@@ -289,7 +305,7 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        <UserFooter name={user.email} meta={portalLabel} onLogout={logout} />
+        <UserFooter name={user.email} meta={portalLabel} onLogout={logout} rail={rail} />
       </aside>
 
       {/* Scrollbar hidden but still scrollable (wheel/touch/keyboard all still work) */}
@@ -308,17 +324,41 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
 // ---- Subcomponents ---------------------------------------------------------
 
-function Brand({ onClose }: { onClose?: () => void }) {
+// Labels fade out on the desktop rail while the icons stay where they are.
+function fade(rail: boolean) {
+  return clsx("transition-opacity duration-200 motion-reduce:transition-none", rail && "md:opacity-0 md:pointer-events-none");
+}
+
+function Brand({ onClose, onToggle, rail }: { onClose?: () => void; onToggle?: () => void; rail: boolean }) {
   return (
-    <div className="px-5 py-5 border-b border-border/70 flex items-center justify-between">
+    <div className="px-4 py-5 border-b border-border/70 flex items-center justify-between relative">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden">
+        {/* On the rail the logo is the way back out. */}
+        <button
+          type="button" onClick={rail ? onToggle : undefined} tabIndex={rail ? 0 : -1}
+          aria-label={rail ? "Show sidebar" : undefined} title={rail ? "Show sidebar" : undefined}
+          className={clsx("group/logo relative w-9 h-9 shrink-0 rounded-lg overflow-hidden", rail ? "md:cursor-pointer" : "cursor-default", focusRing)}
+        >
           <Image src="/icon.png" alt="Trunqo" fill sizes="36px" />
-        </div>
-        <div className="font-display text-[22px] font-medium tracking-tight leading-none text-foreground truncate">
+          {rail && (
+            <span className="absolute inset-0 hidden md:flex items-center justify-center bg-surface/90 text-foreground opacity-0 group-hover/logo:opacity-100 transition-opacity">
+              <PanelLeftOpen size={18} />
+            </span>
+          )}
+        </button>
+        <div className={clsx("font-display text-[22px] font-medium tracking-tight leading-none text-foreground whitespace-nowrap", fade(rail))}>
           Trunqo
         </div>
       </div>
+      {onToggle && (
+        <button
+          onClick={onToggle}
+          aria-label="Hide sidebar" title="Hide sidebar"
+          className={clsx("hidden md:inline-flex p-1.5 rounded-md text-muted hover:text-foreground hover:bg-foreground/5 transition-colors", fade(rail), focusRing)}
+        >
+          <PanelLeftClose size={18} />
+        </button>
+      )}
       {onClose && (
         <button
           onClick={onClose}
@@ -344,6 +384,7 @@ function NavLink({
   hint,
   active,
   onClick,
+  rail,
 }: {
   href: string;
   label: string;
@@ -351,12 +392,13 @@ function NavLink({
   hint?: string;
   active: boolean;
   onClick?: () => void;
+  rail: boolean;
 }) {
   return (
     <Link
       href={href}
       onClick={onClick}
-      title={hint}
+      title={rail ? label : hint}
       aria-current={active ? "page" : undefined}
       className={clsx(
         "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 md:py-2 text-[14px] leading-5 transition-colors duration-150",
@@ -374,7 +416,7 @@ function NavLink({
           className={clsx("shrink-0 transition-all duration-150", active ? "text-foreground" : "text-foreground/60 group-hover:text-accent group-hover:translate-x-0.5")}
         />
       )}
-      <span className={clsx("flex-1 truncate transition-transform duration-150", !active && "group-hover:translate-x-0.5")}>{label}</span>
+      <span className={clsx("flex-1 truncate whitespace-nowrap transition-[transform,opacity] duration-200", !active && "group-hover:translate-x-0.5", fade(rail))}>{label}</span>
     </Link>
   );
 }
@@ -394,12 +436,14 @@ function CompanyBranchGroup({
   onToggle,
   pathname,
   onNavigate,
+  rail,
 }: {
   item: NavGroup;
   isOpen: boolean;
   onToggle: () => void;
   pathname: string;
   onNavigate?: () => void;
+  rail: boolean;
 }) {
   const Icon = item.icon;
   const hasActive = item.children.some((c) => isActive(pathname, c.href));
@@ -408,6 +452,7 @@ function CompanyBranchGroup({
       <button
         onClick={onToggle}
         aria-expanded={isOpen}
+        title={rail ? item.label : undefined}
         className={clsx(
           "group w-full flex items-center gap-3 rounded-xl px-3 py-2.5 md:py-2 text-[14px] leading-5 transition-colors duration-150",
           focusRing,
@@ -421,21 +466,21 @@ function CompanyBranchGroup({
           strokeWidth={1.75}
           className={clsx("shrink-0 transition-all duration-150", hasActive ? "text-foreground" : "text-foreground/60 group-hover:text-accent group-hover:translate-x-0.5")}
         />
-        <span className={clsx("flex-1 text-left truncate transition-transform duration-150", !hasActive && "group-hover:translate-x-0.5")}>{item.label}</span>
+        <span className={clsx("flex-1 text-left truncate whitespace-nowrap transition-[transform,opacity] duration-200", !hasActive && "group-hover:translate-x-0.5", fade(rail))}>{item.label}</span>
         <span
           aria-label={`${item.children.length} ${item.label.toLowerCase()}`}
-          className="min-w-5 h-5 px-1.5 shrink-0 rounded-full bg-foreground/[0.06] flex items-center justify-center text-[11px] font-medium text-foreground/70 tabular-nums"
+          className={clsx("min-w-5 h-5 px-1.5 shrink-0 rounded-full bg-foreground/[0.06] flex items-center justify-center text-[11px] font-medium text-foreground/70 tabular-nums", fade(rail))}
         >
           {item.children.length}
         </span>
         <ChevronDown
           size={14}
-          className={clsx("transition-transform shrink-0 text-muted/60", isOpen && "rotate-180")}
+          className={clsx("transition-transform shrink-0 text-muted/60", isOpen && "rotate-180", fade(rail))}
         />
       </button>
 
       {isOpen && (
-        <div className="relative ml-[20px] mt-0.5 pl-4 border-l border-border space-y-0.5">
+        <div className={clsx("relative ml-[20px] mt-0.5 pl-4 border-l border-border space-y-0.5", rail && "md:hidden")}>
           {item.children.length === 0 && item.empty && (
             <Link
               href={item.empty.href}
@@ -474,28 +519,29 @@ function CompanyBranchGroup({
   );
 }
 
-function UserFooter({ name, meta, onLogout }: { name: string | null; meta: string; onLogout: () => void }) {
+function UserFooter({ name, meta, onLogout, rail }: { name: string | null; meta: string; onLogout: () => void; rail: boolean }) {
   const initial = (name ?? "?").trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="px-3 py-3 border-t border-border">
-      <div className="flex items-center gap-3 mb-1 px-3 py-2">
+      <div className="flex items-center gap-3 mb-1 px-1.5 py-2" title={rail ? `${name ?? ""} · ${meta}` : undefined}>
         <div className="w-8 h-8 rounded-full bg-foreground/10 text-foreground/70 flex items-center justify-center shrink-0 text-[13px] font-semibold">
           {initial}
         </div>
-        <div className="min-w-0">
+        <div className={clsx("min-w-0 whitespace-nowrap", fade(rail))}>
           <div className="text-[13px] font-medium text-foreground truncate">{name}</div>
           <div className="text-xs text-muted truncate">{meta}</div>
         </div>
       </div>
       <button
         onClick={onLogout}
+        title={rail ? "Sign out" : undefined}
         className={clsx(
           "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium text-muted hover:bg-foreground/[0.05] hover:text-foreground transition-colors",
           focusRing
         )}
       >
         <LogOut size={15} strokeWidth={1.75} className="shrink-0" />
-        Sign out
+        <span className={clsx("whitespace-nowrap", fade(rail))}>Sign out</span>
       </button>
     </div>
   );

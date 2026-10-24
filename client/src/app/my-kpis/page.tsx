@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Plus, Trash2, ChevronLeft, ChevronDown, Search, Filter, ArrowUpDown, MoreVertical,
   Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X, Ban, AlarmClock, ListTodo,
@@ -37,6 +38,7 @@ const selectClass =
   "text-sm bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40";
 const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
 const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
+const btnGhost = "px-3 py-2 text-sm text-muted hover:text-foreground transition-colors";
 
 function apiError(err: unknown, fallback: string) {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
@@ -164,7 +166,7 @@ export default function MyKpisPage() {
   const canCreate = !isTeam && !!data;
 
   return (
-    <div className={clsx("p-4 md:p-5 space-y-5", !isTeam && "max-w-5xl mx-auto")}>
+    <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">Performance</p>
@@ -809,12 +811,18 @@ function TargetAndManage({ row, meta, period, bdoId, onSaved, onRemoved }: { row
 }
 
 // ─── Create: title, target, what it's part of, and the window ───────────────
+// Same three-step flow as adding a KPI on the KPI framework.
+const CREATE_STEPS = [
+  { title: "What do you want to track?", subtitle: "Name it and pick how it's measured.", nudge: "Let's start" },
+  { title: "What does it count toward?", subtitle: "How often it's tracked, and the bigger KPI it feeds.", nudge: "Halfway there" },
+  { title: "What's the goal?", subtitle: "How much, and which way it should move.", nudge: "Almost done" },
+] as const;
+
 function CreateSheet({ ownerId, ownerCompany, ownerName, period, onClose, onSaved }: {
   ownerId: string; ownerCompany: string; ownerName: string | null; period: string; onClose: () => void; onSaved: () => void;
 }) {
   const { data: autoKeys = [] } = useQuery<AutoKey[]>({ queryKey: ["kpi-auto-keys"], queryFn: () => fetcher("/kpi-framework/auto-keys") });
   const { data: parents = [] } = useQuery<ParentOpt[]>({ queryKey: ["kpi-parents", ownerCompany, "", period], queryFn: () => fetcher(`/kpi-framework/parents?company=${ownerCompany}&period=${period}`) });
-  const suggestions = autoKeys.filter((k) => k.personal && k.kind === "PERIOD");
   const otherFeeds = autoKeys.filter((k) => k.personal && k.kind !== "PERIOD");
 
   const [metric, setMetric] = useState("");
@@ -864,94 +872,127 @@ function CreateSheet({ ownerId, ownerCompany, ownerName, period, onClose, onSave
     } finally { setBusy(false); }
   };
 
+  const reduce = useReducedMotion();
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState(1);
+  const [reached, setReached] = useState(0);
+  const go = (to: number) => { setDir(to > step ? 1 : -1); setStep(to); setReached((r) => Math.max(r, to)); };
+  const last = step === CREATE_STEPS.length - 1;
+  const canContinue =
+    step === 0 ? metric.trim() !== "" : true;
+  const next = () => { if (canContinue) { setError(""); go(step + 1); } };
+  const meta = CREATE_STEPS[step];
+  const slide = reduce ? 0 : 24;
+
   return (
     <KpiSheet
-      title={ownerName ? `Assign a KPI to ${ownerName}` : "New KPI"}
-      subtitle="Your share of a company or Group goal, and how you'll be measured."
+      title={step === 0 && ownerName ? `Assign a KPI to ${ownerName}` : meta.title}
+      subtitle={meta.subtitle}
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className={btnSecondary}>Cancel</button>
-          <button onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : ownerName ? "Assign" : "Create"}</button>
+          {step === 0 ? <button onClick={onClose} className={btnSecondary}>Cancel</button> : <button onClick={() => go(step - 1)} className={btnGhost}>Back</button>}
+          <button onClick={last ? save : next} disabled={last ? busy : !canContinue} className={btnPrimary}>
+            {last ? (busy ? "Saving…" : ownerName ? "Assign" : "Create") : "Continue"}
+          </button>
         </>
       }
     >
-      {suggestions.length > 0 && (
-        <div>
-          <Label>Fills itself from your records</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {suggestions.map((k) => (
-              <button
-                key={k.key}
-                type="button"
-                onClick={() => (autoKey === k.key ? setAutoKey("") : pickFeed(k.key))}
-                className={clsx(
-                  "px-2.5 py-1 rounded-full text-xs border transition-colors",
-                  autoKey === k.key ? "border-accent bg-accent/10 text-accent" : "border-border text-foreground/70 hover:border-accent/40",
-                )}
-              >
-                {k.label.replace(/\s*\(.*\)$/, "")}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div>
-        <Label>Title *</Label>
-        <input value={metric} onChange={(e) => setMetric(e.target.value)} className={inputClass} placeholder="e.g. Revenue collected" autoFocus />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Target *</Label>
-          <input type="number" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass} />
+        <div className="flex gap-1.5" role="list" aria-label="Progress">
+          {CREATE_STEPS.map((s, i) => (
+            <button
+              key={s.title} type="button" role="listitem" disabled={i > reached || i === step}
+              onClick={() => go(i)} aria-label={`Step ${i + 1}`} aria-current={i === step ? "step" : undefined}
+              className="group flex-1 py-1.5 disabled:cursor-default"
+            >
+              <span className={clsx("block h-1 rounded-full transition-colors", i <= step ? "bg-accent" : "bg-foreground/10 group-enabled:group-hover:bg-foreground/20")} />
+            </button>
+          ))}
         </div>
-        <div>
-          <Label>Unit</Label>
-          <Segmented value={unit as "COUNT"} options={UNIT_CHOICES} onChange={(v) => { setUnit(v); setParentId(""); }} />
-        </div>
+        <p className="text-xs text-muted mt-1">{step + 1} of {CREATE_STEPS.length} · {meta.nudge}</p>
       </div>
 
-      <div>
-        <Label>Part of <span className="text-muted/60">(the company or Group KPI this counts toward)</span></Label>
-        <SelectField value={parentId} onChange={(e) => setParentId(e.target.value)}>
-          <option value="">— Not part of a bigger KPI —</option>
-          {parentChoices.map((p) => <option key={p.id} value={p.id}>{p.company === "GROUP" ? "Group" : p.company} · {p.metric}{p.targetValue != null ? ` (${p.targetValue.toLocaleString()}${p.startDate && p.endDate ? "" : ` a ${FREQ_WORD[p.frequency] ?? "period"}`})` : ""}</option>)}
-        </SelectField>
-      </div>
+      <AnimatePresence mode="wait" initial={false} custom={dir}>
+        <motion.div
+          key={step} custom={dir} className="space-y-4"
+          initial={{ opacity: 0, x: dir * slide }} animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -dir * slide }} transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          {step === 0 && (
+            <>
+              <div>
+                <Label>Title *</Label>
+                <input
+                  value={metric} onChange={(e) => setMetric(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") next(); }}
+                  className={inputClass} placeholder="e.g. Revenue collected" autoFocus
+                />
+              </div>
 
-      <div className="space-y-2">
-        <Label>Every</Label>
-        <Segmented value={frequency} options={[["WEEKLY", "Week"], ["MONTHLY", "Month"], ["QUARTERLY", "Quarter"], ["ANNUAL", "Year"]] as const} onChange={pickFrequency} />
-        <p className="text-[11px] text-muted">The target repeats each {FREQ_WORD[frequency]} until it is changed.</p>
-        <ShareHint parent={parent} frequency={frequency} onUse={(v) => setTarget(String(v))} />
-      </div>
+              <div>
+                <Label>Unit</Label>
+                <Segmented value={unit as "COUNT"} options={UNIT_CHOICES} onChange={(v) => { setUnit(v); setParentId(""); }} />
+              </div>
 
-      {!autoKey && (
-        <>
-          <div>
-            <Label>Direction</Label>
-            <Segmented value={direction} options={[["UP", "Increase"], ["DOWN", "Decrease"]] as const} onChange={setDirection} />
-          </div>
-          {direction === "DOWN" && (
-            <div>
-              <Label>Starting from *</Label>
-              <input type="number" inputMode="decimal" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} placeholder="e.g. 4000" />
-            </div>
+              {otherFeeds.length > 0 && (
+                <div>
+                  <Label>Or track a running total</Label>
+                  <SelectField value={autoKey} onChange={(e) => (e.target.value ? pickFeed(e.target.value) : setAutoKey(""))}>
+                    <option value="">Manual — I&apos;ll log results myself</option>
+                    {otherFeeds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
+                  </SelectField>
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
 
-      {otherFeeds.length > 0 && (
-        <div>
-          <Label>Or track a running total</Label>
-          <SelectField value={suggestions.some((k) => k.key === autoKey) ? "" : autoKey} onChange={(e) => (e.target.value ? pickFeed(e.target.value) : setAutoKey(""))}>
-            <option value="">Manual — I&apos;ll log results myself</option>
-            {otherFeeds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
-          </SelectField>
-        </div>
-      )}
+          {step === 1 && (
+            <>
+              <div className="space-y-2">
+                <Label>Every</Label>
+                <Segmented value={frequency} options={[["WEEKLY", "Week"], ["MONTHLY", "Month"], ["QUARTERLY", "Quarter"], ["ANNUAL", "Year"]] as const} onChange={pickFrequency} />
+                <p className="text-[11px] text-muted">The target repeats each {FREQ_WORD[frequency]} until it is changed.</p>
+              </div>
+
+              <div>
+                <Label>Part of <span className="text-muted/60">(the company or Group KPI this counts toward)</span></Label>
+                <SelectField value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                  <option value="">— Not part of a bigger KPI —</option>
+                  {parentChoices.map((p) => <option key={p.id} value={p.id}>{p.company === "GROUP" ? "Group" : p.company} · {p.metric}{p.targetValue != null ? ` (${p.targetValue.toLocaleString()}${p.startDate && p.endDate ? "" : ` a ${FREQ_WORD[p.frequency] ?? "period"}`})` : ""}</option>)}
+                </SelectField>
+              </div>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div>
+                <Label>Target * <span className="text-muted/60">(each {FREQ_WORD[frequency]})</span></Label>
+                <input
+                  type="number" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") save(); }} className={inputClass} autoFocus
+                />
+                <ShareHint parent={parent} frequency={frequency} onUse={(v) => setTarget(String(v))} />
+              </div>
+
+              {!autoKey && (
+                <>
+                  <div>
+                    <Label>Direction</Label>
+                    <Segmented value={direction} options={[["UP", "Increase"], ["DOWN", "Decrease"]] as const} onChange={setDirection} />
+                  </div>
+                  {direction === "DOWN" && (
+                    <div>
+                      <Label>Starting from *</Label>
+                      <input type="number" inputMode="decimal" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} placeholder="e.g. 4000" />
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       <ErrorNote message={error} />
     </KpiSheet>

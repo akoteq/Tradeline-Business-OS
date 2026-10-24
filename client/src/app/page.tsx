@@ -119,7 +119,7 @@ function GroupDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl space-y-7 px-5 py-10 md:px-8 md:py-12">
+      <div className="p-4 md:p-6 space-y-7">
         <Masthead
           companyCount={data.companies.length}
           urgentCount={attention.urgentCount}

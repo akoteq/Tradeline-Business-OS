@@ -9,6 +9,7 @@ import { LeadsHeader, LeadsStats } from "./components/LeadsStats";
 import { LeadsToolbar } from "./components/LeadsToolbar";
 import { LeadsList } from "./components/LeadsList";
 import { AddLeadSheet } from "./components/AddLeadSheet";
+import { ImportLeadsSheet } from "./components/ImportLeadsSheet";
 import { LeadDrawer } from "./components/LeadDrawer";
 import { useLeadActions } from "./components/useLeadActions";
 import {
@@ -30,6 +31,7 @@ export default function LeadsPage() {
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Lead | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [detail, setDetail] = useState<Lead | null>(null);
 
   const { data: bdos = [] } = useQuery<BdoOption[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
@@ -94,7 +96,7 @@ export default function LeadsPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <LeadsHeader scope={SCOPE_NOTE[level]} sort={sort} onSort={setSort} onAdd={openAdd} />
+      <LeadsHeader scope={SCOPE_NOTE[level]} sort={sort} onSort={setSort} onAdd={openAdd} onImport={() => setShowImport(true)} />
       <LeadsStats stats={stats} status={filters.status} onStatus={(s) => setFilter("status", s)} />
       <LeadsToolbar
         scope={scope} onScope={changeScope} counts={counts} showMine={!!myName}
@@ -113,6 +115,9 @@ export default function LeadsPage() {
           lead={editing} bdos={bdos} canAssign={canShare}
           onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); invalidate(); }} onOpenLead={openExisting}
         />
+      )}
+      {showImport && (
+        <ImportLeadsSheet bdos={bdos} canAssign={canShare} onClose={() => setShowImport(false)} onImported={invalidate} />
       )}
       {detail && (
         <LeadDrawer

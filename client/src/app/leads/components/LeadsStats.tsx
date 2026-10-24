@@ -1,10 +1,10 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { SORT_LABEL, STAGE_LABEL, STAGE_RING, STATUS_LABEL, STATUS_LIST, type SortKey } from "./lib";
 
-export function LeadsHeader({ scope, sort, onSort, onAdd }: { scope: string; sort: SortKey; onSort: (s: SortKey) => void; onAdd: () => void }) {
+export function LeadsHeader({ scope, sort, onSort, onAdd, onImport }: { scope: string; sort: SortKey; onSort: (s: SortKey) => void; onAdd: () => void; onImport: () => void }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
@@ -18,6 +18,9 @@ export function LeadsHeader({ scope, sort, onSort, onAdd }: { scope: string; sor
         >
           {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
         </select>
+        <button onClick={onImport} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground/5">
+          <Upload size={15} /> Import
+        </button>
         <button onClick={onAdd} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90">
           <Plus size={16} /> New lead
         </button>

@@ -10,54 +10,11 @@ import { useCompanies, companyBadgeClass } from "@/lib/companies";
 import { accessLevel } from "@/lib/auth";
 import { EngagementSection, ClientComplianceSection, ClientContactsSection } from "@/components/ClientModules";
 import Link from "next/link";
+import { AddClientSheet } from "./components/AddClientSheet";
+import { REVENUE_YEARS, STATUS_OPTS, TIER_OPTS, type BdoOption, type LinkedDeal, type SME } from "./components/lib";
 import { X, FileText, Trash2, Share2 } from "lucide-react";
 
 const PAGE_SIZE = 100;
-
-type LinkedDeal = { id: string; type: "TRADELINE" | "GRANT"; label: string; status: string };
-
-type SME = {
-  id: string;
-  bizId: string | null;
-  companyName: string;
-  contactName: string | null;
-  email: string | null;
-  phone: string | null;
-  altPhone: string | null;
-  address: string | null;
-  valueChain: string | null;
-  region: string | null;
-  district: string | null;
-  businessDescription: string | null;
-  status: string;
-  followUpDate: string | null;
-  investorReadinessScore: number | null;
-  bankabilityTier?: string;
-  collateralStatus: string | null;
-  dateOfIncorporation: string | null;
-  yearsInOperation: number | null;
-  revenueGhs2023: number | null;
-  revenueGhs2024: number | null;
-  revenueGhs2025: number | null;
-  revenueGhs2026: number | null;
-  bdoId: string | null;
-  bdo: { id: string; name: string } | null;
-  notes: string | null;
-  tradelineCount?: number;
-  grantCount?: number;
-  linkedDeals?: LinkedDeal[];
-  activities?: string[];
-  // Shared clients: which companies serve the client, and what this viewer may do with it.
-  servedBy?: string[];
-  canEdit?: boolean;
-  fullAccess?: boolean;
-};
-
-type BdoOption = { id: string; name: string; company: string };
-
-const STATUS_OPTS = ["IN_PROGRESS", "ACTIVE", "INACTIVE", "ARCHIVED"] as const;
-const TIER_OPTS = ["UNSCORED", "TIER_1", "TIER_2", "TIER_3"] as const;
-const REVENUE_YEARS = ["2023", "2024", "2025", "2026"] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-yellow-100 text-yellow-700",
@@ -76,16 +33,6 @@ const TIER_COLORS: Record<string, string> = {
 const PIPELINE_HREF: Record<LinkedDeal["type"], string> = {
   TRADELINE: "/tradeline/pipeline",
   GRANT: "/grant-loans",
-};
-
-const EMPTY_FORM = {
-  companyName: "", contactName: "", email: "", phone: "", altPhone: "", address: "",
-  valueChain: "", region: "", district: "", businessDescription: "",
-  status: "IN_PROGRESS", bankabilityTier: "UNSCORED", collateralStatus: "",
-  investorReadinessScore: "", followUpDate: "", notes: "",
-  dateOfIncorporation: "", yearsInOperation: "",
-  revenueGhs2023: "", revenueGhs2024: "", revenueGhs2025: "", revenueGhs2026: "",
-  bdoId: "", activities: "",
 };
 
 function fmt(n: number) {
@@ -285,13 +232,13 @@ export default function SmePage() {
       )}
 
       {showForm && (
-        <SmeFormModal
+        <AddClientSheet
           sme={editing}
           bdos={bdos}
           tradelineView={tradelineView}
           onOpenExisting={(id) => { setShowForm(false); setDetailId(id); }}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["sme"] }); }}
+          onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["sme"] }); qc.invalidateQueries({ queryKey: ["sme-detail"] }); }}
         />
       )}
 
@@ -307,20 +254,6 @@ export default function SmePage() {
   );
 }
 
-// ─── Score bar ─────────────────────────────────────────────────────────────────
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 70 ? "bg-green-500" : score >= 40 ? "bg-yellow-500" : "bg-red-500";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(score, 100)}%` }} />
-      </div>
-      <span className="text-xs font-medium">{score}</span>
-    </div>
-  );
-}
-
 // ─── Filter select ─────────────────────────────────────────────────────────────
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
@@ -328,193 +261,6 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
     <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
-  );
-}
-
-// ─── Add / Edit modal ──────────────────────────────────────────────────────────
-
-function SmeFormModal({ sme, bdos, tradelineView, onClose, onSaved, onOpenExisting }: { sme: SME | null; bdos: BdoOption[]; tradelineView: boolean; onClose: () => void; onSaved: () => void; onOpenExisting: (id: string) => void }) {
-  const { byKey } = useCompanies();
-  const [dups, setDups] = useState<{ id: string; name: string; region: string | null; servedBy: string[] }[] | null>(null);
-  const [form, setForm] = useState({
-    ...EMPTY_FORM,
-    ...(sme ? {
-      companyName: sme.companyName,
-      contactName: sme.contactName ?? "",
-      email: sme.email ?? "",
-      phone: sme.phone ?? "",
-      altPhone: sme.altPhone ?? "",
-      address: sme.address ?? "",
-      valueChain: sme.valueChain ?? "",
-      region: sme.region ?? "",
-      district: sme.district ?? "",
-      businessDescription: sme.businessDescription ?? "",
-      status: sme.status,
-      bankabilityTier: sme.bankabilityTier ?? "UNSCORED",
-      activities: (sme.activities ?? []).join(", "),
-      collateralStatus: sme.collateralStatus ?? "",
-      investorReadinessScore: sme.investorReadinessScore != null ? String(sme.investorReadinessScore) : "",
-      followUpDate: sme.followUpDate ? sme.followUpDate.slice(0, 10) : "",
-      notes: sme.notes ?? "",
-      dateOfIncorporation: sme.dateOfIncorporation ? sme.dateOfIncorporation.slice(0, 10) : "",
-      yearsInOperation: sme.yearsInOperation != null ? String(sme.yearsInOperation) : "",
-      revenueGhs2023: sme.revenueGhs2023 != null ? String(sme.revenueGhs2023) : "",
-      revenueGhs2024: sme.revenueGhs2024 != null ? String(sme.revenueGhs2024) : "",
-      revenueGhs2025: sme.revenueGhs2025 != null ? String(sme.revenueGhs2025) : "",
-      revenueGhs2026: sme.revenueGhs2026 != null ? String(sme.revenueGhs2026) : "",
-      bdoId: sme.bdoId ?? "",
-    } : {}),
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async (force = false) => {
-    if (!form.companyName.trim()) { setError("Company name is required."); return; }
-    setSaving(true); setError("");
-    // A new client is checked against the whole group first, so nobody adds the same business twice.
-    if (!sme && !force) {
-      try {
-        const params = new URLSearchParams({ name: form.companyName, phone: form.phone, email: form.email });
-        const found = await fetcher(`/sme/duplicates?${params}`) as { id: string; name: string; region: string | null; servedBy: string[] }[];
-        if (found.length) { setDups(found); setSaving(false); return; }
-      } catch { /* the check is a convenience; carry on */ }
-    }
-    const tradelineOnly = tradelineView ? {} : { bankabilityTier: undefined, collateralStatus: undefined, investorReadinessScore: undefined, revenueGhs2023: undefined, revenueGhs2024: undefined, revenueGhs2025: undefined, revenueGhs2026: undefined };
-    const body = {
-      ...form,
-      activities: form.activities.split(",").map((a) => a.trim()).filter(Boolean),
-      contactName: form.contactName || null,
-      email: form.email || null,
-      phone: form.phone || null,
-      altPhone: form.altPhone || null,
-      address: form.address || null,
-      valueChain: form.valueChain || null,
-      region: form.region || null,
-      district: form.district || null,
-      businessDescription: form.businessDescription || null,
-      collateralStatus: form.collateralStatus || null,
-      investorReadinessScore: form.investorReadinessScore !== "" ? Number(form.investorReadinessScore) : null,
-      followUpDate: form.followUpDate || null,
-      notes: form.notes || null,
-      dateOfIncorporation: form.dateOfIncorporation || null,
-      yearsInOperation: form.yearsInOperation !== "" ? Number(form.yearsInOperation) : null,
-      revenueGhs2023: form.revenueGhs2023 !== "" ? Number(form.revenueGhs2023) : null,
-      revenueGhs2024: form.revenueGhs2024 !== "" ? Number(form.revenueGhs2024) : null,
-      revenueGhs2025: form.revenueGhs2025 !== "" ? Number(form.revenueGhs2025) : null,
-      revenueGhs2026: form.revenueGhs2026 !== "" ? Number(form.revenueGhs2026) : null,
-      bdoId: form.bdoId || null,
-      ...tradelineOnly,
-    };
-    try {
-      sme ? await api.put(`/sme/${sme.id}`, body) : await api.post("/sme", body);
-      onSaved();
-    } catch { setError("Failed to save. Check the server."); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-gray-900">{sme ? "Edit Client" : "Add Client"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <Section label="Company Information">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Business Name *" value={form.companyName} onChange={(v) => set("companyName", v)} span={2} />
-              <Field label="Contact Person" value={form.contactName} onChange={(v) => set("contactName", v)} />
-              <Field label="Phone" value={form.phone} onChange={(v) => set("phone", v)} />
-              <Field label="Alternate Phone" value={form.altPhone} onChange={(v) => set("altPhone", v)} />
-              <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
-                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                  <option value="">— Select region —</option>
-                  {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
-                  {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <Field label="Town / District" value={form.district} onChange={(v) => set("district", v)} />
-              <Field label="Address" value={form.address} onChange={(v) => set("address", v)} span={2} />
-              <Field label="Value Chain / Sector" value={form.valueChain} onChange={(v) => set("valueChain", v)} span={2} />
-              <Field label="Activities (comma-separated, e.g. shea butter processing, export)" value={form.activities} onChange={(v) => set("activities", v)} span={2} />
-            </div>
-            <div className="mt-3">
-              <label className="text-xs font-medium text-gray-600 block mb-1">Business Description</label>
-              <textarea value={form.businessDescription} onChange={(e) => set("businessDescription", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
-            </div>
-          </Section>
-
-          <Section label="Business Profile">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Date of Incorporation" type="date" value={form.dateOfIncorporation} onChange={(v) => set("dateOfIncorporation", v)} />
-              <Field label="Years in Operation" type="number" min={0} value={form.yearsInOperation} onChange={(v) => set("yearsInOperation", v)} />
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                  <option value="">— Unassigned —</option>
-                  {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
-                </select>
-              </div>
-            </div>
-          </Section>
-
-          {tradelineView && <Section label="Financial Records — Revenue by Year (GHS)">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {REVENUE_YEARS.map((y) => (
-                <Field key={y} label={y} type="number" min={0} value={form[`revenueGhs${y}` as keyof typeof form] as string} onChange={(v) => set(`revenueGhs${y}`, v)} />
-              ))}
-            </div>
-          </Section>}
-
-          <Section label="Assessment & Status">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormSelect label="Status" value={form.status} options={STATUS_OPTS as unknown as string[]} onChange={(v) => set("status", v)} />
-              {tradelineView && <FormSelect label="Bankability Tier" value={form.bankabilityTier} options={TIER_OPTS as unknown as string[]} onChange={(v) => set("bankabilityTier", v)} />}
-              {tradelineView && <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Investor Readiness Score (0–100)</label>
-                <input type="number" min="0" max="100" value={form.investorReadinessScore} onChange={(e) => set("investorReadinessScore", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
-                {form.investorReadinessScore !== "" && (
-                  <div className="mt-1.5"><ScoreBar score={Number(form.investorReadinessScore)} /></div>
-                )}
-              </div>}
-              <Field label="Follow Up Date" type="date" value={form.followUpDate} onChange={(v) => set("followUpDate", v)} />
-              {tradelineView && <Field label="Bankability / Collateral Status" value={form.collateralStatus} onChange={(v) => set("collateralStatus", v)} span={2} placeholder="e.g. Land title available, no collateral yet…" />}
-            </div>
-          </Section>
-
-          <Section label="Notes">
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
-          </Section>
-
-          {dups && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-              <p className="font-medium text-amber-900">This business may already be in the client list:</p>
-              <ul className="mt-2 space-y-1.5">
-                {dups.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between gap-2">
-                    <span className="text-amber-900">{d.name}{d.region ? ` · ${d.region}` : ""}{d.servedBy.length ? ` · served by ${d.servedBy.map((k) => byKey[k]?.name ?? k).join(", ")}` : ""}</span>
-                    <button onClick={() => onOpenExisting(d.id)} className="text-xs font-semibold text-accent hover:underline shrink-0">Open it</button>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-amber-800">To work with an existing client, open it and start a deal from your pipeline. If this is a different business, save anyway.</p>
-            </div>
-          )}
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-        </div>
-
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => save(!!dups)} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
-            {saving ? "Saving…" : sme ? "Update Client" : dups ? "Save anyway" : "Add Client"}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -848,35 +594,6 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, value, onChange, type = "text", span, min, placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number; min?: number; placeholder?: string }) {
-  return (
-    <div className={span === 2 ? "col-span-2" : ""}>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} min={min} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
-    </div>
-  );
-}
-
-function FormSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-        {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
-      </select>
-    </div>
-  );
-}
 
 function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
   return (

@@ -8,6 +8,7 @@ const DEFAULT_COUNTRY_CODE = "233";
 export type Lead = {
   id: string; bizId: string | null; businessName: string; email: string | null; phone: string | null;
   contactPerson: string | null; roleTitle: string | null; status: string; source: string | null;
+  industry?: string | null; region?: string | null;
   bdoId: string | null; bdo: { id: string; name: string } | null; priority: string | null;
   dateAdded: string | null; followUpDate: string | null; notes: string | null;
   /** When the record was created; stands in for dateAdded on older leads without one. */
@@ -137,17 +138,18 @@ export function whatsappLink(phone: string | null) {
 // ─── Form ↔ API ─────────────────────────────────────────────────────────────
 export type LeadForm = {
   businessName: string; contactPerson: string; roleTitle: string; email: string; phone: string;
+  industry: string; region: string;
   status: string; priority: string; source: string; followUpDate: string; notes: string; bdoId: string; dateAdded: string;
 };
 export const EMPTY_FORM: LeadForm = {
-  businessName: "", contactPerson: "", roleTitle: "", email: "", phone: "",
+  businessName: "", contactPerson: "", roleTitle: "", email: "", phone: "", industry: "", region: "",
   status: "NEW", priority: "MEDIUM", source: "", followUpDate: "", notes: "", bdoId: "", dateAdded: "",
 };
 
 export function leadToForm(l: Lead): LeadForm {
   return {
     businessName: l.businessName, contactPerson: l.contactPerson ?? "", roleTitle: l.roleTitle ?? "",
-    email: l.email ?? "", phone: l.phone ?? "", status: l.status, priority: l.priority ?? "MEDIUM", source: l.source ?? "",
+    email: l.email ?? "", phone: l.phone ?? "", industry: l.industry ?? "", region: l.region ?? "", status: l.status, priority: l.priority ?? "MEDIUM", source: l.source ?? "",
     followUpDate: l.followUpDate ? l.followUpDate.slice(0, 10) : "", notes: l.notes ?? "",
     bdoId: l.bdoId ?? "", dateAdded: l.dateAdded ? l.dateAdded.slice(0, 10) : "",
   };
@@ -158,6 +160,7 @@ export function formToBody(f: LeadForm, canAssign: boolean) {
     ...f,
     bdoId: f.bdoId || null, email: f.email || null, phone: f.phone || null, contactPerson: f.contactPerson || null,
     roleTitle: f.roleTitle || null, source: f.source || null, priority: f.priority || null,
+    industry: f.industry || null, region: f.region || null,
     followUpDate: f.followUpDate || null, notes: f.notes || null,
   };
   // Staff always own their leads — the server assigns them, so don't send a pick.
@@ -169,10 +172,10 @@ export function formToBody(f: LeadForm, canAssign: boolean) {
 
 // ─── Export ─────────────────────────────────────────────────────────────────
 export function exportLeads(rows: Lead[]) {
-  const head = ["Business", "Biz ID", "Contact", "Role", "Email", "Phone", "Stage", "Priority", "Follow up", "Owner", "Visibility", "Source", "Notes"];
+  const head = ["Business", "Biz ID", "Industry", "Region", "Contact", "Role", "Email", "Phone", "Stage", "Priority", "Follow up", "Owner", "Visibility", "Source", "Notes"];
   const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = rows.map((r) => [
-    r.businessName, r.bizId, r.contactPerson, r.roleTitle, r.email, r.phone, STATUS_LABEL[r.status] ?? r.status, r.priority,
+    r.businessName, r.bizId, r.industry, r.region, r.contactPerson, r.roleTitle, r.email, r.phone, STATUS_LABEL[r.status] ?? r.status, r.priority,
     r.followUpDate ? new Date(r.followUpDate).toLocaleDateString() : "", r.bdo?.name, r.visibility === "PUBLIC" ? "Shared" : "Private", r.source, r.notes,
   ].map(cell).join(","));
   const url = URL.createObjectURL(new Blob([[head.map(cell).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" }));

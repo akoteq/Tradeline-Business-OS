@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { INDUSTRIES } from "@/lib/industries";
+import { GHANA_REGIONS } from "@/lib/regions";
 import { WizardShell, useWizard } from "./WizardShell";
 import { Chips, Disclosure, Label, inputClass, selectClass } from "./fields";
 import { DuplicateMatches, useDuplicateMatches, type DuplicateMatch } from "./DuplicateMatches";
@@ -38,6 +40,8 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
   const { matches } = useDuplicateMatches(nameChanged ? form.businessName : "", lead?.id);
 
   const hasName = form.businessName.trim() !== "";
+  // A new lead needs its industry; region stays optional.
+  const needsIndustry = !isEdit && !form.industry;
   // A new lead must have a follow-up date so it doesn't go cold.
   const needsFollowUp = !isEdit && !form.followUpDate;
   const quick = ["1", "3", "7"].find((n) => inDays(Number(n)) === form.followUpDate);
@@ -46,6 +50,7 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
 
   const save = async (allowDuplicate = false) => {
     if (!hasName) { setError("Add the business name first."); go(0); return; }
+    if (needsIndustry) { setError("Pick the industry this business is in."); go(0); return; }
     if (needsFollowUp) { setError("Pick when you'll follow up with this lead."); return; }
     setSaving(true); setError(""); setBlocked(null);
     try {
@@ -64,8 +69,8 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
     <WizardShell
       steps={STEPS} step={step} dir={dir} reached={reached} onGo={go} onClose={onClose} error={error}
       primary={last
-        ? { label: saving ? "Saving…" : isEdit ? "Save changes" : "Add lead", disabled: saving || !hasName || needsFollowUp || !!blocked, onClick: () => save() }
-        : { label: "Continue", disabled: !hasName, onClick: () => go(step + 1) }}
+        ? { label: saving ? "Saving…" : isEdit ? "Save changes" : "Add lead", disabled: saving || !hasName || needsIndustry || needsFollowUp || !!blocked, onClick: () => save() }
+        : { label: "Continue", disabled: !hasName || needsIndustry, onClick: () => go(step + 1) }}
     >
       {step === 0 && (
         <div className="space-y-4">
@@ -73,7 +78,7 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
             <Label>Business name</Label>
             <input
               autoFocus value={form.businessName} onChange={(e) => { set("businessName", e.target.value); setBlocked(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter" && hasName) go(1); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && hasName && !needsIndustry) go(1); }}
               className={inputClass} placeholder="e.g. Asante Foods Ltd"
               aria-describedby={matches.length ? "lead-duplicates" : undefined}
             />
@@ -94,6 +99,24 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
           <div>
             <Label>Email</Label>
             <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputClass} placeholder="name@business.com" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label hint={isEdit ? undefined : "(required)"}>Industry</Label>
+              <select value={form.industry} onChange={(e) => { set("industry", e.target.value); setError(""); }} className={selectClass} aria-required={!isEdit}>
+                <option value="">Choose an industry…</option>
+                {form.industry && !INDUSTRIES.includes(form.industry) && <option value={form.industry}>{form.industry}</option>}
+                {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label hint="(optional)">Region</Label>
+              <select value={form.region} onChange={(e) => set("region", e.target.value)} className={selectClass}>
+                <option value="">Not sure yet</option>
+                {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+                {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
           </div>
           <Disclosure title="Add their role" defaultOpen={!!form.roleTitle}>
             <div>

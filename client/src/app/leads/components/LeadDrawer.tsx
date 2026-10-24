@@ -62,6 +62,8 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
   };
 
   const details: [string, ReactNode][] = [
+    ["Industry", lead.industry],
+    ["Region", lead.region],
     ["Contact", lead.contactPerson],
     ["Role", lead.roleTitle],
     ["Phone", lead.phone && <a href={`tel:${lead.phone}`} className="hover:text-accent hover:underline">{lead.phone}</a>],
