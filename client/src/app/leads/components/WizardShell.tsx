@@ -44,15 +44,15 @@ export function WizardShell({ steps, step, dir, reached, onGo, onClose, primary,
         role="dialog" aria-modal="true" aria-label={meta.title} onClick={(e) => e.stopPropagation()}
         className="bg-surface shadow-xl border border-border w-full max-w-md max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl"
       >
-        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 shrink-0">
+        <div className="px-4 py-3 border-b border-border flex items-start justify-between gap-3 shrink-0">
           <div className="min-w-0">
-            <h2 className="font-serif text-lg text-foreground">{meta.title}</h2>
+            <h2 className="text-base font-semibold text-foreground">{meta.title}</h2>
             <p className="text-xs text-muted mt-0.5">{meta.subtitle}</p>
           </div>
           <button onClick={onClose} className="text-muted hover:text-foreground transition-colors shrink-0" aria-label="Close"><X size={18} /></button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <div className="p-4 space-y-4 overflow-y-auto">
           <div>
             <div className="flex gap-1.5" role="list" aria-label="Progress">
               {steps.map((s, i) => (
@@ -81,7 +81,7 @@ export function WizardShell({ steps, step, dir, reached, onGo, onClose, primary,
           <ErrorNote message={error} />
         </div>
 
-        <div className="px-5 py-3 border-t border-border flex flex-wrap justify-end gap-2 shrink-0">
+        <div className="px-4 py-3 border-t border-border flex flex-wrap justify-end gap-2 shrink-0">
           {step === 0
             ? <button onClick={onClose} className={btnSecondary}>Cancel</button>
             : <button onClick={() => onGo(step - 1)} className={btnGhost}>Back</button>}
