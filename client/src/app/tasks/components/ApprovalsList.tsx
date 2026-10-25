@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClipboardCheck, Target } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { apiError, fmtDate, type ApprovalTask } from "./task-utils";
 import { TaskEvidence } from "@/components/TaskEvidence";
 
@@ -27,6 +28,7 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
     setError(null);
     try {
       await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : {});
+      toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: t.deliverable });
       setRejecting(null);
       setReason("");
       onChanged();

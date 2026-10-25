@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { useCompanies } from "@/lib/companies";
 import { UserPlus, Mail, KeyRound, ShieldCheck, Pencil, Trash2, X, Link2, Search, MoreVertical, Copy, Check } from "lucide-react";
 
@@ -95,8 +97,8 @@ export default function ManageTeamPage() {
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null);
   const [linkTarget, setLinkTarget] = useState<UserRow | null>(null);
   const [creds, setCreds] = useState<Credentials | null>(null);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
-  const [notice, setNotice] = useState("");
+  // Ask in our own dialog, then run the action.
+  const ask = (c: Confirm) => confirmAction({ title: c.title, body: c.message, confirmLabel: c.confirmLabel, danger: !!c.danger }).then((ok) => { if (ok) c.run(); });
 
   const { data: perf = [], isLoading } = useQuery<BdoPerf[]>({ queryKey: ["bdo-performance"], queryFn: () => fetcher("/bdo/performance") });
   const { data: users = [] } = useQuery<UserRow[]>({ queryKey: ["auth-users"], queryFn: () => fetcher("/auth/users") });
@@ -130,21 +132,21 @@ export default function ManageTeamPage() {
 
   const resend = useMutation({
     mutationFn: (userId: string) => api.post(`/auth/users/${userId}/resend-invite`),
-    onSuccess: (res) => { const d = res.data; setNotice(""); setCreds({ email: d.email ?? "", password: d.tempPassword, emailSent: d.emailSent, emailError: d.emailError }); refresh(); },
-    onError: (err) => setNotice(apiError(err, "We couldn't reset that password. Please try again.")),
+    onSuccess: (res) => { const d = res.data; setCreds({ email: d.email ?? "", password: d.tempPassword, emailSent: d.emailSent, emailError: d.emailError }); refresh(); },
+    onError: (err) => toast.failed("Couldn't reset that password", err),
   });
   const removeMember = useMutation({
     mutationFn: async ({ bdoId, userId }: { bdoId: string; userId?: string }) => {
       if (userId) await api.delete(`/auth/users/${userId}`);
       await api.delete(`/bdo/${bdoId}`);
     },
-    onSuccess: () => { setNotice(""); refresh(); },
-    onError: (err) => setNotice(apiError(err, "We couldn't remove this person. Please try again.")),
+    onSuccess: () => { toast.success("Removed from the team"); refresh(); },
+    onError: (err) => toast.failed("Couldn't remove this person", err),
   });
   const removeAccount = useMutation({
     mutationFn: (userId: string) => api.delete(`/auth/users/${userId}`),
-    onSuccess: () => { setNotice(""); refresh(); },
-    onError: (err) => setNotice(apiError(err, "We couldn't delete this account. Please try again.")),
+    onSuccess: () => { toast.success("Login deleted"); refresh(); },
+    onError: (err) => toast.failed("Couldn't delete this account", err),
   });
 
   const companyOfUser = (u: UserRow) => {
@@ -160,7 +162,7 @@ export default function ManageTeamPage() {
     if (u) {
       items.push({
         label: "Reset password & resend invite", icon: <KeyRound size={14} />,
-        onClick: () => setConfirm({
+        onClick: () => ask({
           title: "Reset password?",
           message: `We'll reset the password for ${u.email} and email them a new invite.`,
           confirmLabel: "Reset and resend",
@@ -170,7 +172,7 @@ export default function ManageTeamPage() {
     }
     items.push({
       label: p ? "Remove from team" : "Delete account", icon: <Trash2 size={14} />, danger: true,
-      onClick: () => setConfirm(p
+      onClick: () => ask(p
         ? {
             title: `Remove ${p.bdo.name}?`,
             message: `Their profile will be deactivated${u ? " and their login deleted" : ""}.`,
@@ -202,12 +204,6 @@ export default function ManageTeamPage() {
       </div>
 
       {creds && <CredentialsBanner creds={creds} onClose={() => setCreds(null)} />}
-      {notice && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-500/5 px-3 py-2 text-sm text-red-600">
-          <span>{notice}</span>
-          <button onClick={() => setNotice("")} aria-label="Dismiss" className="shrink-0 text-red-400 hover:text-red-600"><X size={14} /></button>
-        </div>
-      )}
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -349,7 +345,6 @@ export default function ManageTeamPage() {
         />
       )}
       {roleTarget && <ChangeRoleModal user={roleTarget} companyName={companyOfUser(roleTarget)} onClose={() => setRoleTarget(null)} onSaved={() => { setRoleTarget(null); refresh(); }} />}
-      {confirm && <ConfirmModal confirm={confirm} onClose={() => setConfirm(null)} />}
     </div>
   );
 }
@@ -471,28 +466,9 @@ function CredentialsBanner({ creds, onClose }: { creds: Credentials; onClose: ()
 // Trunqo design tokens for the popups — same as the KPI pages.
 const btnSecondary = "px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-primary/5 transition-colors disabled:opacity-50";
 const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
-const btnDanger = "px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors";
 const inputClass = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-60";
 const labelClass = "text-xs font-medium text-muted block mb-1";
 const errorClass = "text-red-600 text-sm bg-red-500/5 border border-red-200 px-3 py-2 rounded-lg";
-
-// ─── Confirm ────────────────────────────────────────────────────────────────
-function ConfirmModal({ confirm, onClose }: { confirm: Confirm; onClose: () => void }) {
-  return (
-    <ModalShell
-      title={confirm.title}
-      onClose={onClose}
-      footer={
-        <>
-          <button onClick={onClose} className={btnSecondary}>Cancel</button>
-          <button onClick={() => { confirm.run(); onClose(); }} className={confirm.danger ? btnDanger : btnPrimary}>{confirm.confirmLabel}</button>
-        </>
-      }
-    >
-      <p className="text-sm text-foreground/80">{confirm.message}</p>
-    </ModalShell>
-  );
-}
 
 // ─── Onboard (add + invite in one) ──────────────────────────────────────────
 function OnboardModal({ onClose, onDone }: { onClose: () => void; onDone: (c: Credentials) => void }) {
@@ -584,6 +560,7 @@ function EditProfileModal({ perf, onClose, onSaved }: { perf: BdoPerf; onClose: 
     setSaving(true); setError("");
     try {
       await api.put(`/bdo/${b.id}`, { ...form, phone: form.phone || null, role: form.role || null });
+      toast.success("Profile updated", { description: form.name.trim() });
       onSaved();
     } catch { setError("We couldn't save your changes. Please try again."); } finally { setSaving(false); }
   };
@@ -617,7 +594,7 @@ function LinkProfileModal({ user, profiles, onClose, onSaved }: {
   const [error, setError] = useState("");
   const save = async () => {
     setSaving(true); setError("");
-    try { await api.put(`/auth/users/${user.id}/bdo`, { bdoId }); onSaved(); }
+    try { await api.put(`/auth/users/${user.id}/bdo`, { bdoId }); toast.success(bdoId ? "Profile linked" : "Profile unlinked"); onSaved(); }
     catch (err: unknown) { setError(apiError(err, "We couldn't link this profile. Please try again.")); }
     finally { setSaving(false); }
   };
@@ -653,7 +630,7 @@ function ChangeRoleModal({ user, companyName, onClose, onSaved }: { user: UserRo
   const unchanged = role === current;
   const save = async () => {
     setSaving(true); setError("");
-    try { await api.put(`/auth/users/${user.id}/role`, { role }); onSaved(); }
+    try { await api.put(`/auth/users/${user.id}/role`, { role }); toast.success("Access updated"); onSaved(); }
     catch (err: unknown) { setError(apiError(err, "We couldn't update access. Please try again.")); }
     finally { setSaving(false); }
   };

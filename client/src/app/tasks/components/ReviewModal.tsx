@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { Target } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { KpiSheet } from "@/components/kpi";
 import { TaskEvidence } from "@/components/TaskEvidence";
 import { apiError, fmtDate, type ApprovalTask, type Task } from "./task-utils";
@@ -33,6 +34,7 @@ export function ReviewModal({ task, companyName, onClose, onDone }: {
     setError("");
     try {
       await api.post(`/tasks/${task.id}/${action}`, action === "reject" ? { reason: reason.trim() } : {});
+      toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: task.deliverable });
       onDone(action);
     } catch (err) {
       setError(apiError(err, `We couldn't ${action} this task. Please try again.`));

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { X } from "lucide-react";
 
@@ -74,7 +76,8 @@ export default function PartnershipsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/partnerships/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["partnerships"] }),
+    onSuccess: () => { toast.success("Partnership deleted"); qc.invalidateQueries({ queryKey: ["partnerships"] }); },
+    onError: (err) => toast.failed("Couldn't delete the partnership", err),
   });
 
   const totalRevenue = data.reduce((s, p) => s + (p.revenueGeneratedGhs ?? 0), 0);
@@ -149,7 +152,7 @@ export default function PartnershipsPage() {
         title={`${data.length} partnerships`}
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
-        onDelete={(row) => { if (confirm(`Delete "${row.partnerOrganisation}"?`)) deleteMutation.mutate(row.id); }}
+        onDelete={(row) => confirmAction({ title: `Delete ${row.partnerOrganisation}?`, body: "This can't be undone.", confirmLabel: "Delete" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); })}
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <FilterSelect value={filters.status} options={[{ value: "", label: "All Statuses" }, ...STATUS_OPTS.map((s) => ({ value: s, label: s }))]} onChange={(v) => setFilters((f) => ({ ...f, status: v }))} />
@@ -250,6 +253,7 @@ function PartnershipFormModal({ p, onClose, onSaved }: { p: Partnership | null; 
     };
     try {
       p ? await api.put(`/partnerships/${p.id}`, body) : await api.post("/partnerships", body);
+      toast.success(p ? "Partnership updated" : "Partnership added");
       onSaved();
     } catch { setError("Failed to save. Check the server."); }
     finally { setSaving(false); }

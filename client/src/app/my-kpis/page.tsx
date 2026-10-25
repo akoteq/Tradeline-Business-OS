@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { isManager } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
 import {
@@ -157,8 +159,8 @@ export default function MyKpisPage() {
 
   const quickAdd = useMutation({
     mutationFn: (r: Row) => api.post("/kpi-framework/quick-update", { definitionId: r.definition.id, period, delta: 1, bdoId: data?.owner.id }),
-    onSuccess: invalidate,
-    onError: (err) => window.alert(apiError(err, "Couldn't update the KPI.")),
+    onSuccess: (_res, r) => { toast.success("Added 1", { description: r.definition.metric }); invalidate(); },
+    onError: (err) => toast.error("Couldn't update the KPI", { description: apiError(err, "Please try again.") }),
   });
 
   const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
@@ -783,12 +785,13 @@ function TargetAndManage({ row, meta, period, bdoId, onSaved, onRemoved }: { row
     setBusy(true); setError("");
     try {
       await api.post("/kpi-framework/quick-update", { definitionId: row.definition.id, period, target, bdoId: meta.kind === "ACCOUNTABLE" ? undefined : bdoId });
+      toast.success("Target saved", { description: row.definition.metric });
       onSaved();
     } catch (err) { setError(apiError(err, "Couldn't save the target.")); } finally { setBusy(false); }
   };
   const remove = async () => {
-    if (!window.confirm(`Remove "${row.definition.metric}"? Its history is kept.`)) return;
-    try { await api.delete(`/kpi-framework/my/${row.definition.id}`); onRemoved(); }
+    if (!(await confirmAction({ title: `Remove ${row.definition.metric}?`, body: "Its history is kept.", confirmLabel: "Remove KPI" }))) return;
+    try { await api.delete(`/kpi-framework/my/${row.definition.id}`); toast.success("KPI removed", { description: row.definition.metric }); onRemoved(); }
     catch (err) { setError(apiError(err, "Couldn't remove it.")); }
   };
   return (
@@ -866,6 +869,7 @@ function CreateSheet({ ownerId, ownerCompany, ownerName, period, onClose, onSave
         parentId: parentId || null,
         frequency,
       });
+      toast.success("KPI added", { description: metric.trim() });
       onSaved();
     } catch (err) {
       setError(apiError(err, "Failed to create KPI."));

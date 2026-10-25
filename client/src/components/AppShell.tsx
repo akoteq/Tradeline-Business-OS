@@ -6,6 +6,8 @@ import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { Alerts } from "./Alerts";
 import { AssistantLauncher } from "./assistant/AssistantPanel";
+import { Toaster } from "./Toast";
+import { ConfirmHost } from "./Confirm";
 
 const NO_SHELL = ["/login", "/change-password"];
 const HIDDEN_KEY = "sidebar-hidden";
@@ -23,7 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return !h;
   });
 
-  if (NO_SHELL.includes(pathname)) return <>{children}</>;
+  if (NO_SHELL.includes(pathname)) return <>{children}<Toaster /><ConfirmHost /></>;
 
   return (
     <div className="flex min-h-screen">
@@ -55,6 +57,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AssistantLauncher />
+      <Toaster />
+      <ConfirmHost />
     </div>
   );
 }

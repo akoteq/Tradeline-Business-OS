@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, Target } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { TaskEvidence } from "@/components/TaskEvidence";
 import { plural } from "../format";
 import { TabPanel } from "../TabPanel";
@@ -39,6 +40,7 @@ export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[
     setError(null);
     try {
       await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : {});
+      toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: t.deliverable });
       setRejecting(null);
       setReason("");
       for (const key of AFFECTED) qc.invalidateQueries({ queryKey: [key] });
