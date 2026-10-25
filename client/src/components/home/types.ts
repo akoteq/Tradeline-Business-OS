@@ -1,5 +1,5 @@
+import { TaskAttachment } from "@/app/(app)/tasks/components/task-utils";
 import type { useCompanies } from "@/lib/companies";
-import type { TaskAttachment } from "@/app/tasks/components/task-utils";
 
 // ---- API shapes -------------------------------------------------------------
 

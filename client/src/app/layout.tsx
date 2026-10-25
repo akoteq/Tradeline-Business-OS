@@ -1,63 +1,39 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Sora } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "@/components/Providers";
-import { AppShell } from "@/components/AppShell";
+import { site } from "@/lib/site";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
-const sora = Sora({
-  variable: "--font-sora",
-  subsets: ["latin"],
-});
-
-const siteUrl = "https://trunqo.com";
-const siteName = "Trunqo";
-const siteDescription =
-  "Trunqo is the business operating system for owners running more than one company. One alert feed, one accounting engine, and a delegation model that scopes access down to what each person owns — delivered straight to WhatsApp and email the moment it matters.";
-
+/**
+ * The root layout is deliberately thin: fonts, <html>, <body> and defaults every route inherits.
+ *
+ *   app/(marketing)  public pages. No auth, no sidebar, indexable.
+ *   app/(app)        the signed-in product. Providers + AppShell live in its layout.
+ *
+ * Default is "do not index": anything new is private until a layout opts in. The landing page
+ * does that in app/(marketing)/layout.tsx.
+ */
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(site.url),
   title: {
-    default: `${siteName} — The trunk your businesses grow from`,
-    template: `%s · ${siteName}`,
+    default: site.name,
+    template: `%s · ${site.name}`,
   },
-  description: siteDescription,
-  keywords: [
-    "business operating system",
-    "multi-business management",
-    "delegation software",
-    "accounting automation",
-    "business alerts WhatsApp",
-    "SME management platform",
-    "holding company software",
-  ],
-  authors: [{ name: siteName }],
-  creator: siteName,
-  publisher: siteName,
-  category: "Business software",
-  applicationName: siteName,
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
-  alternates: {
-    canonical: siteUrl,
-  },
+  applicationName: site.name,
+  robots: { index: false, follow: false },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -67,28 +43,6 @@ export const metadata: Metadata = {
     apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
   },
   manifest: "/site.webmanifest",
-  openGraph: {
-    type: "website",
-    url: siteUrl,
-    siteName,
-    title: `${siteName} — The trunk your businesses grow from`,
-    description: siteDescription,
-    locale: "en_US",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: `${siteName} — the trunk your businesses grow from`,
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `${siteName} — The trunk your businesses grow from`,
-    description: siteDescription,
-    images: ["/og-image.png"],
-  },
   formatDetection: {
     telephone: false,
   },
@@ -106,16 +60,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} h-full`}
+      className={`${plexSans.variable} ${plexMono.variable} h-full`}
       suppressHydrationWarning
     >
       <body
         className="min-h-full antialiased bg-background text-foreground font-sans"
         suppressHydrationWarning
       >
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        {children}
       </body>
     </html>
   );

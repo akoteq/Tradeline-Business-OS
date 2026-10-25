@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Film, Image as ImageIcon, Link2, Paperclip, X } from "lucide-react";
-import { fmtFileSize, type TaskAttachment } from "@/app/tasks/components/task-utils";
+import { fmtFileSize, TaskAttachment } from "@/app/(app)/tasks/components/task-utils";
 
 /**
  * What a manager checks before approving finished work: every link and file on the task, with
