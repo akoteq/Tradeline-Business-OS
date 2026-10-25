@@ -11,7 +11,7 @@ export function Hero() {
       <Container className="pb-20 pt-16 sm:pt-24 lg:pb-28">
         <Rise>
           <h1 id="hero-title" className="max-w-4xl text-4xl font-semibold sm:text-5xl lg:text-6xl">
-           Every company you run. Every owner. Every date. One view.
+            One system for every company you run.
           </h1>
         </Rise>
 
