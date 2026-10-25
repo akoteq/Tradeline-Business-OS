@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { useCompanies } from "@/lib/companies";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { isGroupOwner, isBusinessCeo } from "@/lib/auth";
 import { KpiRow, KpiDef, KpiStatus, KpiDetailSheet } from "@/components/kpi";
 import { KpiSummary } from "./components/KpiSummary";
@@ -76,11 +78,11 @@ export default function KpiFrameworkPage() {
 
   const archiveDef = useMutation({
     mutationFn: (id: string) => api.delete(`/kpi-framework/definitions/${id}`),
-    onSuccess: refreshAll,
-    onError: (err) => window.alert(apiError(err, "Couldn't archive this KPI. Please try again.")),
+    onSuccess: () => { toast.success("KPI archived", { description: "Its history is kept." }); refreshAll(); },
+    onError: (err) => toast.error("Couldn't archive this KPI", { description: apiError(err, "Please try again.") }),
   });
   const archive = (d: KpiDef) => {
-    if (window.confirm(`Archive "${d.metric}"? Its history is kept, and any KPIs below it become top-level.`)) archiveDef.mutate(d.id);
+    confirmAction({ title: `Archive ${d.metric}?`, body: "Its history is kept, and any KPIs below it become top-level.", confirmLabel: "Archive KPI" }).then((ok) => { if (ok) archiveDef.mutate(d.id); });
   };
 
   return (

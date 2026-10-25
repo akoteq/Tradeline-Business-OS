@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { GHANA_REGIONS } from "@/lib/regions";
@@ -126,7 +128,8 @@ export default function SmePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/sme/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sme"] }),
+    onSuccess: () => { toast.success("Client deleted"); qc.invalidateQueries({ queryKey: ["sme"] }); },
+    onError: (err) => toast.failed("Couldn't delete this client", err),
   });
 
   const columns = [
@@ -204,7 +207,7 @@ export default function SmePage() {
         title={`${total.toLocaleString()} clients`}
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
-        onDelete={(row) => { if (confirm(`Delete "${row.companyName}"?`)) deleteMutation.mutate(row.id); }}
+        onDelete={(row) => confirmAction({ title: `Delete ${row.companyName}?`, body: "The client is removed for everyone. This can't be undone.", confirmLabel: "Delete client" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); })}
         canEditRow={(row) => row.canEdit !== false}
         filterBar={
           <div className="flex gap-2 flex-wrap">
@@ -435,12 +438,16 @@ function DocumentsSection({ smeId }: { smeId: string }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/client-documents/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["client-documents", smeId] }),
+    onSuccess: () => { toast.success("Document deleted"); qc.invalidateQueries({ queryKey: ["client-documents", smeId] }); },
+    onError: (err) => toast.failed("Couldn't delete the document", err),
   });
   const shareMutation = useMutation({
     mutationFn: (d: ClientDoc) => api.put(`/client-documents/${d.id}`, { sharedWithGroup: !d.sharedWithGroup }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["client-documents", smeId] }),
-    onError: (e: unknown) => alert((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Couldn't change sharing."),
+    onSuccess: (_res, d) => {
+      toast.success(d.sharedWithGroup ? "Now private to your company" : "Shared with the group", { description: d.fileName });
+      qc.invalidateQueries({ queryKey: ["client-documents", smeId] });
+    },
+    onError: (e: unknown) => toast.failed("Couldn't change sharing", e),
   });
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -453,9 +460,10 @@ function DocumentsSection({ smeId }: { smeId: string }) {
     if (user?.email) formData.append("uploadedBy", user.email);
     try {
       await api.post("/client-documents", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Document uploaded", { description: file.name });
       qc.invalidateQueries({ queryKey: ["client-documents", smeId] });
-    } catch {
-      alert("Failed to upload document.");
+    } catch (err) {
+      toast.failed("Couldn't upload the document", err);
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -490,7 +498,7 @@ function DocumentsSection({ smeId }: { smeId: string }) {
                   <Share2 size={12} /> {d.sharedWithGroup ? "Shared" : "Private"}
                 </button>
                 <button
-                  onClick={() => { if (confirm(`Delete "${d.fileName}"?`)) deleteMutation.mutate(d.id); }}
+                  onClick={() => confirmAction({ title: `Delete ${d.fileName}?`, body: "This can't be undone.", confirmLabel: "Delete document" }).then((ok) => { if (ok) deleteMutation.mutate(d.id); })}
                   className="text-gray-400 hover:text-red-600"
                 >
                   <Trash2 size={14} />
@@ -525,7 +533,8 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/client-notes/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["client-notes", smeId] }),
+    onSuccess: () => { toast.success("Follow-up deleted"); qc.invalidateQueries({ queryKey: ["client-notes", smeId] }); },
+    onError: (err) => toast.failed("Couldn't delete the follow-up", err),
   });
 
   const addNote = async () => {
@@ -534,9 +543,10 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
     try {
       await api.post("/client-notes", { smeId, note: text, type, date, authorName: user?.bdoName ?? user?.email ?? null });
       setText("");
+      toast.success("Follow-up saved");
       qc.invalidateQueries({ queryKey: ["client-notes", smeId] });
-    } catch {
-      alert("Failed to save follow-up.");
+    } catch (err) {
+      toast.failed("Couldn't save the follow-up", err);
     } finally {
       setSaving(false);
     }
@@ -580,7 +590,7 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
                   <span className="text-xs text-gray-400">{new Date(n.date).toLocaleDateString()}</span>
                   {n.authorName && <span className="text-xs text-gray-400">· {n.authorName}</span>}
                 </div>
-                <button onClick={() => { if (confirm("Delete this log entry?")) deleteMutation.mutate(n.id); }} className="text-gray-300 hover:text-red-600 shrink-0">
+                <button onClick={() => confirmAction({ title: "Delete this follow-up?", body: "This can't be undone.", confirmLabel: "Delete" }).then((ok) => { if (ok) deleteMutation.mutate(n.id); })} className="text-gray-300 hover:text-red-600 shrink-0">
                   <Trash2 size={12} />
                 </button>
               </div>

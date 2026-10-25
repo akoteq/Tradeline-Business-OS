@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 import { UserPlus, Trash2, CheckCircle, Clock, ShieldCheck } from "lucide-react";
 
@@ -54,7 +56,8 @@ export default function AdminPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/admin/users/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+    onSuccess: () => { toast.success("User removed"); qc.invalidateQueries({ queryKey: ["admin-users"] }); },
+    onError: (err) => toast.failed("Couldn't remove this user", err),
   });
 
   const selectedBdo = bdos.find((b) => b.id === form.bdoId);
@@ -185,7 +188,7 @@ export default function AdminPage() {
                     <td className="px-4 py-3">
                       <button
                         onClick={() => {
-                          if (confirm(`Remove ${u.email} from the system?`)) deleteMutation.mutate(u.id);
+                          confirmAction({ title: `Remove ${u.email}?`, body: "Their login is removed from the system.", confirmLabel: "Remove" }).then((ok) => { if (ok) deleteMutation.mutate(u.id); });
                         }}
                         className="p-1.5 rounded-lg text-muted hover:text-red-600 hover:bg-red-500/10 transition-colors"
                       >

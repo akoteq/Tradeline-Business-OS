@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable, type Column } from "@/components/DataTable";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { useComplianceCompanies, STATE_LABEL, STATE_STYLE } from "@/components/ClientModules";
@@ -53,7 +55,11 @@ export default function CompliancePage() {
   const regulators = [...new Set(types.map((t) => t.regulator))].sort();
 
   const verify = async (r: Rec, verified: boolean) => {
-    try { await api.post(`/compliance/${r.id}/verify`, { verified }); refresh(); } catch (e) { alert(errText(e, "Couldn't change verification.")); }
+    try {
+      await api.post(`/compliance/${r.id}/verify`, { verified });
+      toast.success(verified ? "Marked as verified" : "Verification removed", { description: `${r.requirementName} · ${r.clientName}` });
+      refresh();
+    } catch (e) { toast.failed("Couldn't change verification", e); }
   };
 
   if (!user) return null;
@@ -83,7 +89,7 @@ export default function CompliancePage() {
       render: (r) => (
         <div className="flex items-center gap-2 text-xs whitespace-nowrap">
           {r.state === "AWAITING_VERIFICATION" && <button onClick={() => verify(r, true)} className="font-semibold text-green-700 hover:underline">Verify</button>}
-          {r.state === "VERIFIED" && <button onClick={() => { if (confirm("Mark this record as not verified?")) verify(r, false); }} className="text-gray-500 hover:underline">Unverify</button>}
+          {r.state === "VERIFIED" && <button onClick={() => confirmAction({ title: "Mark as not verified?", body: `${r.requirementName} for ${r.clientName} goes back to awaiting verification.`, confirmLabel: "Unverify", danger: false }).then((ok) => { if (ok) verify(r, false); })} className="text-gray-500 hover:underline">Unverify</button>}
           <button onClick={() => setOutreach(r)} className="text-accent hover:underline flex items-center gap-1"><Phone size={11} /> Log outreach</button>
           {!r.opportunityDealId && companies.find((c) => c.key === r.company)?.modules?.complianceOpportunities && r.state !== "NOT_APPLICABLE" &&
             <button onClick={() => setOpportunity(r)} className="text-accent hover:underline flex items-center gap-1"><Briefcase size={11} /> Opportunity</button>}
@@ -115,7 +121,7 @@ export default function CompliancePage() {
         title={`${filtered.length} records`}
         onAdd={() => setEditing("new")}
         onEdit={(r) => setEditing(r)}
-        onDelete={accessLevel(user.role) !== "STAFF" ? (r) => { if (confirm(`Delete ${r.requirementName} for ${r.clientName}?`)) api.delete(`/compliance/${r.id}`).then(refresh, (e) => alert(errText(e, "Failed to delete."))); } : undefined}
+        onDelete={accessLevel(user.role) !== "STAFF" ? (r) => confirmAction({ title: `Delete ${r.requirementName} for ${r.clientName}?`, body: "This can't be undone.", confirmLabel: "Delete" }).then((ok) => { if (ok) api.delete(`/compliance/${r.id}`).then(() => { toast.success("Record deleted", { description: `${r.requirementName} · ${r.clientName}` }); refresh(); }, (e) => toast.failed("Couldn't delete the record", e)); }) : undefined}
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <select value={regulator} onChange={(e) => setRegulator(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
@@ -209,6 +215,7 @@ function RecordModal({ record, types, companies, onClose, onSaved }: { record: R
     try {
       if (record) { delete body.company; delete body.smeId; delete body.requirementTypeId; await api.put(`/compliance/${record.id}`, body); }
       else await api.post("/compliance", body);
+      toast.success(record ? "Record updated" : "Record added");
       onSaved();
     } catch (e) { setError(errText(e, "Failed to save.")); }
     finally { setSaving(false); }
@@ -309,7 +316,7 @@ function OutreachModal({ record, onClose, onSaved }: { record: Rec; onClose: () 
   const [error, setError] = useState("");
   const save = async () => {
     setSaving(true); setError("");
-    try { await api.post(`/compliance/${record.id}/outreach`, { type, note }); onSaved(); } catch (e) { setError(errText(e, "Failed to save.")); } finally { setSaving(false); }
+    try { await api.post(`/compliance/${record.id}/outreach`, { type, note }); toast.success("Outreach logged", { description: record.clientName }); onSaved(); } catch (e) { setError(errText(e, "Failed to save.")); } finally { setSaving(false); }
   };
   return (
     <Modal title={`Log outreach — ${record.clientName}`} onClose={onClose} footer={<>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
@@ -87,7 +89,8 @@ export default function BapxPipelinePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/bapx/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bapx"] }),
+    onSuccess: () => { toast.success("Deal deleted"); qc.invalidateQueries({ queryKey: ["bapx"] }); },
+    onError: (err) => toast.failed("Couldn't delete this deal", err),
   });
 
   const columns = [
@@ -127,7 +130,7 @@ export default function BapxPipelinePage() {
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
         onDelete={(row) => {
-          if (confirm(`Delete deal for "${row.businessName}"?`)) deleteMutation.mutate(row.id);
+          confirmAction({ title: `Delete the deal for ${row.businessName}?`, body: "This can't be undone.", confirmLabel: "Delete deal" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
         }}
         filterBar={
           <div className="flex gap-2 flex-wrap">
@@ -234,6 +237,7 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
     try {
       if (deal) await api.put(`/bapx/${deal.id}`, body);
       else await api.post("/bapx", body);
+      toast.success(deal ? "Deal updated" : "Deal added", { description: form.businessName.trim() || undefined });
       onSaved();
     } catch {
       setError("Failed to save. Check the server.");
@@ -415,6 +419,7 @@ function CoachBox({ deal }: { deal: BapxDeal }) {
     try {
       const { data } = await api.post<{ aiCoachRecommendation: string; aiCoachGeneratedAt: string }>(`/bapx/${deal.id}/coach`);
       setCoach({ text: data.aiCoachRecommendation, at: data.aiCoachGeneratedAt });
+      toast.success("New recommendation ready");
       qc.invalidateQueries({ queryKey: ["bapx"] });
     } catch (err) {
       setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Couldn't write a recommendation.");

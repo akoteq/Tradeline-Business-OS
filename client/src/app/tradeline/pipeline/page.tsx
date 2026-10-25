@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
 import { useAuth } from "@/components/AuthProvider";
@@ -103,7 +105,8 @@ export default function TradelinePipelinePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/tradeline/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tradeline"] }),
+    onSuccess: () => { toast.success("Deal deleted"); qc.invalidateQueries({ queryKey: ["tradeline"] }); },
+    onError: (err) => toast.failed("Couldn't delete this deal", err),
   });
 
   const totalPotential = data.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
@@ -180,7 +183,7 @@ export default function TradelinePipelinePage() {
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
         onDelete={(row) => {
-          if (confirm(`Delete "${row.businessName}"?`)) deleteMutation.mutate(row.id);
+          confirmAction({ title: `Delete the deal for ${row.businessName}?`, body: "This can't be undone.", confirmLabel: "Delete deal" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
         }}
         filterBar={
           <div className="flex gap-2 flex-wrap">
@@ -303,6 +306,7 @@ function DealFormModal({ deal, bdos, clients, isBdoRole, currentBdoId, onClose, 
     try {
       if (deal) await api.put(`/tradeline/${deal.id}`, body);
       else await api.post("/tradeline", body);
+      toast.success(deal ? "Deal updated" : "Deal added", { description: form.businessName.trim() || undefined });
       onSaved();
     } catch (err) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;

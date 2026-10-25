@@ -3,6 +3,8 @@
 import { use, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
 import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
@@ -119,7 +121,8 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/company-deals/${id}`),
-    onSuccess: invalidate,
+    onSuccess: () => { toast.success("Deal deleted"); invalidate(); },
+    onError: (err) => toast.failed("Couldn't delete this deal", err),
   });
 
   const totalRevenue  = deals.reduce((s, d) => s + (d.revenueReceivedGhs ?? 0), 0);
@@ -180,7 +183,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
             onAdd={() => { setEditing(null); setShowForm(true); }}
             onEdit={(row) => { setEditing(row); setShowForm(true); }}
             onDelete={(row) => {
-              if (confirm(`Delete deal "${row.businessName}"?`)) deleteMutation.mutate(row.id);
+              confirmAction({ title: `Delete the deal for ${row.businessName}?`, body: "This can't be undone.", confirmLabel: "Delete deal" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
             }}
             filterBar={
               <div className="flex flex-wrap gap-2">
@@ -319,6 +322,7 @@ function DealFormModal({
     };
     try {
       deal ? await api.put(`/company-deals/${deal.id}`, body) : await api.post("/company-deals", body);
+      toast.success(deal ? "Deal updated" : "Deal added", { description: form.businessName.trim() || undefined });
       onSaved();
     } catch {
       setError("Failed to save. Check the server.");

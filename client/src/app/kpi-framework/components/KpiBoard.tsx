@@ -7,6 +7,7 @@ import {
   Settings2, Archive, Pencil, ChevronLeft, ChevronRight, Search, Filter, ArrowUpDown, MoreHorizontal, Target, Users,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { useAuth } from "@/components/AuthProvider";
 import { isManager } from "@/lib/auth";
 import {
@@ -62,8 +63,8 @@ export function KpiBoard({
     && r.definition.unit === "COUNT" && r.entry?.reviewStatus !== "LOCKED" && r.status !== "DRAFT";
   const quickAdd = useMutation({
     mutationFn: (r: KpiRow) => api.post("/kpi-framework/quick-update", { definitionId: r.definition.id, period, delta: 1 }),
-    onSuccess: onChanged,
-    onError: (err) => window.alert(apiError(err, "Couldn't add to this KPI. Please try again.")),
+    onSuccess: (_res, r) => { toast.success("Added 1", { description: r.definition.metric }); onChanged(); },
+    onError: (err) => toast.error("Couldn't add to this KPI", { description: apiError(err, "Please try again.") }),
   });
 
   // Status filter → search → sort.

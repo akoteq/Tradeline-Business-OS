@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { clsx } from "clsx";
 import { AlertTriangle, Building2, ChevronRight } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { useCompanies } from "@/lib/companies";
 import { INDUSTRIES } from "@/lib/industries";
 import { GHANA_REGIONS } from "@/lib/regions";
@@ -84,6 +85,7 @@ export function AddClientSheet({ sme, bdos, tradelineView, onClose, onSaved, onO
     try {
       const body = formToBody(form, tradelineView);
       if (sme) await api.put(`/sme/${sme.id}`, body); else await api.post("/sme", body);
+      toast.success(isEdit ? "Client updated" : "Client added", { description: form.companyName.trim() });
       onSaved();
     } catch (err) { setError(apiError(err, "Couldn't save this client. Please try again.")); }
     finally { setSaving(false); }

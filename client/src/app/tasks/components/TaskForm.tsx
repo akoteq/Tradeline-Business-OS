@@ -212,10 +212,13 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   const depChoices = allTasks.filter((t) => t.id !== task?.id && t.type === "TASK" && t.status !== "CANCELLED");
 
   // Dates are checked here, on the step where you can fix them, not after the server says no.
+  // A task needs both dates (the server requires them); a proposal's due / sent date is optional.
   const dateError = () =>
     !form.startDate
       ? "Pick a start date."
-      : form.targetDate && form.targetDate < form.startDate
+      : !isProposal && !form.targetDate
+      ? "Pick a due date."
+      : form.targetDate &&form.targetDate < form.startDate
       ? "The due date can't be before the start date."
       : "";
 
@@ -309,7 +312,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
       )}
       {step === 2 && (
         <button type="button" onClick={() => go(3)} className={primaryBtn}>
-          {form.targetDate ? "Continue" : "Skip for now"}
+          {form.targetDate || !isProposal ? "Continue" : "Skip for now"}
         </button>
       )}
       {step === 3 && (
@@ -408,7 +411,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                 className={inputClass}
               />
             </Field>
-            <Field label={dueLabel} hint="(optional)">
+            <Field label={dueLabel} hint={isProposal ? "(optional)" : undefined}>
               <input
                 type="date"
                 value={form.targetDate}
@@ -424,7 +427,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                     <button
                       key={label}
                       type="button"
-                      onClick={() => set("targetDate", d)}
+                      onClick={() => { set("targetDate", d); if (error) setError(""); }}
                       aria-pressed={selected}
                       className={clsx(
                         "h-7 px-3 rounded-full border text-xs transition-colors",

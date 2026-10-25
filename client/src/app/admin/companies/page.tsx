@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DEFAULT_COMPANIES, type Company, type ClientField } from "@/lib/companies";
 import { Building2, Plus, Pencil, Archive, RotateCcw, Trash2, X, ShieldCheck } from "lucide-react";
 
@@ -40,17 +42,19 @@ export default function ManageCompaniesPage() {
 
   const archiveMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/companies/${id}`),
-    onSuccess: invalidate,
+    onSuccess: () => { toast.success("Company archived"); invalidate(); },
+    onError: (err) => toast.failed("Couldn't archive the company", err),
   });
   const restoreMutation = useMutation({
     mutationFn: (id: string) => api.put(`/companies/${id}`, { isActive: true }),
-    onSuccess: invalidate,
+    onSuccess: () => { toast.success("Company restored"); invalidate(); },
+    onError: (err) => toast.failed("Couldn't restore the company", err),
   });
   // Only archived companies with no deals, staff, leads, tasks or KPIs — the server explains otherwise.
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/companies/${id}/permanent`),
-    onSuccess: invalidate,
-    onError: (err) => alert((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to delete company."),
+    onSuccess: () => { toast.success("Company deleted"); invalidate(); },
+    onError: (err) => toast.failed("Couldn't delete the company", err),
   });
 
   return (
@@ -64,11 +68,11 @@ export default function ManageCompaniesPage() {
           <div className="flex flex-wrap gap-2">
           <button
             onClick={async () => {
-              if (!confirm("Link every existing client to the companies that already have deals with them? Safe to run more than once.")) return;
+              if (!(await confirmAction({ title: "Link existing clients?", body: "Links every existing client to the companies that already have deals with them. Safe to run more than once.", confirmLabel: "Link clients", danger: false }))) return;
               try {
                 const { data } = await api.post<{ created: number }>("/companies/backfill-engagements");
-                alert(`Done — ${data.created} client link${data.created === 1 ? "" : "s"} created.`);
-              } catch { alert("That didn't work. Try again."); }
+                toast.success("Clients linked", { description: `${data.created} client link${data.created === 1 ? "" : "s"} created.` });
+              } catch (err) { toast.failed("That didn't work", err); }
             }}
             className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface"
             title="One-off: so 'Served by' and each company's client details work for clients added before shared clients"
@@ -138,7 +142,7 @@ export default function ManageCompaniesPage() {
                           </button>
                           {c.isActive ? (
                             <button
-                              onClick={() => { if (confirm(`Archive ${c.name}? Its existing deals are kept; it just stops appearing in menus.`)) archiveMutation.mutate(c.id); }}
+                              onClick={() => confirmAction({ title: `Archive ${c.name}?`, body: "Its existing deals are kept; it just stops appearing in menus.", confirmLabel: "Archive" }).then((ok) => { if (ok) archiveMutation.mutate(c.id); })}
                               className="flex items-center gap-1 rounded-lg border border-accent/25 px-2 py-1 text-xs text-accent transition-colors hover:bg-accent/[0.08]"
                             >
                               <Archive size={12} /> Archive
@@ -153,7 +157,7 @@ export default function ManageCompaniesPage() {
                               </button>
                               {!BUILT_IN_KEYS.has(c.key) && (
                                 <button
-                                  onClick={() => { if (confirm(`Permanently delete ${c.name}? This can't be undone.`)) deleteMutation.mutate(c.id); }}
+                                  onClick={() => confirmAction({ title: `Permanently delete ${c.name}?`, body: "This can't be undone.", confirmLabel: "Delete company" }).then((ok) => { if (ok) deleteMutation.mutate(c.id); })}
                                   disabled={deleteMutation.isPending}
                                   className="flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 transition-colors hover:bg-red-500/[0.06] disabled:opacity-50"
                                 >
@@ -217,6 +221,7 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
       } else {
         await api.post("/companies", { name: form.name, slug: form.slug || undefined, color: form.color, order: form.order, modules, clientFields });
       }
+      toast.success(company ? "Company updated" : "Company added", { description: form.name.trim() });
       onSaved();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to save company.";
@@ -326,7 +331,12 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
           <div className="rounded-xl border border-border p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold text-foreground">Client fields <span className="font-normal text-muted">(only this company sees them)</span></p>
-              <select value="" onChange={(e) => { const p = packs.find((x) => x.key === e.target.value); if (p && (!form.clientFields.length || confirm(`Replace the current fields with the ${p.label} pack?`))) setForm((f) => ({ ...f, clientFields: p.fields })); }} className="rounded-lg border border-border bg-background px-2 py-1 text-xs">
+              <select value="" onChange={async (e) => {
+                const p = packs.find((x) => x.key === e.target.value);
+                if (!p) return;
+                if (form.clientFields.length && !(await confirmAction({ title: `Use the ${p.label} pack?`, body: "It replaces the fields you have now.", confirmLabel: "Replace fields" }))) return;
+                setForm((f) => ({ ...f, clientFields: p.fields }));
+              }} className="rounded-lg border border-border bg-background px-2 py-1 text-xs">
                 <option value="">Start from a pack…</option>
                 {packs.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>

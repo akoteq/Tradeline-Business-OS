@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { isStaff } from "@/lib/auth";
@@ -83,7 +85,8 @@ export default function GrantLoansPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/grant-loans/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["grant-loans"] }),
+    onSuccess: () => { toast.success("Application deleted"); qc.invalidateQueries({ queryKey: ["grant-loans"] }); },
+    onError: (err) => toast.failed("Couldn't delete the application", err),
   });
 
   // Count by status for the summary bar
@@ -155,7 +158,7 @@ export default function GrantLoansPage() {
         title={`${data.length} records`}
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
-        onDelete={(row) => { if (confirm(`Delete record for "${row.clientName}"?`)) deleteMutation.mutate(row.id); }}
+        onDelete={(row) => confirmAction({ title: `Delete the application for ${row.clientName}?`, body: "This can't be undone.", confirmLabel: "Delete" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); })}
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <FilterSelect
@@ -256,6 +259,7 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
     };
     try {
       g ? await api.put(`/grant-loans/${g.id}`, body) : await api.post("/grant-loans", body);
+      toast.success(g ? "Application updated" : "Application added");
       onSaved();
     } catch { setError("Failed to save. Check the server."); }
     finally { setSaving(false); }
