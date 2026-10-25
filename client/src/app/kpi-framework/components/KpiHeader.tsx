@@ -48,25 +48,26 @@ export function KpiHeader({
   const monthOptions = buildMonthOptions(period);
   return (
     <>
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="min-w-0">
+      {/* Stacks below lg; from lg up it is ALWAYS title-left / actions-right, regardless of zoom or content width. */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 lg:flex-1">
           <h1 className="font-serif text-3xl md:text-5xl text-foreground tracking-tight">Company KPIs</h1>
           <p className="text-sm text-muted mt-2 max-w-3xl">
             {ownCompany && <>{companyName(ownCompany)} · </>}See how every KPI is pacing against its target. The tick on each bar marks where it should be by today.
             Recurring KPIs show {periodLabel(period)}; KPIs with a fixed deadline show their full run.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap lg:shrink-0">
           <Picker icon={Calendar} value={period} onChange={onPeriod} className="min-w-[190px]">
             {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </Picker>
           {canManage && (
-            <button onClick={onDepartments} className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl border border-border bg-surface text-foreground shadow-sm hover:bg-primary/5 transition-colors">
+            <button onClick={onDepartments} className="flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm rounded-xl border border-border bg-surface text-foreground shadow-sm hover:bg-primary/5 transition-colors">
               <Building2 size={16} /> Departments
             </button>
           )}
           {canManage && (
-            <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-accent text-accent-foreground rounded-xl shadow-sm hover:opacity-90 transition-opacity">
+            <button onClick={onAdd} className="flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-accent text-accent-foreground rounded-xl shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap">
               <Plus size={16} /> Add KPI
             </button>
           )}
