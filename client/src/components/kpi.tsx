@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Zap, X, Trash2, Lock, ChevronRight, Ban, AlertCircle } from "lucide-react";
 import { clsx } from "clsx";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "./Toast";
+import { confirmAction } from "./Confirm";
 
 // Shared KPI vocabulary and pieces. The server (lib/kpiEngine.ts, lib/kpiStatus.ts) computes
 // every number and status; this only shows them.
@@ -354,9 +356,9 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                       <button
                         title="Remove this result"
                         onClick={async () => {
-                          if (!window.confirm("Remove this result line?")) return;
-                          try { await api.delete(`/kpi-framework/updates/${u.id}`); refresh(); }
-                          catch (err) { window.alert(apiError(err, "Couldn't remove it.")); }
+                          if (!(await confirmAction({ title: "Remove this result?", body: "It no longer counts toward the KPI.", confirmLabel: "Remove" }))) return;
+                          try { await api.delete(`/kpi-framework/updates/${u.id}`); toast.success("Result removed"); refresh(); }
+                          catch (err) { toast.error("Couldn't remove it", { description: apiError(err, "Please try again.") }); }
                         }}
                         className="shrink-0 p-0.5 rounded text-muted hover:text-red-600"
                       ><Trash2 size={12} /></button>
@@ -427,6 +429,7 @@ export function LogResult({ row, bdoId, tasks = [], onSaved, defaultTaskId }: {
     try {
       await api.post("/kpi-framework/updates", { kpiId: row.definition.id, value, date, note: note || undefined, taskId: taskId || undefined, bdoId: bdoId ?? undefined });
       setValue(""); setNote(""); setTaskId("");
+      toast.success("Result logged", { description: row.definition.metric });
       onSaved();
     } catch (err) {
       setError(apiError(err, "Couldn't log the result."));

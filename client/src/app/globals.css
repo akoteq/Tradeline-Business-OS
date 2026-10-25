@@ -213,3 +213,13 @@
   font-weight: 500;
   color: var(--color-muted);
 }
+/* Toast countdown bar (components/Toast.tsx). The toast closes when this ends. */
+@keyframes toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+.toast-timer {
+  animation-name: toast-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { INDUSTRIES } from "@/lib/industries";
 import { GHANA_REGIONS } from "@/lib/regions";
 import { WizardShell, useWizard } from "./WizardShell";
@@ -56,6 +57,7 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
     try {
       const body = { ...formToBody(form, canAssign), ...(allowDuplicate ? { allowDuplicate: true } : {}) };
       if (lead) await api.put(`/leads/${lead.id}`, body); else await api.post("/leads", body);
+      toast.success(isEdit ? "Lead updated" : "Lead added", { description: form.businessName.trim() });
       onSaved();
     } catch (err) {
       const dups = (err as { response?: { status?: number; data?: { duplicates?: DuplicateMatch[] } } })?.response;

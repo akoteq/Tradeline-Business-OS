@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { accessLevel } from "@/lib/auth";
@@ -65,7 +67,7 @@ export default function ContactsPage() {
         onAdd={() => setEditing("new")}
         onEdit={(r) => setEditing(r)}
         canEditRow={(r) => r.canEdit}
-        onDelete={(r) => { if (confirm(`Delete ${r.name}?`)) api.delete(`/contacts/${r.id}`).then(refresh, (e) => alert(errText(e, "Failed to delete."))); }}
+        onDelete={(r) => confirmAction({ title: `Delete ${r.name}?`, body: "Their interactions and commitments go with them.", confirmLabel: "Delete contact" }).then((ok) => { if (ok) api.delete(`/contacts/${r.id}`).then(() => { toast.success("Contact deleted", { description: r.name }); refresh(); }, (e) => toast.failed("Couldn't delete the contact", e)); })}
         filterBar={
           <div className="flex gap-3 flex-wrap items-center">
             <select value={stage} onChange={(e) => setStage(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5"><option value="">All stages</option>{STAGES.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
@@ -86,9 +88,16 @@ function ContactDrawer({ id, onClose, onEdit }: { id: string; onClose: () => voi
   const [commit, setCommit] = useState({ description: "", owedBy: "US", dueDate: "" });
   const refresh = () => qc.invalidateQueries({ queryKey: ["contacts"] });
   const add = async (path: string, body: unknown, reset: () => void) => {
-    try { await api.post(`/contacts/${id}/${path}`, body); reset(); refresh(); } catch (e) { alert(errText(e, "Failed to save.")); }
+    try {
+      await api.post(`/contacts/${id}/${path}`, body);
+      toast.success(path === "commitments" ? "Commitment added" : "Interaction logged");
+      reset(); refresh();
+    } catch (e) { toast.failed("Couldn't save that", e); }
   };
-  const setStatus = async (cid: string, status: string) => { try { await api.put(`/contacts/commitments/${cid}`, { status }); refresh(); } catch (e) { alert(errText(e, "Failed.")); } };
+  const setStatus = async (cid: string, status: string) => {
+    try { await api.put(`/contacts/commitments/${cid}`, { status }); toast.success("Commitment updated"); refresh(); }
+    catch (e) { toast.failed("Couldn't update the commitment", e); }
+  };
   if (!c) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -189,7 +198,11 @@ function ContactModal({ contact, onClose, onSaved, onOpen }: { contact: ContactR
     const body: Record<string, unknown> = { ...form, interests: form.interests.split(",").map((x) => x.trim()).filter(Boolean), nextFollowUpDate: form.nextFollowUpDate || null, ownerBdoId: form.ownerBdoId || null };
     if (contact?.contactDetailsHidden) { delete body.phone; delete body.email; }
     if (!canSeePrivate) delete body.privateNotes;
-    try { contact ? await api.put(`/contacts/${contact.id}`, body) : await api.post("/contacts", body); onSaved(); }
+    try {
+      contact ? await api.put(`/contacts/${contact.id}`, body) : await api.post("/contacts", body);
+      toast.success(contact ? "Contact updated" : "Contact added", { description: form.name.trim() });
+      onSaved();
+    }
     catch (e) { setError(errText(e, "Failed to save.")); } finally { setSaving(false); }
   };
 

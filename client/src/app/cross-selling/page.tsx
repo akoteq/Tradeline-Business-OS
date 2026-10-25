@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { useCompanies } from "@/lib/companies";
 import { DataTable, type Column } from "@/components/DataTable";
 import { X, ArrowRight } from "lucide-react";
@@ -35,7 +37,8 @@ export default function CrossSellingPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/referrals/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["referrals"] }),
+    onSuccess: () => { toast.success("Referral deleted"); qc.invalidateQueries({ queryKey: ["referrals"] }); },
+    onError: (err) => toast.failed("Couldn't delete the referral", err),
   });
 
   const rows = referrals.filter((r) =>
@@ -112,7 +115,7 @@ export default function CrossSellingPage() {
         title={`${rows.length} referrals`}
         onAdd={() => { setEditing(null); setShowForm(true); }}
         onEdit={(row) => { setEditing(row); setShowForm(true); }}
-        onDelete={(row) => { if (confirm(`Delete referral for "${row.clientName}"?`)) deleteMutation.mutate(row.id); }}
+        onDelete={(row) => confirmAction({ title: `Delete the referral for ${row.clientName}?`, body: "This can't be undone.", confirmLabel: "Delete" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); })}
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
@@ -177,6 +180,7 @@ function ReferralModal({ referral, onClose, onSaved }: { referral: Referral | nu
     };
     try {
       referral ? await api.put(`/referrals/${referral.id}`, body) : await api.post("/referrals", body);
+      toast.success(referral ? "Referral updated" : "Referral added");
       onSaved();
     } catch (err: unknown) {
       setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to save.");

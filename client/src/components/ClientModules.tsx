@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { useAuth } from "@/components/AuthProvider";
 import { useCompanies, type ClientField } from "@/lib/companies";
 import { accessLevel } from "@/lib/auth";
@@ -78,6 +79,7 @@ export function EngagementSection({ smeId }: { smeId: string }) {
     setSaving(true); setError("");
     try {
       await api.put(`/sme/${smeId}/engagements/${e.company}`, { profile: form });
+      toast.success("Details saved", { description: e.companyName });
       setEditing(null);
       qc.invalidateQueries({ queryKey: ["engagements", smeId] });
       qc.invalidateQueries({ queryKey: ["sme"] });

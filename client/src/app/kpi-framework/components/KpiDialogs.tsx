@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { accessLevel } from "@/lib/auth";
 import { KpiRow, KpiSheet } from "@/components/kpi";
 import { ReviewBadge } from "./ui";
@@ -22,6 +23,10 @@ function ErrorNote({ message }: { message: string }) {
 }
 
 // ─── Review workflow for the period (submit → verify → lock) ────────────────
+const DONE: Record<string, string> = {
+  submit_target: "Target submitted", submit_actual: "Actual submitted", verify: "Verified", lock: "Locked", reopen: "Reopened",
+};
+
 export function ReviewPanel({ row, role, onChanged }: { row: KpiRow; role: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -31,7 +36,11 @@ export function ReviewPanel({ row, role, onChanged }: { row: KpiRow; role: strin
   const actions = TRANSITIONS.filter((t) => t.from.includes(review) && (!t.levels || t.levels.includes(accessLevel(role))));
   const transition = async (action: string) => {
     setBusy(true); setError("");
-    try { await api.post(`/kpi-framework/entries/${entry.id}/transition`, { action }); onChanged(); }
+    try {
+      await api.post(`/kpi-framework/entries/${entry.id}/transition`, { action });
+      toast.success(DONE[action] ?? "Review updated", { description: row.definition.metric });
+      onChanged();
+    }
     catch (err) { setError(apiError(err, "Couldn't update the review status. Please try again.")); }
     finally { setBusy(false); }
   };
@@ -58,6 +67,7 @@ export function PeriodTargetSheet({ row, period, onClose, onSaved }: { row: KpiR
     setBusy(true); setError("");
     try {
       await api.post("/kpi-framework/quick-update", { definitionId: row.definition.id, period, target, start });
+      toast.success("Target saved", { description: `${row.definition.metric} · ${periodLabelFor(period, row.definition.frequency)}` });
       onSaved();
     } catch (err) { setError(apiError(err, "Couldn't save the target. Please try again.")); setBusy(false); }
   };
@@ -88,11 +98,15 @@ export function DepartmentsModal({ company, companyName, onClose, onChanged }: {
   const add = async () => {
     if (!name.trim()) return;
     setError("");
-    try { await api.post("/kpi-framework/departments", { company, name }); setName(""); refresh(); }
+    try { await api.post("/kpi-framework/departments", { company, name }); toast.success("Department added", { description: name.trim() }); setName(""); refresh(); }
     catch (err) { setError(apiError(err, "Couldn't add the department. Please try again.")); }
   };
   const update = async (c: Department, body: Record<string, unknown>) => {
-    try { await api.put(`/kpi-framework/departments/${c.id}`, body); refresh(); }
+    try {
+      await api.put(`/kpi-framework/departments/${c.id}`, body);
+      toast.success(body.status === "ARCHIVED" ? "Department archived" : body.status === "ACTIVE" ? "Department restored" : "Department renamed", { description: String(body.name ?? c.name) });
+      refresh();
+    }
     catch (err) { setError(apiError(err, "Couldn't update the department. Please try again.")); }
   };
   return (

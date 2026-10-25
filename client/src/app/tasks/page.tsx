@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ArrowRight, ChevronDown, ListChecks, Plus, Search, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ListChecks, Plus, Search } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
@@ -11,6 +11,7 @@ import { type ClientOption } from "@/components/ClientSelect";
 import { useAuth } from "@/components/AuthProvider";
 import { isStaff, isGroupOwner } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
+import { toast } from "@/components/Toast";
 import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
 import { ResultPrompt } from "./components/ResultPrompt";
@@ -74,7 +75,6 @@ export default function TasksPage() {
   const [prompt, setPrompt] = useState<Task | null>(null);
   const [toDelete, setToDelete] = useState<Task | null>(null);
   const [reviewing, setReviewing] = useState<Task | null>(null);
-  const [notice, setNotice] = useState("");
   const qc = useQueryClient();
 
   // Managers approve the work staff finish; the alerts link here with ?view=approvals.
@@ -129,22 +129,29 @@ export default function TasksPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
-    onSuccess: () => { refresh(); setToDelete(null); },
-    onError: (err) => { setToDelete(null); setNotice(apiError(err, "We couldn't delete that. Please try again.")); },
+    onSuccess: () => {
+      refresh();
+      if (toDelete) toast.success(`${toDelete.type === "PROPOSAL" ? "Proposal" : "Task"} deleted`, { description: toDelete.deliverable });
+      setToDelete(null);
+    },
+    onError: (err) => { setToDelete(null); toast.error("Couldn't delete that", { description: apiError(err, "Please try again.") }); },
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ task, status }: { task: Task; status: string }) => api.put(`/tasks/${task.id}`, { status }),
     onSuccess: (res, { status }) => {
       refresh();
-      // Finishing work that is linked to a manual KPI: ask whether it produced a result.
       const saved = res.data as Task;
+      if (status === "COMPLETED") toast.success("Marked as done", { description: saved.deliverable });
+      // Finishing work that is linked to a manual KPI: ask whether it produced a result.
       if (status === "COMPLETED" && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
     },
     onError: (err) => {
       const msg = apiError(err, "We couldn't update that task. Please try again.");
       // Older tasks may have no start date, which the API now requires on every save.
-      setNotice(/start date/i.test(msg) ? "This task has no start date yet. Open Edit details, add one, then try again." : msg);
+      toast.error("Couldn't update that task", {
+        description: /start date/i.test(msg) ? "This task has no start date yet. Open Edit details, add one, then try again." : msg,
+      });
     },
   });
 
@@ -263,13 +270,6 @@ export default function TasksPage() {
             : isBdo ? "Everything assigned to you, in one place." : `Give work to your team and follow it through to done across ${scopeName}.`}
         </p>
       </div>
-
-      {notice && (
-        <div role="alert" className="flex items-start gap-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
-          <span className="flex-1">{notice}</span>
-          <button onClick={() => setNotice("")} aria-label="Dismiss" className="text-red-500 hover:text-red-700"><X size={16} /></button>
-        </div>
-      )}
 
       {/* Stat cards */}
       {isProposalView ? (
@@ -479,6 +479,11 @@ export default function TasksPage() {
           onSaved={(saved, justCompleted) => {
             setShowForm(false);
             refresh();
+            const noun = saved.type === "PROPOSAL" ? "Proposal" : "Task";
+            const who = saved.bdo?.name ?? bdos.find((b) => b.id === saved.bdoId)?.name;
+            toast.success(editing ? `${noun} updated` : `${noun} created`, {
+              description: editing || !who ? saved.deliverable : `${saved.deliverable} · assigned to ${saved.bdoId === myBdoId ? "you" : who}`,
+            });
             // Finishing work that is linked to a manual KPI: ask whether it produced a result.
             if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
           }}

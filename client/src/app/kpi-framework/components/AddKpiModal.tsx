@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
 import { fitsUnder, type KpiDef, type ParentOpt } from "@/components/kpi";
 import {
   AGG_LABEL, FREQ_OPTS, UNIT_OPTS, apiError, defaultAgg, periodLabelFor,
@@ -104,6 +105,7 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
     try {
       if (isEdit) await api.put(`/kpi-framework/definitions/${editDef!.id}?period=${period}`, body);
       else await api.post(`/kpi-framework/definitions?period=${period}`, body);
+      toast.success(isEdit ? "KPI updated" : "KPI added", { description: form.metric.trim() });
       onSaved();
     } catch (err) {
       setError(apiError(err, "Couldn't save this KPI. Please try again."));

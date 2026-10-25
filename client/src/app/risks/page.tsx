@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { accessLevel } from "@/lib/auth";
@@ -46,7 +48,8 @@ export default function RisksPage() {
   const rows = risks.filter((r) => !company || r.company === company);
 
   const setMitigation = async (r: Risk, m: Mitigation, status: string) => {
-    try { await api.patch(`/risks/${r.id}/mitigations/${m.id}`, { status }); refresh(); } catch (e) { alert(errText(e, "Couldn't update.")); }
+    try { await api.patch(`/risks/${r.id}/mitigations/${m.id}`, { status }); toast.success("Mitigation updated", { description: r.title }); refresh(); }
+    catch (e) { toast.failed("Couldn't update the mitigation", e); }
   };
 
   if (!user) return null;
@@ -109,7 +112,7 @@ export default function RisksPage() {
         onAdd={() => setEditing("new")}
         onEdit={(r) => setEditing(r)}
         canEditRow={(r) => r.canEdit}
-        onDelete={(r) => { if (confirm(`Delete "${r.title}"?`)) api.delete(`/risks/${r.id}`).then(refresh, (e) => alert(errText(e, "Failed to delete."))); }}
+        onDelete={(r) => confirmAction({ title: `Delete "${r.title}"?`, body: "This can't be undone.", confirmLabel: "Delete risk" }).then((ok) => { if (ok) api.delete(`/risks/${r.id}`).then(() => { toast.success("Risk deleted", { description: r.title }); refresh(); }, (e) => toast.failed("Couldn't delete the risk", e)); })}
         filterBar={
           <div className="flex gap-3 flex-wrap items-center">
             {level === "GROUP_OWNER" && (
@@ -122,8 +125,12 @@ export default function RisksPage() {
         }
       />
 
-      {editing && <RiskModal risk={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(w) => { setEditing(null); refresh(); if (w) alert(w); }} />}
-      {reviewing && <ReviewModal risk={reviewing} onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); refresh(); }} />}
+      {editing && <RiskModal risk={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(w) => {
+        toast.success(editing === "new" ? "Risk added" : "Risk updated");
+        if (w) toast.warning("Heads up", { description: w });
+        setEditing(null); refresh();
+      }} />}
+      {reviewing && <ReviewModal risk={reviewing} onClose={() => setReviewing(null)} onSaved={() => { toast.success("Review saved", { description: reviewing.title }); setReviewing(null); refresh(); }} />}
     </div>
   );
 }

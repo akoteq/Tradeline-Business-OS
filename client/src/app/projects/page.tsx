@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "@/components/Toast";
+import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { isGroupOwner } from "@/lib/auth";
@@ -67,7 +69,8 @@ export default function ProjectsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/projects/${id}`),
-    onSuccess: invalidate,
+    onSuccess: () => { toast.success("Project deleted"); invalidate(); },
+    onError: (err) => toast.failed("Couldn't delete the project", err),
   });
 
   const filtered = projects.filter((p) => {
@@ -157,7 +160,7 @@ export default function ProjectsPage() {
         onAdd={isAdmin ? () => { setEditing(null); setShowForm(true); } : undefined}
         onEdit={isAdmin ? (row) => { setEditing(row); setShowForm(true); } : undefined}
         onDelete={isAdmin ? (row) => {
-          if (confirm(`Delete project "${row.name}"?`)) deleteMutation.mutate(row.id);
+          confirmAction({ title: `Delete ${row.name}?`, body: "This project is removed for everyone. This can't be undone.", confirmLabel: "Delete project" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
         } : undefined}
         filterBar={
           <div className="flex gap-2 flex-wrap">
@@ -243,6 +246,7 @@ function ProjectFormModal({
       project
         ? await api.put(`/projects/${project.id}`, body)
         : await api.post("/projects", body);
+      toast.success(project ? "Project updated" : "Project added");
       onSaved();
     } catch {
       setError("Failed to save. Check the server.");

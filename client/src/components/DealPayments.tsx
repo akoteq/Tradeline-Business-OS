@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Undo2 } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
+import { toast } from "./Toast";
+import { promptAction } from "./Confirm";
 
 // Payments on a deal: one dated line per receipt. The deal's "received" figure is the sum of
 // these lines, and revenue KPIs count them inside each KPI's window — so record money here
@@ -61,6 +63,7 @@ export function DealPayments({ source, dealId, onChanged }: {
     setBusy(true); setError("");
     try {
       await api.post("/deal-payments", { source, dealId, ...form, exchangeRate: form.currency === "GHS" ? 1 : form.exchangeRate });
+      toast.success("Payment recorded", { description: `${form.currency} ${Number(form.amount).toLocaleString()}` });
       setForm((f) => ({ ...f, amount: "", note: "" }));
       setOpen(false);
       refresh();
@@ -70,13 +73,21 @@ export function DealPayments({ source, dealId, onChanged }: {
   };
 
   const reverse = async (p: Payment) => {
-    const note = window.prompt(`Reverse the payment of ${fmt(p.amountGhs)}? Optional reason:`);
+    const note = await promptAction({
+      title: `Reverse the payment of ${fmt(p.amountGhs)}?`,
+      body: "It comes off the deal's revenue. The original stays on record.",
+      inputLabel: "Reason (optional)",
+      placeholder: "e.g. Entered twice",
+      confirmLabel: "Reverse payment",
+      danger: true,
+    });
     if (note === null) return;
     try {
       await api.post(`/deal-payments/${p.id}/reverse`, { note: note || undefined });
+      toast.success("Payment reversed", { description: fmt(p.amountGhs) });
       refresh();
     } catch (err) {
-      window.alert(apiError(err, "Couldn't reverse the payment."));
+      toast.failed("Couldn't reverse the payment", err);
     }
   };
 

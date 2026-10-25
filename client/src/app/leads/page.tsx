@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
 import { accessLevel, isManager } from "@/lib/auth";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "@/components/Toast";
 import { LeadsHeader, LeadsStats } from "./components/LeadsStats";
 import { LeadsToolbar } from "./components/LeadsToolbar";
 import { LeadsList } from "./components/LeadsList";
@@ -13,7 +14,7 @@ import { ImportLeadsSheet } from "./components/ImportLeadsSheet";
 import { LeadDrawer } from "./components/LeadDrawer";
 import { useLeadActions } from "./components/useLeadActions";
 import {
-  PAGE_SIZE, SCOPE_NOTE, apiError, canEditLead, exportLeads, groupOf, sortLeads,
+  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, groupOf, sortLeads,
   type BdoOption, type Filters, type Lead, type Scope, type SortKey,
 } from "./components/lib";
 
@@ -75,17 +76,33 @@ export default function LeadsPage() {
   const actions = useLeadActions(canShare, invalidate);
 
   const guard = async (job: () => Promise<void>, fallback: string) => {
-    try { await job(); } catch (err) { alert(apiError(err, fallback)); }
+    try { await job(); } catch (err) { toast.error(fallback, { description: apiError(err, "Please try again.") }); }
   };
   const keepDetail = (u: Lead | null) => { if (u && detail?.id === u.id) setDetail(u); };
 
   const handlers = {
     onOpen: setDetail,
     onEdit: (l: Lead) => { setEditing(l); setDetail(null); setShowForm(true); },
-    onStage: (l: Lead, s: string) => guard(async () => keepDetail(await actions.stage(l, s)), "Couldn't move this lead to a new stage."),
-    onConvert: (l: Lead) => guard(async () => keepDetail(await actions.convert(l)), "Couldn't convert this lead."),
-    onShare: (l: Lead) => guard(async () => keepDetail(await actions.visibility(l)), "Couldn't change who can see this lead."),
-    onDelete: (l: Lead) => guard(async () => { if (await actions.remove(l) && detail?.id === l.id) setDetail(null); }, "Couldn't delete this lead. Please try again."),
+    onStage: (l: Lead, s: string) => guard(async () => {
+      keepDetail(await actions.stage(l, s));
+      toast.success(`Moved to ${STATUS_LABEL[s] ?? s}`, { description: l.businessName });
+    }, "Couldn't move this lead to a new stage."),
+    onConvert: (l: Lead) => guard(async () => {
+      const u = await actions.convert(l);
+      if (!u) return;
+      keepDetail(u);
+      toast.success("Converted to a client", { description: `${l.businessName} is now in your clients.` });
+    }, "Couldn't convert this lead."),
+    onShare: (l: Lead) => guard(async () => {
+      const u = await actions.visibility(l);
+      keepDetail(u);
+      toast.success(u?.visibility === "PUBLIC" ? "Shared with your team" : "Made private", { description: l.businessName });
+    }, "Couldn't change who can see this lead."),
+    onDelete: (l: Lead) => guard(async () => {
+      if (!(await actions.remove(l))) return;
+      if (detail?.id === l.id) setDetail(null);
+      toast.success("Lead deleted", { description: l.businessName });
+    }, "Couldn't delete this lead."),
   };
 
   const openAdd = () => { setEditing(null); setShowForm(true); };
