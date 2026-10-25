@@ -50,7 +50,7 @@ export function KpiHeader({
     <>
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="min-w-0">
-          <h1 className="font-serif text-3xl md:text-5xl text-foreground tracking-tight">Company Scorecard</h1>
+          <h1 className="font-serif text-3xl md:text-5xl text-foreground tracking-tight">Company KPIs</h1>
           <p className="text-sm text-muted mt-2 max-w-3xl">
             {ownCompany && <>{companyName(ownCompany)} · </>}See how every KPI is pacing against its target. The tick on each bar marks where it should be by today.
             Recurring KPIs show {periodLabel(period)}; KPIs with a fixed deadline show their full run.

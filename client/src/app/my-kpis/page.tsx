@@ -162,14 +162,14 @@ export default function MyKpisPage() {
   });
 
   const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
-  const title = isTeam ? "Team KPIs" : viewingSomeoneElse && data ? `${data.owner.name}'s KPIs` : "My KPIs";
+  const title = isTeam ? "Individual KPIs" : viewingSomeoneElse && data ? `${data.owner.name}'s KPIs` : "My KPIs";
   const canCreate = !isTeam && !!data;
 
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">Performance</p>
+
           {canAssign && !isTeam && (
             <button onClick={() => go("team")} className="text-xs text-muted hover:text-accent transition-colors mb-1 inline-flex items-center gap-1">
               <ChevronLeft size={13} /> Team
