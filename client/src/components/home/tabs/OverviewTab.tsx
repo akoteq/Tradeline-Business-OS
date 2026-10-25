@@ -1,13 +1,14 @@
 "use client";
 
 import { Layers, Target, TrendingDown, TrendingUp, Users, Wallet, CheckCircle2 } from "lucide-react";
+import { ApprovalsGlance } from "../ApprovalsGlance";
 import { AttentionGlance } from "../AttentionGlance";
 import { PipelineStageChart } from "../charts/PipelineStageChart";
 import { RevenueTrendChart } from "../charts/RevenueTrendChart";
 import type { useHomeCharts } from "../charts/useHomeCharts";
 import { fmtCompact, fmtSigned } from "../format";
 import { TabPanel } from "../TabPanel";
-import type { AttentionModel, CompanyMap, Exec } from "../types";
+import type { AttentionModel, CompanyMap, Exec, PendingApproval } from "../types";
 import { SectionHeader, Stat } from "../ui";
 
 export function OverviewTab({
@@ -16,17 +17,23 @@ export function OverviewTab({
   byKey,
   activeTrend,
   charts,
+  approvals,
+  onOpenApprovals,
 }: {
   data: Exec;
   attention: AttentionModel;
   byKey: CompanyMap;
   activeTrend?: number[];
   charts: ReturnType<typeof useHomeCharts>;
+  approvals: PendingApproval[];
+  onOpenApprovals: () => void;
 }) {
   const { totals, leads } = data;
 
   return (
     <TabPanel className="space-y-7">
+      <ApprovalsGlance approvals={approvals} onOpen={onOpenApprovals} />
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Stat icon={Layers} label="Deals" value={totals.deals} raw={totals.deals} />
         <Stat icon={TrendingUp} label="Active" value={totals.active} raw={totals.active} tone="positive" spark={activeTrend} />

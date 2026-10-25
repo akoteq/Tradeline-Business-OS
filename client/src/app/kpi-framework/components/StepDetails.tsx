@@ -5,7 +5,7 @@ import { ChoiceCard, Chips, Disclosure, Label, inputClass, selectClass } from ".
 import { FREQ_WORD, fmtKpiVal } from "@/components/kpi";
 
 export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
-  const { form, set, isEdit, owners, categories, departments, parentChoices, hiddenParents, autoKeys, aggLabels, defaultAgg, lockedAggregation } = ctx;
+  const { form, set, isEdit, owners, departments, parentChoices, hiddenParents, autoKeys, aggLabels, defaultAgg, lockedAggregation } = ctx;
   const target = Number(form.windowed ? form.targetValue : form.periodTarget);
   const hasTarget = Number.isFinite(target) && target > 0 && (form.windowed ? form.targetValue : form.periodTarget) !== "";
 
@@ -44,19 +44,12 @@ export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
       </div>
 
       <Disclosure title="More options">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Label>Category</Label>
-            <select value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)} className={selectClass}>
-              <option value="">None</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label>Department</Label>
-            <input value={form.department} onChange={(e) => set("department", e.target.value)} list="dept-list" className={inputClass} />
-            <datalist id="dept-list">{departments.map((d) => <option key={d.department} value={d.department} />)}</datalist>
-          </div>
+        <div>
+          <Label>Department</Label>
+          <select value={form.departmentId} onChange={(e) => set("departmentId", e.target.value)} className={selectClass}>
+            <option value="">None</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
         </div>
 
         <div>

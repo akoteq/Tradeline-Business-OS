@@ -1,0 +1,32 @@
+// Industries a business can be in, for the lead form's dropdown. Broad on purpose: most of the
+// group's clients are in agriculture, so that's split by where in the chain they sit; the rest
+// follow the sectors BAPX deals already use. "Other" covers anything that doesn't fit.
+export const INDUSTRIES = [
+  "Agriculture & farming",
+  "Agro-processing",
+  "Agro-inputs (seed, fertiliser, agro-chemicals)",
+  "Aggregation & commodity trading",
+  "Livestock & poultry",
+  "Fisheries & aquaculture",
+  "Agri-tech",
+  "Food & beverages",
+  "Manufacturing",
+  "Apparel, textiles & fashion",
+  "Artisans & crafts",
+  "Construction & building materials",
+  "Engineering & electronics",
+  "Chemicals & petroleum",
+  "Energy & utilities",
+  "Packaging & printing",
+  "Personal & home care",
+  "Health & pharmaceuticals",
+  "Wholesale & retail trade",
+  "Financial services",
+  "Business & consulting services",
+  "ICT & technology",
+  "Transport & logistics",
+  "Tourism & hospitality",
+  "Education & training",
+  "Waste & recycling",
+  "Other",
+];

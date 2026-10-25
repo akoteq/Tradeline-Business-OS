@@ -7,12 +7,12 @@ import type { AccessLevel } from "@/lib/auth";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type AutoKey = { key: string; label: string; unit: string; kind: string };
-export type Dept = { department: string; count: number };
-export type Category = { id: string; name: string; company: string; status: string; kpiCount: number };
+// A company's department (groups its KPIs; managed in the Departments sheet).
+export type Department = { id: string; name: string; company: string; status: string; kpiCount: number };
 export type Bdo = { id: string; name: string; company: string };
 export type ReviewStatus = "DRAFT" | "TARGET_SET" | "ACTUAL_SUBMITTED" | "VERIFIED" | "LOCKED";
 export type SortKey = "default" | "attain_asc" | "attain_desc" | "name";
-export type View = "list" | "category" | "cascade";
+export type View = "list" | "department" | "cascade";
 export type CascadeNode = { row: KpiRow; children: CascadeNode[] };
 export type CompanyOpt = { key: string; name: string };
 

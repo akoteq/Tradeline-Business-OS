@@ -40,7 +40,10 @@ type KpiAlert = {
   reason?: string; detail?: string; type?: "AT_RISK" | "STALE" | "OVER_ALLOCATED" | "NO_RESULT";
 };
 
-type AlertsResponse = { deadlines: Deadline[]; stale: StaleDeal[]; kpiRisks?: KpiAlert[]; kpiSignals?: KpiAlert[] };
+// Tasks staff finished that wait for this manager to approve them before they count.
+type Approval = { id: string; deliverable: string; submittedAt: string | null; bdo: { id: string; name: string } | null };
+
+type AlertsResponse = { deadlines: Deadline[]; stale: StaleDeal[]; kpiRisks?: KpiAlert[]; kpiSignals?: KpiAlert[]; approvals?: Approval[] };
 
 const SIGNAL_LABEL: Record<string, string> = { AT_RISK: "At risk", STALE: "Quiet", OVER_ALLOCATED: "Over-allocated", NO_RESULT: "No result" };
 
@@ -112,7 +115,8 @@ export function Alerts() {
     ...(data?.kpiSignals ?? []).map((k) => ({ ...k, label: SIGNAL_LABEL[k.type ?? ""] ?? "KPI", text: k.detail ?? "" })),
   ];
   const kpiHref = isBdo ? "/my-kpis" : "/kpi-framework";
-  const totalCount = deadlines.length + stale.length + kpiAlerts.length;
+  const approvals = data?.approvals ?? [];
+  const totalCount = deadlines.length + stale.length + kpiAlerts.length + approvals.length;
 
   // The dashboard is now the primary alert surface (see CEODashboard), so this
   // no longer force-opens a full-screen modal every session — it starts as a
@@ -131,6 +135,29 @@ export function Alerts() {
 
   const list = (
     <div className="space-y-5">
+      {approvals.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Waiting for your approval ({approvals.length})
+          </p>
+          <div className="space-y-1.5">
+            {approvals.slice(0, 10).map((a) => (
+              <Link key={a.id} href="/tasks?view=approvals" onClick={() => setView("banner")} className="block hover:opacity-80">
+                <div className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{a.deliverable}</p>
+                    <p className="text-xs text-gray-400">
+                      {a.bdo?.name ?? "Unassigned"}{a.submittedAt ? ` · done ${new Date(a.submittedAt).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 bg-sky-50 text-sky-700 border-sky-200">Approve</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {deadlines.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -245,6 +272,8 @@ export function Alerts() {
           onClick={() => setBannerExpanded((e) => !e)}
           className={`flex-1 text-left text-sm font-medium ${isUrgent ? "text-red-800" : "text-amber-800"}`}
         >
+          {approvals.length > 0 && `${approvals.length} task${approvals.length !== 1 ? "s" : ""} to approve`}
+          {approvals.length > 0 && (deadlines.length > 0 || stale.length > 0 || kpiAlerts.length > 0) && " · "}
           {deadlines.length > 0 && `${deadlines.length} deadline${deadlines.length !== 1 ? "s" : ""} coming up`}
           {deadlines.length > 0 && stale.length > 0 && " · "}
           {stale.length > 0 && `${stale.length} deal${stale.length !== 1 ? "s" : ""} need${stale.length === 1 ? "s" : ""} attention`}

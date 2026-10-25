@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ArrowRight, ChevronDown, ListChecks, Plus, Search, X } from "lucide-react";
@@ -14,6 +14,8 @@ import { useCompanies } from "@/lib/companies";
 import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
 import { ResultPrompt } from "./components/ResultPrompt";
+import { ApprovalsList } from "./components/ApprovalsList";
+import { ReviewModal } from "./components/ReviewModal";
 import { ConfirmDialog, FilterSelect, OutcomeBadge, RingStat, Stat } from "./components/TaskBits";
 import {
   COLLAPSED_ROWS,
@@ -32,6 +34,7 @@ import {
   isOverdue,
   isUpcoming,
   plural,
+  type ApprovalTask,
   type Bdo,
   type SortKey,
   type TabKey,
@@ -70,10 +73,22 @@ export default function TasksPage() {
   const [showForm, setShowForm] = useState(false);
   const [prompt, setPrompt] = useState<Task | null>(null);
   const [toDelete, setToDelete] = useState<Task | null>(null);
+  const [reviewing, setReviewing] = useState<Task | null>(null);
   const [notice, setNotice] = useState("");
   const qc = useQueryClient();
 
+  // Managers approve the work staff finish; the alerts link here with ?view=approvals.
+  const { data: approvals = [] } = useQuery<ApprovalTask[]>({
+    queryKey: ["tasks", "approvals"],
+    queryFn: () => fetcher("/tasks/approvals"),
+    enabled: !!user && !isBdo,
+  });
+  useEffect(() => {
+    if (!isBdo && new URLSearchParams(window.location.search).get("view") === "approvals") setTab("approvals");
+  }, [isBdo]);
+
   const isProposalView = tab === "proposals";
+  const isApprovalView = tab === "approvals";
 
   // Staff are always scoped to their own tasks; everyone else uses the filter bar.
   // Blocked isn't a stored status: the server works it out from "Can't start until".
@@ -107,7 +122,7 @@ export default function TasksPage() {
   // Tasks feed KPI work and results, so the KPI screens refresh with them.
   // Money brought in on a linked task is a payment on its deal, so the deal screens refresh too.
   const refresh = () => {
-    for (const key of ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "task-deal-options"]) {
+    for (const key of ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "task-deal-options", "alerts"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -184,11 +199,11 @@ export default function TasksPage() {
     "24px",
     "minmax(0,2.4fr)",
     "84px",
-    "104px",
     ...(oneCompany ? [] : ["minmax(0,1.3fr)"]),
     ...(isBdo ? [] : ["minmax(0,1.2fr)"]),
     "132px",
-    "150px",
+    // Status, plus "Review" or "Awaiting approval" beside it
+    "190px",
     "28px",
   ].join(" ");
 
@@ -233,6 +248,7 @@ export default function TasksPage() {
     { key: "overdue", label: "Overdue", count: isProposalView ? null : overdueN, badge: "bg-red-50 text-red-600" },
     { key: "week", label: "Due this week", count: isProposalView ? null : weekN, badge: "" },
     { key: "proposals", label: "Proposals", count: isProposalView ? total : null, badge: "" },
+    ...(isBdo ? [] : [{ key: "approvals" as TabKey, label: "Awaiting approval", count: approvals.length, badge: approvals.length ? "bg-sky-50 text-sky-700" : "" }]),
   ];
 
   return (
@@ -364,7 +380,9 @@ export default function TasksPage() {
       </div>
 
       {/* Body */}
-      {isProposalView ? (
+      {isApprovalView ? (
+        <ApprovalsList tasks={approvals} oneCompany={oneCompany} companyName={(k) => byKey[k]?.name ?? k} onChanged={refresh} />
+      ) : isProposalView ? (
         <DataTable
           columns={proposalColumns}
           data={visible}
@@ -437,6 +455,7 @@ export default function TasksPage() {
                       onEdit={() => openEdit(t)}
                       onDelete={() => setToDelete(t)}
                       onLogResult={() => setPrompt(t)}
+                      onReview={isBdo ? undefined : () => setReviewing(t)}
                     />
                   ))}
                 </div>
@@ -463,6 +482,16 @@ export default function TasksPage() {
             // Finishing work that is linked to a manual KPI: ask whether it produced a result.
             if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
           }}
+        />
+      )}
+
+      {reviewing && (
+        <ReviewModal
+          // The approvals feed carries the results logged with the task; use it when it has this one.
+          task={approvals.find((a) => a.id === reviewing.id) ?? reviewing}
+          companyName={oneCompany || !reviewing.company ? "" : (byKey[reviewing.company]?.name ?? reviewing.company)}
+          onClose={() => setReviewing(null)}
+          onDone={() => { setReviewing(null); refresh(); }}
         />
       )}
 

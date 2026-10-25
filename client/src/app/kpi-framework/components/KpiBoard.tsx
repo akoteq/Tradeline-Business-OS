@@ -14,10 +14,10 @@ import {
   fmtKpiVal, PaceBar, AutoTag, Tag, StatusPill, WorkChip, windowLabel,
 } from "@/components/kpi";
 import { Menu, MenuItem, IconButton, ReviewBadge, TrendCell } from "./ui";
-import { apiError, avatarColor, initials, kpiIcon, periodLabelFor, type Category, type ReviewStatus, type SortKey, type View } from "./lib";
+import { apiError, avatarColor, initials, kpiIcon, periodLabelFor, type Department, type ReviewStatus, type SortKey, type View } from "./lib";
 
 const PAGE_SIZE = 20;
-const COLS = ["KPI", "Owner & category", "Actual", "Target", "Progress", "Tasks", "Status", "Trend", "Review", "Actions"];
+const COLS = ["KPI", "Owner & department", "Actual", "Target", "Progress", "Tasks", "Status", "Trend", "Review", "Actions"];
 
 function BoardGroup({ name, rows, colSpan, children }: { name: string; rows: KpiRow[]; colSpan: number; children: ReactNode }) {
   if (!name) return <>{children}</>;
@@ -41,12 +41,12 @@ function BoardGroup({ name, rows, colSpan, children }: { name: string; rows: Kpi
 }
 
 export function KpiBoard({
-  board, isLoading, error, categories, view, statusFilter, onStatusFilter, resetKey, period,
+  board, isLoading, error, departments, view, statusFilter, onStatusFilter, resetKey, period,
   canManage, companyName, onOpen, onSetTarget, onEdit, onArchive, onAdd, onChanged,
 }: {
-  board: KpiRow[]; isLoading: boolean; error: unknown; categories: Category[]; view: View;
+  board: KpiRow[]; isLoading: boolean; error: unknown; departments: Department[]; view: View;
   statusFilter: KpiStatus | ""; onStatusFilter: (s: KpiStatus | "") => void;
-  resetKey: string;                       // changes when company / department / category / period change, to go back to page 1
+  resetKey: string;                       // changes when company / department / period change, to go back to page 1
   period: string; canManage: boolean; companyName: (k: string) => string;
   onOpen: (id: string) => void; onSetTarget: (r: KpiRow) => void; onEdit: (d: KpiDef) => void; onArchive: (d: KpiDef) => void;
   onAdd: () => void; onChanged: () => void;
@@ -70,7 +70,7 @@ export function KpiBoard({
   const q = search.trim().toLowerCase();
   const filtered = board.filter((r) =>
     (!statusFilter || r.status === statusFilter) &&
-    (!q || [r.definition.metric, r.definition.department, r.definition.definition, r.owner?.name, r.category?.name, r.parent?.metric]
+    (!q || [r.definition.metric, r.definition.definition, r.owner?.name, r.department?.name, r.parent?.metric]
       .some((v) => (v ?? "").toLowerCase().includes(q))),
   );
   const rows = [...filtered].sort((a, b) => {
@@ -88,12 +88,12 @@ export function KpiBoard({
   useEffect(() => { setPage(1); }, [resetKey, statusFilter, search, sort, view]);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
-  const pageRows = view === "category" ? rows : rows.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+  const pageRows = view === "department" ? rows : rows.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
 
-  // By-category view: one block per category (uncategorised last).
-  const groups = view === "category"
-    ? [...categories.map((c) => ({ key: c.id, name: c.name, rows: rows.filter((r) => r.category?.id === c.id) })),
-       { key: "none", name: "No category", rows: rows.filter((r) => !r.category) }].filter((g) => g.rows.length)
+  // By-department view: one block per department (KPIs without one last).
+  const groups = view === "department"
+    ? [...departments.map((c) => ({ key: c.id, name: c.name, rows: rows.filter((r) => r.department?.id === c.id) })),
+       { key: "none", name: "No department", rows: rows.filter((r) => !r.department) }].filter((g) => g.rows.length)
     : [{ key: "all", name: "", rows: pageRows }];
 
   const iconBtn = (active: boolean) => clsx(
@@ -119,7 +119,7 @@ export function KpiBoard({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by KPI, owner or category"
+              placeholder="Search by KPI, owner or department"
               className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
             />
           </div>
@@ -216,7 +216,7 @@ export function KpiBoard({
                           )}
                           <div className="min-w-0">
                             <div className={clsx("text-[13px] font-medium truncate max-w-[160px]", owner ? "text-foreground" : "text-muted")}>{owner ?? "No owner"}</div>
-                            <div className="text-xs text-muted truncate max-w-[160px]">{r.category?.name ?? r.definition.department ?? "—"}</div>
+                            <div className="text-xs text-muted truncate max-w-[160px]">{r.department?.name ?? "—"}</div>
                           </div>
                         </div>
                       </td>

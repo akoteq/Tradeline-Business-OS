@@ -55,7 +55,7 @@ export default function ManageCompaniesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-8">
+      <div className="p-4 md:p-6 space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-dashed border-border pb-5">
           <div>
             <h1 className="font-serif text-[1.75rem] leading-[1.15] text-foreground md:text-[2rem]">Manage companies</h1>

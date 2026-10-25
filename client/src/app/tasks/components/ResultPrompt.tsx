@@ -31,7 +31,7 @@ export function ResultPrompt({ task, onClose, onDone }: { task: Task; onClose: (
   return (
     <KpiSheet
       title={`Did this move ${k.metric}?`}
-      subtitle={<>“{task.deliverable}” is done. If it produced a result, add it here and we'll link it to this task.</>}
+      subtitle={<>“{task.deliverable}” is done. If it produced a result, add it here and we'll link it to this task{task.approval === "PENDING" ? ". It counts once the task is approved" : ""}.</>}
       onClose={onClose}
       footer={
         <button

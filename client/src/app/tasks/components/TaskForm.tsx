@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
@@ -24,8 +24,10 @@ import {
   type DealOption,
   type Linkable,
   type Task,
+  type TaskAttachment,
   type TaskKpi,
 } from "./task-utils";
+import { AttachmentsField, discardUploads } from "./Attachments";
 
 /**
  * Add / edit a task in three short steps, the same flow as "Add KPI":
@@ -167,7 +169,13 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
     currency: task?.currency ?? "GHS",
     exchangeRate: task?.exchangeRate && task.exchangeRate !== 1 ? String(task.exchangeRate) : "",
     dealId: task?.dealId ?? "",
+    attachments: task?.attachments ?? ([] as TaskAttachment[]),
   });
+  // Files uploaded while this form is open. Any that don't end up saved on the task (removed
+  // again, or the form is cancelled) are thrown away so they don't sit in Cloudinary.
+  const uploads = useRef<TaskAttachment[]>([]);
+  const unsaved = (kept: TaskAttachment[]) => uploads.current.filter((u) => !kept.some((k) => k.publicId === u.publicId));
+  const close = () => { discardUploads(uploads.current); onClose(); };
   const [step, setStep] = useState(1);
   // New tasks unlock steps as you go; when editing, every step is open from the start.
   const [reachable, setReachable] = useState(editing ? 3 : 1);
@@ -254,10 +262,12 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
       currency: form.currency,
       exchangeRate: form.currency === "GHS" ? 1 : Number(form.exchangeRate) || null,
       dealId: form.dealId || null,
+      attachments: form.attachments,
     };
     try {
       const res = task ? await api.put(`/tasks/${task.id}`, body) : await api.post("/tasks", body);
       const saved = res.data as Task;
+      discardUploads(unsaved(saved.attachments ?? form.attachments));
       const match = linkable.find((k) => k.id === saved.kpiId);
       const kpi = saved.kpi ?? (match ? ({ ...match, aggregation: null } as TaskKpi) : null);
       onSaved({ ...saved, kpi, bdoId: saved.bdoId ?? assignee }, form.status === "COMPLETED" && task?.status !== "COMPLETED");
@@ -290,7 +300,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   const footer = (
     <div className="flex items-center justify-end gap-2 w-full">
       {step === 1 ? (
-        <button type="button" onClick={onClose} className={secondaryBtn}>Cancel</button>
+        <button type="button" onClick={close} className={secondaryBtn}>Cancel</button>
       ) : (
         <button type="button" onClick={() => go(step - 1)} className={ghostBtn}>Back</button>
       )}
@@ -311,7 +321,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   );
 
   return (
-    <KpiSheet title={heading.title} subtitle={heading.sub} onClose={onClose} footer={footer}>
+    <KpiSheet title={heading.title} subtitle={heading.sub} onClose={close} footer={footer}>
       <div className="space-y-5">
         <StepProgress step={step} reachable={reachable} onGo={go} />
 
@@ -357,6 +367,14 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                 </Field>
               </>
             )}
+
+            <Field label="Links and files" hint="(optional)">
+              <AttachmentsField
+                value={form.attachments}
+                onChange={(next) => set("attachments", next)}
+                onUploaded={(file) => { uploads.current.push(file); }}
+              />
+            </Field>
           </>
         )}
 
@@ -549,7 +567,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                 </div>
                 <p className="text-xs text-muted">
                   {form.dealId
-                    ? `When you mark this done, the money brought in is added as a payment on ${linkedDeal?.name ?? "the deal"}. It counts toward revenue for the deal, the people on it, the company and the group. Reopen the task and it comes off again.`
+                    ? `When you mark this done${isBdo ? " and your Business CEO approves it" : ""}, the money brought in is added as a payment on ${linkedDeal?.name ?? "the deal"}. It counts toward revenue for the deal, the people on it, the company and the group. Reopen the task and it comes off again.`
                     : "To record money brought in, pick the deal it came from above."}
                 </p>
               </div>

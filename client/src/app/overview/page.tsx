@@ -218,7 +218,7 @@ export default function OverviewPage() {
 
 // ─── Pieces ─────────────────────────────────────────────────────────────────
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">{children}</div>;
+  return <div className="p-4 md:p-6 space-y-5">{children}</div>;
 }
 
 function Header({ title, subtitle, period, setPeriod }: { title: string; subtitle?: string; period: string; setPeriod: (p: string) => void }) {

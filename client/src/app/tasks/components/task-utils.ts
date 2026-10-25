@@ -55,13 +55,43 @@ export type Task = {
   // The deal this work is for; money brought in is recorded as a payment on it.
   dealId: string | null;
   deal: { id: string; source: string; name: string } | null;
+  // Approval: work staff finish counts toward KPIs only once their Business CEO or the Group
+  // Owner approves it. approvedAt set + PENDING = a change to approved work is waiting.
+  approval: "PENDING" | "APPROVED" | "REJECTED" | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  approvedByEmail: string | null;
+  rejectedReason: string | null;
+  rejectedByEmail: string | null;
+  // Links and files that go with the work. Files are stored in Cloudinary.
+  attachments?: TaskAttachment[];
 };
+
+export type TaskAttachment = {
+  kind: "LINK" | "FILE";
+  name: string;
+  url: string;
+  publicId?: string | null;
+  resourceType?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+  addedAt?: string;
+};
+
+export const fmtFileSize = (n?: number | null) =>
+  !n ? "" : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+
+// A task waiting for approval, with the results its owner logged from it.
+export type ApprovalTask = Task & { pendingResults: { value: number; date: string; note: string | null }[] };
+
+// Whether a completed task's money and results count yet.
+export const counts = (t: Task) => t.status === "COMPLETED" && (t.approval !== "PENDING" || !!t.approvedAt) && t.approval !== "REJECTED";
 
 export type DealOption = { id: string; source: string; name: string; stage: string; receivedGhs: number };
 export type Bdo = { id: string; name: string; company: string };
 export type Linkable = { id: string; metric: string; company: string; source: string; unit: string; kind: "PERSONAL" | "SCORECARD" | "COMPANY" };
 
-export type TabKey = "all" | "mine" | "overdue" | "week" | "proposals";
+export type TabKey = "all" | "mine" | "overdue" | "week" | "proposals" | "approvals";
 export type SortKey = "soonest" | "latest" | "priority";
 export type GroupKey = "overdue" | "blocked" | "progress" | "todo" | "done";
 
@@ -188,8 +218,6 @@ export const groupOf = (t: Task): GroupKey =>
   isClosed(t) ? "done" : isOverdue(t) ? "overdue" : t.blocked ? "blocked" : t.status === "IN_PROGRESS" ? "progress" : "todo";
 
 export const shownStatus = (t: Task) => (isClosed(t) ? t.status : t.blocked ? "BLOCKED" : isOverdue(t) ? "OVERDUE" : t.status);
-
-export const progressOf = (t: Task) => (t.status === "COMPLETED" ? 100 : t.progress ?? 0);
 
 /* ------------------------------------------------------------------ */
 /* Categories and groups                                               */

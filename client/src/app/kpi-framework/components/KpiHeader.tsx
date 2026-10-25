@@ -2,9 +2,9 @@
 
 import { useRef } from "react";
 import { clsx } from "clsx";
-import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, Tags, List, FolderTree, GitBranch } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Calendar, Building2, List, FolderTree, GitBranch } from "lucide-react";
 import { Picker } from "./ui";
-import { buildMonthOptions, periodLabel, type Category, type CompanyOpt, type Dept, type View } from "./lib";
+import { buildMonthOptions, periodLabel, type CompanyOpt, type Department, type View } from "./lib";
 
 function CompanyTabs({ options, value, onChange }: { options: CompanyOpt[]; value: string; onChange: (key: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -32,18 +32,17 @@ function CompanyTabs({ options, value, onChange }: { options: CompanyOpt[]; valu
   );
 }
 
-const VIEWS = [["list", "List", List], ["category", "By category", FolderTree], ["cascade", "Hierarchy", GitBranch]] as const;
+const VIEWS = [["list", "List", List], ["department", "By department", FolderTree], ["cascade", "Hierarchy", GitBranch]] as const;
 
 export function KpiHeader({
-  ownCompany, companyName, period, onPeriod, canManage, onCategories, onAdd,
-  companyOpts, company, onCompany, categories, categoryId, onCategory, departments, department, onDepartment, view, onView,
+  ownCompany, companyName, period, onPeriod, canManage, onDepartments, onAdd,
+  companyOpts, company, onCompany, departments, departmentId, onDepartment, view, onView,
 }: {
   ownCompany: string | null; companyName: (k: string) => string;
   period: string; onPeriod: (p: string) => void;
-  canManage: boolean; onCategories: () => void; onAdd: () => void;
+  canManage: boolean; onDepartments: () => void; onAdd: () => void;
   companyOpts: CompanyOpt[]; company: string; onCompany: (c: string) => void;
-  categories: Category[]; categoryId: string; onCategory: (id: string) => void;
-  departments: Dept[]; department: string; onDepartment: (d: string) => void;
+  departments: Department[]; departmentId: string; onDepartment: (id: string) => void;
   view: View; onView: (v: View) => void;
 }) {
   const monthOptions = buildMonthOptions(period);
@@ -62,8 +61,8 @@ export function KpiHeader({
             {monthOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </Picker>
           {canManage && (
-            <button onClick={onCategories} className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl border border-border bg-surface text-foreground shadow-sm hover:bg-primary/5 transition-colors">
-              <Tags size={16} /> Categories
+            <button onClick={onDepartments} className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl border border-border bg-surface text-foreground shadow-sm hover:bg-primary/5 transition-colors">
+              <Building2 size={16} /> Departments
             </button>
           )}
           {canManage && (
@@ -77,17 +76,11 @@ export function KpiHeader({
       <div className="space-y-3">
         {!ownCompany && <CompanyTabs options={companyOpts} value={company} onChange={onCompany} />}
         <div className="flex flex-wrap items-center gap-3">
-          {categories.length > 0 && view !== "cascade" && (
-            <Picker icon={Tags} value={categoryId} onChange={onCategory} className="min-w-[220px]">
-              <option value="">All categories</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.kpiCount})</option>)}
-              <option value="none">No category</option>
-            </Picker>
-          )}
           {departments.length > 0 && view !== "cascade" && (
-            <Picker icon={Building2} value={department} onChange={onDepartment} className="min-w-[220px]">
+            <Picker icon={Building2} value={departmentId} onChange={onDepartment} className="min-w-[220px]">
               <option value="">All departments</option>
-              {departments.map((d) => <option key={d.department} value={d.department}>{d.department} ({d.count})</option>)}
+              {departments.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.kpiCount})</option>)}
+              <option value="none">No department</option>
             </Picker>
           )}
           <div className="flex rounded-xl border border-border bg-surface shadow-sm overflow-hidden text-sm ml-auto">

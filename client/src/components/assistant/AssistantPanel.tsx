@@ -9,7 +9,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { isManager } from "@/lib/auth";
 import { Markdown } from "./Markdown";
 
-// The AI assistant: a chat panel for the Group Owner and Business CEOs. Answers stream in;
+// The AI assistant: a chat panel for everyone. The server scopes it to the person (Group Owner:
+// the group; Business CEO: their company; staff: their own work). Answers stream in;
 // tasks it prepares appear as summary cards and are only saved when Confirm is pressed.
 
 type Conversation = { id: string; title: string; lastMessageAt: string };
@@ -40,6 +41,17 @@ const STARTERS = [
   "Who is behind on their KPIs?",
   "Which compliance registrations expire soon?",
   "Suggest risks we should add to our register",
+];
+
+// Staff see the same chat, worded for one person's own work.
+const STAFF_STARTERS = [
+  "What should I focus on today?",
+  "Which of my tasks are overdue?",
+  "Which leads need a follow-up?",
+  "How am I doing on my KPIs?",
+  "How is our company doing on its KPIs?",
+  "Which of my deals are falling behind?",
+  "Add a task for me to call a client on Friday",
 ];
 
 // Card title, the word shown once confirmed, and the link text for each kind of draft.
@@ -96,17 +108,23 @@ export function AssistantLauncher() {
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener(OPEN_EVENT, onOpen); };
   }, []);
 
-  if (!isManager(user)) return null;
+  if (!user) return null;
   return (
     <>
       {!open && (
+        // A small round button so it doesn't sit on top of the page; the name shows on hover or focus.
         <button
           onClick={() => setOpen(true)}
-          aria-label="Ask Trunqo"
-          className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:shadow-xl"
+          aria-label="Ask Trunqo (Ctrl+K)"
+          className="group fixed bottom-5 right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-background shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2"
         >
-          <Sparkles size={16} className="text-accent" />
-          <span className="hidden sm:inline">Ask Trunqo</span>
+          <Sparkles size={18} className="text-accent" />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-full mr-2.5 whitespace-nowrap rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-background shadow-md opacity-0 translate-x-1 transition duration-150 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0"
+          >
+            Ask Trunqo <span className="opacity-60">· Ctrl K</span>
+          </span>
         </button>
       )}
       {open && <AssistantPanel onClose={() => setOpen(false)} />}
@@ -432,17 +450,22 @@ function IconButton({ label, onClick, active, children }: { label: string; onCli
 }
 
 function EmptyState({ enabled, onPick }: { enabled: boolean; onPick: (q: string) => void }) {
+  const { user } = useAuth();
+  const staff = !isManager(user);
+  const starters = staff ? STAFF_STARTERS : STARTERS;
   return (
     <div className="space-y-5 pt-4">
       <div>
         <p className="text-xl font-semibold tracking-tight text-foreground">What do you want to know?</p>
-        <p className="mt-1 text-sm text-muted">Ask about deals, data gaps, KPIs or tasks — or ask it to create or change a task. You confirm before anything is saved.</p>
+        <p className="mt-1 text-sm text-muted">{staff
+          ? "Ask about your tasks, leads, clients and KPIs, or how your company is doing on its KPIs. It can also add a task or a client note for you. You confirm before anything is saved."
+          : "Ask about deals, data gaps, KPIs or tasks — or ask it to create or change a task. You confirm before anything is saved."}</p>
       </div>
       {!enabled ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">The assistant isn&apos;t set up yet. Add an OpenAI API key on the server to turn it on.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {STARTERS.map((s) => (
+          {starters.map((s) => (
             <button
               key={s}
               onClick={() => onPick(s)}

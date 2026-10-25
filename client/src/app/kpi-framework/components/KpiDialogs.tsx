@@ -9,7 +9,7 @@ import { KpiRow, KpiSheet } from "@/components/kpi";
 import { ReviewBadge } from "./ui";
 import {
   TRANSITIONS, apiError, periodLabelFor, inputClass, btnPrimary, btnSecondary,
-  type Category, type ReviewStatus,
+  type Department, type ReviewStatus,
 } from "./lib";
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -78,32 +78,32 @@ export function PeriodTargetSheet({ row, period, onClose, onSaved }: { row: KpiR
   );
 }
 
-// ─── Categories (per company) ───────────────────────────────────────────────
-export function CategoriesModal({ company, companyName, onClose, onChanged }: { company: string; companyName: string; onClose: () => void; onChanged: () => void }) {
+// ─── Departments (per company) ──────────────────────────────────────────────
+export function DepartmentsModal({ company, companyName, onClose, onChanged }: { company: string; companyName: string; onClose: () => void; onChanged: () => void }) {
   const qc = useQueryClient();
-  const { data: cats = [] } = useQuery<Category[]>({ queryKey: ["kpi-categories", company, "all"], queryFn: () => fetcher(`/kpi-framework/categories?company=${company}&all=1`) });
+  const { data: depts = [] } = useQuery<Department[]>({ queryKey: ["kpi-departments", company, "all"], queryFn: () => fetcher(`/kpi-framework/departments?company=${company}&all=1`) });
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const refresh = () => { qc.invalidateQueries({ queryKey: ["kpi-categories"] }); onChanged(); };
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["kpi-departments"] }); onChanged(); };
   const add = async () => {
     if (!name.trim()) return;
     setError("");
-    try { await api.post("/kpi-framework/categories", { company, name }); setName(""); refresh(); }
-    catch (err) { setError(apiError(err, "Couldn't add the category. Please try again.")); }
+    try { await api.post("/kpi-framework/departments", { company, name }); setName(""); refresh(); }
+    catch (err) { setError(apiError(err, "Couldn't add the department. Please try again.")); }
   };
-  const update = async (c: Category, body: Record<string, unknown>) => {
-    try { await api.put(`/kpi-framework/categories/${c.id}`, body); refresh(); }
-    catch (err) { setError(apiError(err, "Couldn't update the category. Please try again.")); }
+  const update = async (c: Department, body: Record<string, unknown>) => {
+    try { await api.put(`/kpi-framework/departments/${c.id}`, body); refresh(); }
+    catch (err) { setError(apiError(err, "Couldn't update the department. Please try again.")); }
   };
   return (
-    <KpiSheet title="KPI categories" subtitle={`${companyName} · Group related KPIs together, e.g. Sales, Delivery, Finance`} onClose={onClose}>
+    <KpiSheet title="Departments" subtitle={`${companyName} · Group KPIs by department, e.g. Sales, Delivery, Finance`} onClose={onClose}>
       <div className="flex gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} className={inputClass} placeholder="New category name" />
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} className={inputClass} placeholder="New department name" />
         <button onClick={add} className={btnPrimary}>Add</button>
       </div>
       <ErrorNote message={error} />
       <ul className="divide-y divide-border/60">
-        {cats.map((c) => (
+        {depts.map((c) => (
           <li key={c.id} className="py-2 flex items-center gap-2">
             <input defaultValue={c.name} onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && update(c, { name: e.target.value })} className={clsx(inputClass, "py-1.5", c.status === "ARCHIVED" && "opacity-50")} />
             <span className="text-[11px] text-muted whitespace-nowrap">{c.kpiCount} KPI{c.kpiCount === 1 ? "" : "s"}</span>
@@ -112,7 +112,7 @@ export function CategoriesModal({ company, companyName, onClose, onChanged }: { 
             </button>
           </li>
         ))}
-        {cats.length === 0 && <li className="py-3 text-sm text-muted">No categories yet. Add one above to start grouping your KPIs.</li>}
+        {depts.length === 0 && <li className="py-3 text-sm text-muted">No departments yet. Add one above to start grouping your KPIs.</li>}
       </ul>
     </KpiSheet>
   );

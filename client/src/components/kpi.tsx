@@ -50,7 +50,7 @@ export type KpiDef = {
   id: string; metric: string; company: string; department: string | null; definition: string | null;
   unit: string; higherIsBetter: boolean; frequency: string; source: string; autoKey: string | null;
   aggregation: string; state: string; parentId: string | null; ownerId: string | null; ownerBdoId: string | null;
-  categoryId: string | null; startDate: string | null; endDate: string | null; targetValue: number | null; startValue: number | null;
+  departmentId: string | null; startDate: string | null; endDate: string | null; targetValue: number | null; startValue: number | null;
   milestones: { date: string; target: number }[]; assignedBy: string | null; scope?: string | null;
 };
 export type KpiRow = {
@@ -64,7 +64,7 @@ export type KpiRow = {
   lastUpdateAt: string | null; bdoId: string | null;
   owner: { id: string; name: string } | null;
   parent: { id: string; metric: string; company: string } | null;
-  category: { id: string; name: string } | null;
+  department: { id: string; name: string } | null;
   work: { tasks: number; done: number; blocked: number; overdue: number; noResult: number; pct: number | null };
   children: { count: number; allocated: number | null; unallocated: number | null; over: boolean };
 };
@@ -251,7 +251,7 @@ type Detail = {
   attributed: number | null;
   chain: { id: string; metric: string; company: string }[];
   canManage: boolean;
-  updates: { id: string; value: number; date: string; note: string | null; person: string | null; enteredBy: string | null; createdAt: string; task: { id: string; deliverable: string } | null; canDelete: boolean }[];
+  updates: { id: string; value: number; date: string; note: string | null; person: string | null; enteredBy: string | null; createdAt: string; task: { id: string; deliverable: string } | null; canDelete: boolean; pending?: boolean }[];
   tasks: { id: string; deliverable: string; status: string; progress: number; weight: number; targetDate: string | null; bdo: string | null; blocked: boolean; noResult: boolean; kpiId: string }[];
 };
 
@@ -348,6 +348,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                       {u.task && <span> · from “{u.task.deliverable}”</span>}
                       {u.note && <span className="italic"> · {u.note}</span>}
                       {u.enteredBy && <span className="text-muted/70"> · {u.enteredBy}</span>}
+                      {u.pending && <span className="ml-1 px-1.5 py-px rounded-full bg-sky-50 text-sky-700 font-medium" title="Counts once its task is approved">awaiting approval</span>}
                     </div>
                     {u.canDelete && (
                       <button

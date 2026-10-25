@@ -2,17 +2,18 @@
 
 import { clsx } from "clsx";
 import { Calendar, FileText, Target } from "lucide-react";
-import { CATEGORY_ICONS, categoryOf, fmtDate, isOverdue, progressOf, shownStatus, type Task, type TaskGroup } from "./task-utils";
+import { CATEGORY_ICONS, categoryOf, counts, fmtDate, isOverdue, shownStatus, type Task, type TaskGroup } from "./task-utils";
 import { PriorityPill, RowMenu, StatusMenu } from "./TaskBits";
+import { AttachmentChips } from "./Attachments";
 
 /**
  * One task. From `lg` up it is a single table row (the grid columns come from the page).
  * On phones the same pieces stack into two lines:
  *   line 1  checkbox, icon, name and what it moves
- *   line 2  status, priority, progress, owner, due date
+ *   line 2  status, priority, owner, due date
  * The two wrappers use `lg:contents`, so on desktop their children become the grid cells.
  */
-export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onLogResult }: {
+export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onLogResult, onReview }: {
   task: Task;
   group: TaskGroup;
   gridCols: string;
@@ -26,11 +27,12 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
   onEdit: () => void;
   onDelete: () => void;
   onLogResult: () => void;
+  /** Managers only: opens the approve / reject popup for work waiting on them. */
+  onReview?: () => void;
 }) {
   const category = categoryOf(task);
   const Icon = CATEGORY_ICONS[category] ?? FileText;
   const overdue = isOverdue(task);
-  const pct = progressOf(task);
   const done = task.status === "COMPLETED";
 
   return (
@@ -67,7 +69,7 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
                 <span title="The deal this task is for">
                   {" "}· {task.deal.name}
                   {task.revenueActual
-                    ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${done ? "received" : "expected"}`
+                    ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${counts(task) ? "received" : done ? "awaiting approval" : "expected"}`
                     : ""}
                 </span>
               )}
@@ -80,6 +82,12 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
             {task.completionCriteria && (
               <div className="text-xs text-muted truncate" title={task.completionCriteria}>Done when: {task.completionCriteria}</div>
             )}
+            <AttachmentChips items={task.attachments} max={2} className="mt-1" />
+            {task.rejectedReason && task.approval !== "PENDING" && (
+              <div className="text-xs text-red-600 truncate" title={task.rejectedReason}>
+                {task.approval === "APPROVED" ? "Change rejected" : "Rejected"}{task.rejectedByEmail ? ` by ${task.rejectedByEmail}` : ""}: {task.rejectedReason}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -87,13 +95,6 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
       {/* Line 2 on phones, plain table cells from lg up */}
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-7 lg:mt-0 lg:pl-0 lg:contents">
         <div><PriorityPill value={task.priority} /></div>
-
-        <div className="flex items-center gap-1.5" title={`Weight ${task.weight ?? 1} of 5`}>
-          <div className="h-1.5 w-16 lg:w-auto lg:flex-1 rounded-full bg-subtle lg:min-w-[40px]">
-            <div className="h-full rounded-full bg-accent/70" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-xs tabular-nums text-muted w-8 text-right">{pct}%</span>
-        </div>
 
         {/* The company is for the Group Owner's table; on a phone the filter covers it */}
         {showCompany && <div className="hidden lg:block text-sm text-foreground/80 truncate">{companyName || "—"}</div>}
@@ -111,6 +112,24 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
         {/* Status leads on a phone: it is the thing you tap most */}
         <div className="flex flex-wrap items-center gap-1 max-lg:order-first">
           <StatusMenu value={shownStatus(task)} current={task.status} busy={updating} onChange={onChangeStatus} />
+          {task.approval === "PENDING" && onReview && (
+            <button
+              type="button"
+              onClick={onReview}
+              className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-600 text-white hover:bg-sky-700 whitespace-nowrap"
+              title={task.approvedAt ? "A change to approved work is waiting for you" : "Finished work waiting for your approval"}
+            >
+              Review
+            </button>
+          )}
+          {task.approval === "PENDING" && !onReview && (
+            <span
+              className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 whitespace-nowrap"
+              title={task.approvedAt ? "A change to this approved task is waiting for approval; the approved version counts until then." : "Doesn't count toward KPIs until it's approved."}
+            >
+              {task.approvedAt ? "Change awaiting approval" : "Awaiting approval"}
+            </span>
+          )}
           {task.needsResult && (
             <button
               onClick={onLogResult}

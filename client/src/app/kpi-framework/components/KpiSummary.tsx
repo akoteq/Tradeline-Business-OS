@@ -28,7 +28,7 @@ const STATUS_CARD: Partial<Record<KpiStatus, CardLook>> = {
 const PULSE_STATUSES: KpiStatus[] = ["OVERDUE", "OFF_TRACK"];
 
 // Ring gauge: the achievement number as a dial. Progress uses the accent colour.
-function Ring({ pct, size = 92 }: { pct: number | null; size?: number }) {
+export function Ring({ pct, size = 92 }: { pct: number | null; size?: number }) {
   const stroke = 8;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;

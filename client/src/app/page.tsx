@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
-import { AlertTriangle, Building2, Layers, Target, User } from "lucide-react";
+import { AlertTriangle, Building2, ClipboardCheck, Layers, Target, User } from "lucide-react";
 import { fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { isGroupOwner, isBusinessCeo } from "@/lib/auth";
@@ -13,13 +13,14 @@ import { BrandLoader } from "@/components/BrandLoader";
 import { Masthead } from "@/components/home/Masthead";
 import { QuickNav, type NavItem } from "@/components/home/QuickNav";
 import { useHomeCharts } from "@/components/home/charts/useHomeCharts";
+import { ApprovalsTab } from "@/components/home/tabs/ApprovalsTab";
 import { AttentionTab } from "@/components/home/tabs/AttentionTab";
 import { CompaniesTab } from "@/components/home/tabs/CompaniesTab";
 import { DealsTab } from "@/components/home/tabs/DealsTab";
 import { OverviewTab } from "@/components/home/tabs/OverviewTab";
 import { TeamTab } from "@/components/home/tabs/TeamTab";
 import { PREVIEW_TREND, URGENCY_RANK, URGENCY_URGENT, groupStale, plural } from "@/components/home/format";
-import type { AlertsResponse, AttentionModel, Exec } from "@/components/home/types";
+import type { AlertsResponse, AttentionModel, Exec, PendingApproval } from "@/components/home/types";
 
 /**
  * Home routes by role: the group dashboard is the Group Owner's view only (the API refuses it
@@ -49,8 +50,16 @@ function GroupDashboard() {
   const { byKey } = useCompanies();
   const alerts = useQuery<AlertsResponse>({ queryKey: ["alerts"], queryFn: () => fetcher("/alerts") });
   const exec = useQuery<Exec>({ queryKey: ["executive-dashboard"], queryFn: () => fetcher("/dashboard/executive") });
+  // Work staff finished that waits for the Group Owner's approval before it counts.
+  const approvalsQuery = useQuery<PendingApproval[]>({ queryKey: ["tasks", "approvals"], queryFn: () => fetcher("/tasks/approvals") });
+  const approvals = approvalsQuery.data ?? [];
   const charts = useHomeCharts();
   const [activeId, setActiveId] = useState("overview");
+
+  // The approvals alert links here with ?view=approvals.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "approvals") setActiveId("approvals");
+  }, []);
 
   const data = exec.data;
 
@@ -83,12 +92,13 @@ function GroupDashboard() {
     () =>
       [
         { id: "overview", label: "Overview", icon: Layers },
+        { id: "approvals", label: "Approvals", icon: ClipboardCheck, count: approvals.length },
         { id: "team-performance", label: "Team", icon: User },
         hasAttention ? { id: "attention", label: "Attention", icon: AlertTriangle, count: attention.total } : null,
         { id: "company-health", label: "Companies", icon: Building2 },
         { id: "deal-ledgers", label: "Deals", icon: Target },
       ].filter((x): x is NavItem => x !== null),
-    [hasAttention, attention.total],
+    [hasAttention, attention.total, approvals.length],
   );
 
   if (exec.isLoading) return <BrandLoader fullScreen={false} label="Loading dashboard" />;
@@ -109,7 +119,7 @@ function GroupDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl space-y-7 px-5 py-10 md:px-8 md:py-12">
+      <div className="p-4 md:p-6 space-y-7">
         <Masthead
           companyCount={data.companies.length}
           urgentCount={attention.urgentCount}
@@ -121,8 +131,10 @@ function GroupDashboard() {
 
         <AnimatePresence mode="wait">
           {activeId === "overview" && (
-            <OverviewTab key="overview" data={data} attention={attention} byKey={byKey} activeTrend={activeTrend} charts={charts} />
+            <OverviewTab key="overview" data={data} attention={attention} byKey={byKey} activeTrend={activeTrend} charts={charts}
+              approvals={approvals} onOpenApprovals={() => setActiveId("approvals")} />
           )}
+          {activeId === "approvals" && <ApprovalsTab key="approvals" approvals={approvals} byKey={byKey} />}
           {activeId === "team-performance" && <TeamTab key="team-performance" health={data.kpiHealth} charts={charts} />}
           {activeId === "attention" && hasAttention && <AttentionTab key="attention" attention={attention} byKey={byKey} />}
           {activeId === "company-health" && <CompaniesTab key="company-health" companies={data.companies} />}

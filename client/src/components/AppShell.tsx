@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -8,10 +8,20 @@ import { Alerts } from "./Alerts";
 import { AssistantLauncher } from "./assistant/AssistantPanel";
 
 const NO_SHELL = ["/login", "/change-password"];
+const HIDDEN_KEY = "sidebar-hidden";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop only, remembered per browser. Read after mount so the server render matches.
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  useEffect(() => {
+    try { setSidebarHidden(localStorage.getItem(HIDDEN_KEY) === "1"); } catch { /* storage blocked */ }
+  }, []);
+  const toggleHidden = () => setSidebarHidden((h) => {
+    try { localStorage.setItem(HIDDEN_KEY, h ? "0" : "1"); } catch { /* storage blocked */ }
+    return !h;
+  });
 
   if (NO_SHELL.includes(pathname)) return <>{children}</>;
 
@@ -25,7 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} hidden={sidebarHidden} onToggleHidden={toggleHidden} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
