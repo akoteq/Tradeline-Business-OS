@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clsx } from "clsx";
-import { Check, CheckCircle2, ChevronDown, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Loader2, MoreHorizontal, Paperclip, Pencil, Trash2 } from "lucide-react";
 import {
   OUTCOME_COLORS,
   OUTCOME_LABEL,
@@ -138,18 +138,39 @@ function Ring({ pct, ringClass, trackClass }: { pct: number; ringClass: string; 
   );
 }
 
-export function RingStat({ value, label, pct, ringClass, trackClass, labelClass }: {
+/**
+ * A status card. With `onClick` it becomes a button: click it to show those tasks first,
+ * click again to go back to the normal order. `active` outlines the one that is on.
+ */
+export function RingStat({ value, label, pct, ringClass, trackClass, labelClass, onClick, active, hint }: {
   value: string; label: string; pct: number; ringClass: string; trackClass: string; labelClass: string;
+  onClick?: () => void;
+  active?: boolean;
+  hint?: string;
 }) {
-  return (
-    <div className="bg-surface border border-border rounded-xl shadow-card px-3.5 py-3 flex items-center gap-3 min-w-[168px] shrink-0 sm:min-w-0">
+  const body = (
+    <>
       <Ring pct={pct} ringClass={ringClass} trackClass={trackClass} />
       <div className="min-w-0">
         <div className="text-xl font-semibold text-foreground leading-tight tabular-nums whitespace-nowrap">{value}</div>
         <div className={clsx("text-sm font-medium truncate", labelClass)}>{label}</div>
       </div>
       <div className="ml-auto self-end text-xs text-muted tabular-nums">{pct}%</div>
-    </div>
+    </>
+  );
+  const base = "bg-surface border rounded-xl shadow-card px-3.5 py-3 flex items-center gap-3 min-w-[168px] shrink-0 sm:min-w-0";
+
+  if (!onClick) return <div className={clsx(base, "border-border")}>{body}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={!!active}
+      title={hint}
+      className={clsx(base, "sm:w-full text-left transition-colors", active ? "border-accent ring-1 ring-accent" : "border-border hover:border-foreground/30")}
+    >
+      {body}
+    </button>
   );
 }
 
@@ -182,7 +203,7 @@ export function FilterSelect({ value, onChange, label, children }: { value: stri
   );
 }
 
-export function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; onDelete: () => void; onAttach?: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -210,7 +231,12 @@ export function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: ()
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-40 bg-surface border border-border rounded-xl shadow-pop py-1 z-30">
+        <div className="absolute right-0 top-full mt-1 w-52 bg-surface border border-border rounded-xl shadow-pop py-1 z-30">
+          {onAttach && (
+            <button onClick={() => { setOpen(false); onAttach(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">
+              <Paperclip size={14} /> Attach file or link
+            </button>
+          )}
           <button onClick={() => { setOpen(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">
             <Pencil size={14} /> Edit details
           </button>

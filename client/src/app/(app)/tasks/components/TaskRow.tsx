@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, type DragEvent } from "react";
 import { clsx } from "clsx";
-import { Calendar, FileText, Target } from "lucide-react";
+import { Calendar, FileText, Loader2, Paperclip, Target, UploadCloud } from "lucide-react";
 import { CATEGORY_ICONS, categoryOf, counts, fmtDate, isOverdue, shownStatus, type Task, type TaskGroup } from "./task-utils";
 import { PriorityPill, RowMenu, StatusMenu } from "./TaskBits";
 import { AttachmentChips } from "./Attachments";
@@ -13,9 +14,10 @@ import { AttachmentChips } from "./Attachments";
  *   line 2  status, priority, owner, due date
  * The two wrappers use `lg:contents`, so on desktop their children become the grid cells.
  */
-export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onLogResult, onReview }: {
+export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onAttach, onDropFiles, uploading, onLogResult, onReview }: {
   task: Task;
-  group: TaskGroup;
+  /** Only the icon colours are used, so a group made on the fly (like "Due in 7 days") works too. */
+  group: Pick<TaskGroup, "rowIcon">;
   gridCols: string;
   showCompany: boolean;
   showBdo: boolean;
@@ -26,6 +28,12 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
   onChangeStatus: (status: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Opens the files-and-links dialog, no need to go through Edit details. */
+  onAttach: () => void;
+  /** Files dropped on the row. They are uploaded and saved on the task, no dialog needed. */
+  onDropFiles?: (files: File[]) => void;
+  /** True while dropped files are uploading to this task. */
+  uploading?: boolean;
   onLogResult: () => void;
   /** Managers only: opens the approve / reject popup for work waiting on them. */
   onReview?: () => void;
@@ -34,12 +42,52 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
   const Icon = CATEGORY_ICONS[category] ?? FileText;
   const overdue = isOverdue(task);
   const done = task.status === "COMPLETED";
+  const hasFiles = (task.attachments?.length ?? 0) > 0;
+
+  // Drag files from the desktop onto the row to attach them.
+  const [over, setOver] = useState(false);
+  const isFileDrag = (e: DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  const dragOver = (e: DragEvent) => {
+    if (!onDropFiles || !isFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setOver(true);
+  };
+  const dragLeave = (e: DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+  };
+  const drop = (e: DragEvent) => {
+    if (!onDropFiles || !isFileDrag(e)) return;
+    e.preventDefault();
+    setOver(false);
+    const items = Array.from(e.dataTransfer.items ?? []);
+    // Skip folders (they show up as files with no content)
+    const files = items.length
+      ? items.filter((i) => i.kind === "file" && !i.webkitGetAsEntry?.()?.isDirectory).map((i) => i.getAsFile()).filter((f): f is File => !!f)
+      : Array.from(e.dataTransfer.files);
+    if (files.length) onDropFiles(files);
+  };
 
   return (
     <div
-      className="relative px-4 py-3 lg:py-2.5 lg:grid lg:items-center lg:gap-x-4 hover:bg-primary/[0.03] transition-colors"
+      className={clsx("group/row relative px-4 py-3 lg:py-2.5 lg:grid lg:items-center lg:gap-x-4 transition-colors", over ? "bg-accent/5" : "hover:bg-primary/[0.03]")}
       style={{ gridTemplateColumns: gridCols }}
+      onDragEnter={dragOver}
+      onDragOver={dragOver}
+      onDragLeave={dragLeave}
+      onDrop={drop}
     >
+      {(over || uploading) && (
+        <div
+          className={clsx(
+            "pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 text-sm font-medium",
+            over ? "border-2 border-dashed border-accent bg-accent/5 text-accent" : "bg-surface/70 text-muted"
+          )}
+        >
+          {over ? <><UploadCloud size={16} /> Drop to attach to this task</> : <><Loader2 size={16} className="animate-spin" /> Uploading…</>}
+        </div>
+      )}
+
       {/* Line 1 */}
       <div className="flex items-start gap-3 pr-9 lg:pr-0 lg:contents">
         <input
@@ -82,7 +130,23 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
             {task.completionCriteria && (
               <div className="text-xs text-muted truncate" title={task.completionCriteria}>Done when: {task.completionCriteria}</div>
             )}
-            <AttachmentChips items={task.attachments} max={2} className="mt-1" />
+
+            {/* Files and links, with a one-click way to add more (no Edit details needed) */}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <AttachmentChips items={task.attachments} max={2} />
+              <button
+                type="button"
+                onClick={onAttach}
+                title={hasFiles ? "Add or remove files and links" : "Attach a file or link"}
+                aria-label={hasFiles ? "Add or remove files and links" : "Attach a file or link"}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted transition-colors hover:bg-subtle hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/30"
+              >
+                <Paperclip size={12} />
+                {/* On desktop the word appears when you point at the row; phones always show it */}
+                <span className={clsx(hasFiles ? "hidden" : "max-lg:inline lg:hidden lg:group-hover/row:inline")}>Attach</span>
+              </button>
+            </div>
+
             {task.rejectedReason && task.approval !== "PENDING" && (
               <div className="text-xs text-red-600 truncate" title={task.rejectedReason}>
                 {task.approval === "APPROVED" ? "Change rejected" : "Rejected"}{task.rejectedByEmail ? ` by ${task.rejectedByEmail}` : ""}: {task.rejectedReason}
@@ -144,7 +208,7 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
 
       {/* Menu: top-right on a phone, last column on desktop */}
       <div className="absolute top-2.5 right-2 lg:static lg:justify-self-end">
-        <RowMenu onEdit={onEdit} onDelete={onDelete} />
+        <RowMenu onEdit={onEdit} onDelete={onDelete} onAttach={onAttach} />
       </div>
     </div>
   );

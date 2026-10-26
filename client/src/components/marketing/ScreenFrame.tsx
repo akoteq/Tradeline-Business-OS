@@ -26,7 +26,7 @@ export function ScreenFrame({
         <span className="size-2.5 rounded-full bg-border" />
         <span className="size-2.5 rounded-full bg-border" />
         <span className="size-2.5 rounded-full bg-border" />
-        <span className="ml-3 rounded-md bg-surface px-3 py-0.5 text-xs text-muted">trunqo.com</span>
+        <span className="ml-3 rounded-md bg-surface px-3 py-0.5 text-xs text-muted">trunqo.org</span>
       </div>
       <Image
         src={screen.src}

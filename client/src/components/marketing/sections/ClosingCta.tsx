@@ -8,7 +8,7 @@ export function ClosingCta() {
       <Container className="py-20 lg:py-28">
         <div className="rounded-2xl bg-primary px-6 py-14 text-accent-foreground sm:px-12 lg:py-20">
           <h2 id="cta-title" className="max-w-2xl text-3xl font-semibold sm:text-4xl">
-            Pick up where you left off.
+            Already invited? Log in.
           </h2>
           <p className="mt-4 max-w-xl text-base text-white/70">
             Trunqo access is currently by invitation from your organisation.

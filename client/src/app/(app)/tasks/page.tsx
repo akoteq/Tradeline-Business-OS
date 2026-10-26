@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ArrowRight, ChevronDown, ListChecks, Plus, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, GripVertical, ListChecks, Plus, Search } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
@@ -18,10 +18,14 @@ import { ResultPrompt } from "./components/ResultPrompt";
 import { ApprovalsList } from "./components/ApprovalsList";
 import { ReviewModal } from "./components/ReviewModal";
 import { ConfirmDialog, FilterSelect, OutcomeBadge, RingStat, Stat } from "./components/TaskBits";
+import { AttachDialog } from "./components/AttachDialog";
+import { SortableStats } from "./components/SortableStats";
+import { SortableGroups } from "./components/SortableGroups";
+import { FOCUS_LABEL, useTaskFocus, type FocusKey } from "./components/useTaskFocus";
+import { useQuickAttach } from "./components/useQuickAttach";
 import {
   COLLAPSED_ROWS,
   FILTER_STATUSES,
-  GROUPS,
   PRIORITIES,
   PRIORITY_LABEL,
   PRIORITY_RANK,
@@ -30,7 +34,6 @@ import {
   dueTime,
   fmt,
   fmtDate,
-  groupOf,
   isDueThisWeek,
   isOverdue,
   isUpcoming,
@@ -49,6 +52,8 @@ import {
  *   TaskRow.tsx     one task in the list
  *   TaskForm.tsx    the three-step add / edit flow
  *   ResultPrompt.tsx  "Did this move the KPI?" after finishing linked work
+ *   SortableStats.tsx the status cards, draggable into any order
+ *   SortableGroups.tsx the task sections, draggable by their header
  */
 
 
@@ -75,6 +80,9 @@ export default function TasksPage() {
   const [prompt, setPrompt] = useState<Task | null>(null);
   const [toDelete, setToDelete] = useState<Task | null>(null);
   const [reviewing, setReviewing] = useState<Task | null>(null);
+  const [attaching, setAttaching] = useState<Task | null>(null);
+  // Which group the person asked to see first (clicking a status card), remembered on this device.
+  const { focus, toggle: toggleFocus, clear: clearFocus, arrange } = useTaskFocus();
   const qc = useQueryClient();
 
   // Managers approve the work staff finish; the alerts link here with ?view=approvals.
@@ -126,6 +134,9 @@ export default function TasksPage() {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
+
+  // Files dropped on a row: upload them and save them on that task.
+  const quickAttach = useQuickAttach(refresh);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
@@ -197,7 +208,12 @@ export default function TasksPage() {
     return sort === "latest" ? tb - ta : ta - tb;
   };
   const visible = data.filter((t) => matchesSearch(t) && matchesTab(t)).sort(sorter);
-  const groups = GROUPS.map((g) => ({ ...g, tasks: visible.filter((t) => groupOf(t) === g.key) })).filter((g) => g.tasks.length > 0);
+  const groups = arrange(visible);
+  const focusProps = (key: FocusKey) => ({
+    onClick: () => toggleFocus(key),
+    active: focus === key,
+    hint: focus === key ? "Click to go back to the normal order" : "Click to show these first",
+  });
 
   const filtering = !!q || tab !== "all" || Object.values(filters).some(Boolean);
   const clearFilters = () => { setFilters(EMPTY_FILTERS); setSearch(""); setTab("all"); };
@@ -279,13 +295,23 @@ export default function TasksPage() {
           <Stat label="Win rate" value={winRate === null ? "—" : `${winRate}%`} tone="green" />
         </div>
       ) : (
-        // A swipeable strip on phones, a grid from tablet up
-        <div className="no-scrollbar flex gap-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible sm:grid sm:grid-cols-3 xl:grid-cols-5">
-          <RingStat value={`${completedN} / ${total}`} label="Done" pct={pct(completedN)} ringClass="stroke-green-600" trackClass="stroke-green-100" labelClass="text-green-600" />
-          <RingStat value={String(overdueN)} label="Overdue" pct={pct(overdueN)} ringClass="stroke-red-500" trackClass="stroke-red-100" labelClass="text-red-500" />
-          <RingStat value={String(blockedN)} label="Blocked" pct={pct(blockedN)} ringClass="stroke-amber-500" trackClass="stroke-amber-100" labelClass="text-amber-600" />
-          <RingStat value={String(upcomingN)} label="Due in 7 days" pct={pct(upcomingN)} ringClass="stroke-blue-500" trackClass="stroke-blue-100" labelClass="text-muted" />
-          <RingStat value={String(notStartedN)} label="Not started" pct={pct(notStartedN)} ringClass="stroke-gray-400" trackClass="stroke-gray-200" labelClass="text-muted" />
+        // A swipeable strip on phones, a grid from tablet up. Drag a card to reorder; the order is remembered.
+        <SortableStats
+          className="no-scrollbar flex gap-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible sm:grid sm:grid-cols-3 xl:grid-cols-5"
+          cards={[
+            { key: "done", node: <RingStat value={`${completedN} / ${total}`} label="Done" pct={pct(completedN)} ringClass="stroke-green-600" trackClass="stroke-green-100" labelClass="text-green-600" {...focusProps("done")} /> },
+            { key: "overdue", node: <RingStat value={String(overdueN)} label="Overdue" pct={pct(overdueN)} ringClass="stroke-red-500" trackClass="stroke-red-100" labelClass="text-red-500" {...focusProps("overdue")} /> },
+            { key: "blocked", node: <RingStat value={String(blockedN)} label="Blocked" pct={pct(blockedN)} ringClass="stroke-amber-500" trackClass="stroke-amber-100" labelClass="text-amber-600" {...focusProps("blocked")} /> },
+            { key: "upcoming", node: <RingStat value={String(upcomingN)} label="Due in 7 days" pct={pct(upcomingN)} ringClass="stroke-blue-500" trackClass="stroke-blue-100" labelClass="text-muted" {...focusProps("upcoming")} /> },
+            { key: "todo", node: <RingStat value={String(notStartedN)} label="Not started" pct={pct(notStartedN)} ringClass="stroke-gray-400" trackClass="stroke-gray-200" labelClass="text-muted" {...focusProps("todo")} /> },
+          ]}
+        />
+      )}
+
+      {focus && !isProposalView && (
+        <div className="-mt-1 flex items-center gap-2 text-sm text-muted">
+          <span>Showing <span className="font-medium text-foreground">{FOCUS_LABEL[focus]}</span> first.</span>
+          <button onClick={clearFocus} className="font-medium text-accent hover:underline">Back to normal order</button>
         </div>
       )}
 
@@ -418,13 +444,26 @@ export default function TasksPage() {
           />
         )
       ) : (
-        <div className="space-y-3">
-          {groups.map((g) => {
+        // Drag a section by its header to reorder. A status card pinned first (focus) wins over this.
+        <SortableGroups
+          className="space-y-3"
+          keys={groups.map((g) => g.key)}
+          disabled={!!focus}
+          renderItem={(key, handle) => {
+            const g = groups.find((x) => x.key === key);
+            if (!g) return null;
             const isOpen = !!expanded[g.key];
             const shown = isOpen ? g.tasks : g.tasks.slice(0, COLLAPSED_ROWS);
             return (
-              <section key={g.key} className="bg-surface border border-border rounded-xl shadow-card">
-                <div className={clsx("px-4 py-2.5 flex items-center gap-3 rounded-t-xl", g.header)}>
+              <section className="bg-surface border border-border rounded-xl shadow-card">
+                <div
+                  {...handle}
+                  title={focus ? undefined : "Drag to reorder"}
+                  className={clsx("group/hdr relative px-4 py-2.5 flex items-center gap-3 rounded-t-xl", !focus && "cursor-grab select-none", g.header)}
+                >
+                  {!focus && (
+                    <GripVertical size={14} className="absolute left-0.5 top-1/2 -translate-y-1/2 text-muted/60 opacity-0 transition-opacity group-hover/hdr:opacity-100 max-lg:hidden" />
+                  )}
                   <span className={clsx("h-6 w-6 rounded-full grid place-items-center", g.iconWrap)}>
                     <g.Icon size={14} />
                   </span>
@@ -454,6 +493,9 @@ export default function TasksPage() {
                       onChangeStatus={(status) => toggleMutation.mutate({ task: t, status })}
                       onEdit={() => openEdit(t)}
                       onDelete={() => setToDelete(t)}
+                      onAttach={() => setAttaching(t)}
+                      onDropFiles={(files) => quickAttach.attach(t, files)}
+                      uploading={quickAttach.busy.has(t.id)}
                       onLogResult={() => setPrompt(t)}
                       onReview={isBdo ? undefined : () => setReviewing(t)}
                     />
@@ -461,8 +503,8 @@ export default function TasksPage() {
                 </div>
               </section>
             );
-          })}
-        </div>
+          }}
+        />
       )}
 
       {showForm && (
@@ -497,6 +539,15 @@ export default function TasksPage() {
           companyName={oneCompany || !reviewing.company ? "" : (byKey[reviewing.company]?.name ?? reviewing.company)}
           onClose={() => setReviewing(null)}
           onDone={() => { setReviewing(null); refresh(); }}
+        />
+      )}
+
+      {attaching && (
+        <AttachDialog
+          task={data.find((t) => t.id === attaching.id) ?? attaching}
+          onClose={() => setAttaching(null)}
+          onSaved={refresh}
+          onEditInstead={() => { const t = attaching; setAttaching(null); openEdit(t); }}
         />
       )}
 

@@ -6,8 +6,8 @@ import { FileText, Link2, Loader2, Paperclip, Upload, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { apiError, fmtFileSize, type TaskAttachment } from "./task-utils";
 
-const MAX_ATTACHMENTS = 20;
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 20;
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 const inputClass =
   "w-full bg-background border border-transparent rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:bg-surface focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors";
@@ -22,6 +22,14 @@ function normaliseUrl(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Uploads one file (POST /tasks/attachments) and returns it, ready to be saved on a task. */
+export async function uploadAttachment(file: File): Promise<TaskAttachment> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await api.post("/tasks/attachments", fd, { headers: { "Content-Type": "multipart/form-data" } });
+  return res.data as TaskAttachment;
 }
 
 /** Throws away files uploaded in this form that never got saved on a task. Best effort. */
@@ -73,10 +81,7 @@ export function AttachmentsField({ value, onChange, onUploaded }: {
     for (const file of ok) {
       setUploading((u) => [...u, file.name]);
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await api.post("/tasks/attachments", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        const saved = res.data as TaskAttachment;
+        const saved = await uploadAttachment(file);
         onUploaded(saved);
         onChange([...latest.current, saved]);
       } catch (err) {

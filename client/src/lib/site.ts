@@ -4,7 +4,7 @@
  */
 export const site = {
   name: "Trunqo",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://trunqo.com",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://trunqo.org",
   category: "Business operating system",
   tagline: "The trunk your businesses grow from",
   description:

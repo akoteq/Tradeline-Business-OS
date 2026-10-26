@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from "@/lib/session";
  *   - signed in  -> the dashboard (app/(app)/page.tsx)
  *   - everyone else -> the public landing page (app/(marketing)/home/page.tsx)
  *
- * It is a rewrite, not a redirect, so the address bar stays on trunqo.com and shared links
+ * It is a rewrite, not a redirect, so the address bar stays on trunqo.org and shared links
  * stay clean. /home is also reachable directly and is canonicalised to "/".
  */
 export function middleware(request: NextRequest) {
