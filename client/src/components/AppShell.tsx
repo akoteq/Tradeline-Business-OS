@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
-import { Alerts } from "./Alerts";
 import { AssistantLauncher } from "./assistant/AssistantPanel";
 import { Toaster } from "./Toast";
 import { ConfirmHost } from "./Confirm";
@@ -41,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="md:hidden sticky top-0 z-10 flex items-center gap-3 h-14 px-4 bg-white border-b border-gray-200 shrink-0">
+        <header className="md:hidden sticky top-0 z-10 flex items-center gap-3 h-14 px-4 bg-surface border-b border-border shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
@@ -52,7 +51,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="font-semibold text-gray-900 text-sm">Tradeline Business Operating System</span>
         </header>
 
-        <Alerts />
+        {/* Deadlines, deals needing attention and KPI alerts live on the home page (Attention tab),
+            not in a banner over every page. */}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
 

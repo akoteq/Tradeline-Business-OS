@@ -24,12 +24,11 @@ import {
   AlertTriangle,
   Contact,
   Briefcase,
-  Moon,
-  Sun,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
+import { ThemeToggle } from "./ThemeToggle";
 import { useCompanies } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
 
@@ -56,8 +55,8 @@ import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
  *    Hover has no marker and a lighter wash than active, so it can't pass for the current page.
  *  - A group that contains the current page reads as active too, even when collapsed.
  *
- * Theme: light by default. The toggle above "Sign out" sets data-theme="dark" on <html> and
- * remembers the choice on this device. The colours live in globals.css, so nothing here is themed by hand.
+ * Theme: the light/dark switch (ThemeToggle) sits at the end of the name row in the footer; on the
+ * rail it drops to its own row above "Sign out". The colours come from globals.css.
  */
 
 type IconType = typeof LayoutDashboard;
@@ -76,9 +75,6 @@ type NavEntry = NavItem | NavGroup;
 type NavSection = { title?: string; items: NavEntry[] };
 
 const AUTH_PATHS = ["/login", "/change-password"];
-
-const THEME_KEY = "trunqo.theme";
-type Theme = "light" | "dark";
 
 type SidebarProps = {
   mobileOpen?: boolean; onClose?: () => void;
@@ -100,21 +96,6 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
   const { user, loading, logout } = useAuth();
   const { companies } = useCompanies();
   const [open, setOpen] = useState<string[]>(["Companies"]);
-
-  // Light unless this person chose dark. Read once after mount (localStorage isn't on the server).
-  const [theme, setTheme] = useState<Theme>("light");
-  useEffect(() => {
-    let saved: Theme = "light";
-    try { if (localStorage.getItem(THEME_KEY) === "dark") saved = "dark"; } catch { /* storage blocked: stay light */ }
-    document.documentElement.dataset.theme = saved;
-    setTheme(saved);
-  }, []);
-  const toggleTheme = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    setTheme(next);
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* it just won't stick */ }
-  };
 
   if (AUTH_PATHS.includes(pathname)) return null;
   if (loading) return <aside className={clsx("hidden md:flex min-h-screen bg-surface shrink-0", hidden ? "w-[68px]" : "w-64")} />;
@@ -329,7 +310,8 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
           ))}
         </nav>
 
-        <UserFooter name={user.email} meta={portalLabel} onLogout={logout} rail={rail} theme={theme} onToggleTheme={toggleTheme} />
+        {/* The person's name from their staff profile; a login without one (e.g. a Group Owner) shows the email. */}
+        <UserFooter name={user.bdoName?.trim() || user.email} email={user.email} meta={portalLabel} onLogout={logout} rail={rail} />
       </aside>
 
       {/* Scrollbar hidden but still scrollable (wheel/touch/keyboard all still work) */}
@@ -543,45 +525,29 @@ function CompanyBranchGroup({
   );
 }
 
-function UserFooter({
-  name,
-  meta,
-  onLogout,
-  rail,
-  theme,
-  onToggleTheme,
-}: {
-  name: string | null;
-  meta: string;
-  onLogout: () => void;
-  rail: boolean;
-  theme: Theme;
-  onToggleTheme: () => void;
-}) {
+function UserFooter({ name, email, meta, onLogout, rail }: { name: string | null; email: string; meta: string; onLogout: () => void; rail: boolean }) {
   const initial = (name ?? "?").trim().charAt(0).toUpperCase() || "?";
-  const dark = theme === "dark";
-  const ThemeIcon = dark ? Sun : Moon;
-  const themeLabel = dark ? "Light mode" : "Dark mode";
-  const rowClass = clsx(
-    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium text-muted hover:bg-foreground/[0.05] hover:text-foreground transition-colors",
-    focusRing
-  );
   return (
     <div className="px-3 py-3 border-t border-border">
-      <div className="flex items-center gap-3 mb-1 px-1.5 py-2" title={rail ? `${name ?? ""} · ${meta}` : undefined}>
+      <div className="flex items-center gap-3 mb-1 px-1.5 py-2" title={rail ? `${name ?? ""} · ${meta}` : email}>
         <div className="w-8 h-8 rounded-full bg-foreground/10 text-foreground/70 flex items-center justify-center shrink-0 text-[13px] font-semibold">
           {initial}
         </div>
-        <div className={clsx("min-w-0 whitespace-nowrap", fade(rail))}>
+        <div className={clsx("min-w-0 flex-1 whitespace-nowrap", fade(rail))}>
           <div className="text-[13px] font-medium text-foreground truncate">{name}</div>
           <div className="text-xs text-muted truncate">{meta}</div>
         </div>
+        <ThemeToggle className={clsx("-mr-1 shrink-0", rail && "md:hidden")} />
       </div>
-      <button onClick={onToggleTheme} title={rail ? themeLabel : undefined} aria-label={`Switch to ${themeLabel.toLowerCase()}`} className={rowClass}>
-        <ThemeIcon size={15} strokeWidth={1.75} className="shrink-0" />
-        <span className={clsx("whitespace-nowrap", fade(rail))}>{themeLabel}</span>
-      </button>
-      <button onClick={onLogout} title={rail ? "Sign out" : undefined} className={rowClass}>
+      {rail && <ThemeToggle className="hidden md:flex ml-1 mb-1" />}
+      <button
+        onClick={onLogout}
+        title={rail ? "Sign out" : undefined}
+        className={clsx(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium text-muted hover:bg-foreground/[0.05] hover:text-foreground transition-colors",
+          focusRing
+        )}
+      >
         <LogOut size={15} strokeWidth={1.75} className="shrink-0" />
         <span className={clsx("whitespace-nowrap", fade(rail))}>Sign out</span>
       </button>
