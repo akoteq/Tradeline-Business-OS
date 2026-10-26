@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
+
   /* Milk / light-grey base — neutral, professional */
   --background: #f5f5f3;
   --foreground: #15141a;
@@ -16,6 +18,110 @@
 
   --color-muted: #62666d;
   --color-border: #e4e4e0;
+
+  /* Sidebar wash and scrollbar, kept as tokens so dark mode can swap them */
+  --sidebar-bg: linear-gradient(180deg, #ffffff 0%, #fdf9f6 55%, #fcede5 100%);
+  --scrollbar-thumb: #cfcfca;
+}
+
+/* ------------------------------------------------------------------
+   Dark theme — opt-in. The sidebar toggle sets data-theme="dark" on <html>.
+   Light stays the default; nothing here applies until that attribute is set.
+   Two parts:
+     1. Our own tokens (background, surface, text, borders, shadows).
+     2. Tailwind's palette colours (red, amber, green, sky, blue, gray...) so the
+        pastel pills and tinted banners already in the app flip too, without
+        touching every component. Light fills become soft tints, dark text
+        shades become light.
+------------------------------------------------------------------- */
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #121214;
+  --foreground: #ececf0;
+
+  --color-accent: #e8633a;
+  --color-accent-foreground: #ffffff;
+
+  --color-surface: #1a1a1e;
+  --color-subtle: #25252b;
+
+  --color-muted: #9a9ca6;
+  --color-border: #2d2d34;
+
+  --sidebar-bg: linear-gradient(180deg, #1c1c21 0%, #19191d 55%, #1f1815 100%);
+  --scrollbar-thumb: #3a3a42;
+
+  /* Shadows need real black to show on a dark page */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 20px -6px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 2px 4px rgb(0 0 0 / 0.4), 0 16px 40px -12px rgb(0 0 0 / 0.7);
+
+  /* red */
+  --color-red-50: color-mix(in srgb, #ef4444 10%, transparent);
+  --color-red-100: color-mix(in srgb, #ef4444 16%, transparent);
+  --color-red-200: color-mix(in srgb, #ef4444 28%, transparent);
+  --color-red-600: #ef4444;
+  --color-red-700: #f87171;
+  --color-red-800: #fca5a5;
+
+  /* orange */
+  --color-orange-50: color-mix(in srgb, #f97316 10%, transparent);
+  --color-orange-100: color-mix(in srgb, #f97316 16%, transparent);
+  --color-orange-200: color-mix(in srgb, #f97316 28%, transparent);
+  --color-orange-600: #f97316;
+  --color-orange-700: #fb923c;
+  --color-orange-800: #fdba74;
+
+  /* amber */
+  --color-amber-50: color-mix(in srgb, #f59e0b 10%, transparent);
+  --color-amber-100: color-mix(in srgb, #f59e0b 16%, transparent);
+  --color-amber-200: color-mix(in srgb, #f59e0b 28%, transparent);
+  --color-amber-600: #f59e0b;
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+
+  /* green */
+  --color-green-50: color-mix(in srgb, #22c55e 10%, transparent);
+  --color-green-100: color-mix(in srgb, #22c55e 16%, transparent);
+  --color-green-200: color-mix(in srgb, #22c55e 28%, transparent);
+  --color-green-600: #22c55e;
+  --color-green-700: #4ade80;
+  --color-green-800: #86efac;
+
+  /* emerald */
+  --color-emerald-50: color-mix(in srgb, #10b981 10%, transparent);
+  --color-emerald-100: color-mix(in srgb, #10b981 16%, transparent);
+  --color-emerald-200: color-mix(in srgb, #10b981 28%, transparent);
+  --color-emerald-600: #10b981;
+  --color-emerald-700: #34d399;
+  --color-emerald-800: #6ee7b7;
+
+  /* sky */
+  --color-sky-50: color-mix(in srgb, #0ea5e9 10%, transparent);
+  --color-sky-100: color-mix(in srgb, #0ea5e9 16%, transparent);
+  --color-sky-200: color-mix(in srgb, #0ea5e9 28%, transparent);
+  --color-sky-600: #0ea5e9;
+  --color-sky-700: #38bdf8;
+  --color-sky-800: #7dd3fc;
+
+  /* blue */
+  --color-blue-50: color-mix(in srgb, #3b82f6 10%, transparent);
+  --color-blue-100: color-mix(in srgb, #3b82f6 16%, transparent);
+  --color-blue-200: color-mix(in srgb, #3b82f6 28%, transparent);
+  --color-blue-600: #3b82f6;
+  --color-blue-700: #60a5fa;
+  --color-blue-800: #93c5fd;
+
+  /* gray */
+  --color-gray-50: color-mix(in srgb, #9ca3af 8%, transparent);
+  --color-gray-100: color-mix(in srgb, #9ca3af 13%, transparent);
+  --color-gray-200: color-mix(in srgb, #9ca3af 22%, transparent);
+  --color-gray-300: #3a3a42;
+  --color-gray-500: #9ca3af;
+  --color-gray-600: #b4b9c4;
+  --color-gray-700: #cdd1d8;
+  --color-gray-800: #e1e4e8;
+  --color-gray-900: #f1f2f4;
 }
 
 @theme inline {
@@ -111,7 +217,7 @@
     font-optical-sizing: auto;
     text-rendering: optimizeLegibility;
     scrollbar-width: thin;
-    scrollbar-color: #cfcfca transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
   body {

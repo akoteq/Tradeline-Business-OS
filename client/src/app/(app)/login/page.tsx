@@ -60,8 +60,7 @@ export default function LoginPage() {
           <div className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">
             Operations Portal
           </div>
-          <h1 className="font-serif text-3xl text-foreground">Trunqo</h1>
-          <p className="text-sm text-muted mt-1">Sign in to your account</p>
+
         </div>
 
         <form

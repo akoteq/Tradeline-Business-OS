@@ -1,2 +1,5 @@
 packages:
   - 'client'
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

@@ -6,3 +6,4 @@ dist
 
 # The API lives in its own repository — this repo tracks the client only.
 server/
+.vercel
