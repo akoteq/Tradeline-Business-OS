@@ -5,6 +5,8 @@ export const PAGE_SIZE = 100;
 // Used to turn a local number like 024… into a WhatsApp link. Change for another market.
 const DEFAULT_COUNTRY_CODE = "233";
 
+export type StageEntry = { status: string; at: string; byUserId: string | null; byName: string | null };
+
 export type Lead = {
   id: string; bizId: string | null; businessName: string; email: string | null; phone: string | null;
   contactPerson: string | null; roleTitle: string | null; status: string; source: string | null;
@@ -14,33 +16,54 @@ export type Lead = {
   /** When the record was created; stands in for dateAdded on older leads without one. */
   createdAt?: string;
   visibility: "PRIVATE" | "PUBLIC" | null; smeId: string | null; convertedAt: string | null; archivedAt: string | null;
+  /** Each stage the lead moved into, oldest first. Recorded by the server from 27 Oct 2026. */
+  stageHistory?: StageEntry[];
 };
 export type BdoOption = { id: string; name: string; company: string };
 export type Filters = { status: string; bdo: string; priority: string; source: string };
 export type Scope = "all" | "mine" | "overdue" | "week" | "shared";
 
 // ─── Stages ─────────────────────────────────────────────────────────────────
-export const STATUS_LIST = ["NEW", "CONTACTED", "QUALIFIED", "IN_PROGRESS", "CONVERTED", "LOST"] as const;
+export const STATUS_LIST = ["NEW", "CONTACTED", "QUALIFIED", "MEETING_BOOKED", "PROPOSAL_SENT", "NEGOTIATION", "CONVERTED", "LOST"] as const;
+// IN_PROGRESS is the old catch-all stage. Older leads may still carry it, so it keeps a label and
+// colours below, but it isn't in the list, so nobody can pick it any more.
 // A lead only reaches CONVERTED through "Convert to customer", never by picking the stage.
 export const EDITABLE_STATUSES = STATUS_LIST.filter((s) => s !== "CONVERTED");
 export const STATUS_LABEL: Record<string, string> = {
-  NEW: "New", CONTACTED: "Contacted", QUALIFIED: "Qualified", IN_PROGRESS: "In progress", CONVERTED: "Converted", LOST: "Lost",
+  NEW: "New", CONTACTED: "Contacted", QUALIFIED: "Qualified", MEETING_BOOKED: "Meeting booked", PROPOSAL_SENT: "Proposal sent",
+  NEGOTIATION: "Negotiation", CONVERTED: "Converted", LOST: "Lost", IN_PROGRESS: "In progress",
 };
 export const STATUS_COLORS: Record<string, string> = {
   NEW: "bg-foreground/5 text-foreground/70",
   CONTACTED: "bg-sky-500/10 text-sky-700",
   QUALIFIED: "bg-violet-500/10 text-violet-700",
+  MEETING_BOOKED: "bg-blue-500/10 text-blue-700",
+  PROPOSAL_SENT: "bg-amber-500/10 text-amber-700",
+  NEGOTIATION: "bg-orange-500/10 text-orange-700",
   IN_PROGRESS: "bg-amber-500/10 text-amber-700",
   CONVERTED: "bg-emerald-500/10 text-emerald-700",
   LOST: "bg-red-500/10 text-red-700",
 };
 // Ring colour and label colour for the stage cards (literal classes so Tailwind keeps them).
 export const STAGE_RING: Record<string, string> = {
-  NEW: "text-zinc-400", CONTACTED: "text-sky-500", QUALIFIED: "text-violet-500", IN_PROGRESS: "text-amber-500", CONVERTED: "text-emerald-500", LOST: "text-red-500",
+  NEW: "text-zinc-400", CONTACTED: "text-sky-500", QUALIFIED: "text-violet-500", MEETING_BOOKED: "text-blue-500", PROPOSAL_SENT: "text-amber-500",
+  NEGOTIATION: "text-orange-500", CONVERTED: "text-emerald-500", LOST: "text-red-500", IN_PROGRESS: "text-amber-500",
 };
 export const STAGE_LABEL: Record<string, string> = {
-  NEW: "text-foreground/70", CONTACTED: "text-sky-700", QUALIFIED: "text-violet-700", IN_PROGRESS: "text-amber-700", CONVERTED: "text-emerald-700", LOST: "text-red-700",
+  NEW: "text-foreground/70", CONTACTED: "text-sky-700", QUALIFIED: "text-violet-700", MEETING_BOOKED: "text-blue-700", PROPOSAL_SENT: "text-amber-700",
+  NEGOTIATION: "text-orange-700", CONVERTED: "text-emerald-700", LOST: "text-red-700", IN_PROGRESS: "text-amber-700",
 };
+
+// The five cards at the top of the page. Each groups one or more stages; tapping a card filters
+// to all of them (sent to the API as a comma-separated status list). Old IN_PROGRESS leads count
+// as Working so every lead lands in a card.
+export const STAGE_GROUPS: { label: string; statuses: string[]; ring: string; text: string }[] = [
+  { label: "New", statuses: ["NEW"], ring: "text-zinc-400", text: "text-foreground/70" },
+  { label: "Working", statuses: ["CONTACTED", "QUALIFIED", "IN_PROGRESS"], ring: "text-sky-500", text: "text-sky-700" },
+  { label: "In pipeline", statuses: ["MEETING_BOOKED", "PROPOSAL_SENT", "NEGOTIATION"], ring: "text-blue-500", text: "text-blue-700" },
+  { label: "Converted", statuses: ["CONVERTED"], ring: "text-emerald-500", text: "text-emerald-700" },
+  { label: "Lost", statuses: ["LOST"], ring: "text-red-500", text: "text-red-700" },
+];
 
 export const SOURCES = ["Database", "Referral", "Cold Call", "Event", "Social Media", "Website"];
 export const PRIORITIES: [string, string][] = [["HIGH", "High"], ["MEDIUM", "Medium"], ["LOW", "Low"]];

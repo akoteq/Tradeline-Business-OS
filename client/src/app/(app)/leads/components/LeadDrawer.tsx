@@ -7,7 +7,7 @@ import { Building2, CalendarClock, Lock, Mail, MessageCircle, Pencil, Phone, Use
 import { PriorityBadge } from "@/components/Badges";
 import { StatusBadge, VisibilityBadge } from "./badges";
 import type { LeadActions } from "./useLeadActions";
-import { EDITABLE_STATUSES, STATUS_COLORS, STATUS_LABEL, apiError, followUpInfo, whatsappLink, type Lead } from "./lib";
+import { EDITABLE_STATUSES, STAGE_RING, STATUS_COLORS, STATUS_LABEL, apiError, followUpInfo, whatsappLink, type Lead } from "./lib";
 
 /**
  * A lead's details, in a side panel styled like the rest of the app's sheets: the business up
@@ -74,6 +74,7 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
     ["Biz ID", lead.bizId],
   ];
   const showFooter = !closed && (canEdit || canShare);
+  const history = lead.stageHistory ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -154,6 +155,28 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
               </div>
             </Section>
           )}
+
+          <Section title="Stage history">
+            {history.length ? (
+              <ol className="relative space-y-3 border-l border-border pl-5 ml-1.5">
+                {history.map((h, i) => (
+                  <li key={`${h.status}-${h.at}-${i}`} className="relative">
+                    {/* Dot in the stage's colour (bg-current takes the text colour from STAGE_RING) */}
+                    <span className={clsx("absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-current ring-4 ring-surface", STAGE_RING[h.status] ?? "text-zinc-400")} aria-hidden />
+                    <p className="text-sm font-medium text-foreground">{STATUS_LABEL[h.status] ?? h.status}</p>
+                    <p className="text-xs text-muted">
+                      <time dateTime={h.at}>{fmtDate(h.at, { day: "numeric", month: "short", year: "numeric" })}, {new Date(h.at).toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" })}</time>
+                      {h.byName && <> · {h.byName}</>}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">
+                Stage changes are recorded from 27 Oct 2026. The next time this lead moves, the date shows here.
+              </p>
+            )}
+          </Section>
 
           <Section title="Details">
             <dl className="divide-y divide-border/70 rounded-xl border border-border">
