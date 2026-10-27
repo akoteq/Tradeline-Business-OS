@@ -2,7 +2,7 @@
 
 import { clsx } from "clsx";
 import { Plus, Upload } from "lucide-react";
-import { SORT_LABEL, STAGE_LABEL, STAGE_RING, STATUS_LABEL, STATUS_LIST, type SortKey } from "./lib";
+import { SORT_LABEL, STAGE_GROUPS, STATUS_LABEL, type SortKey } from "./lib";
 
 export function LeadsHeader({ scope, sort, onSort, onAdd, onImport }: { scope: string; sort: SortKey; onSort: (s: SortKey) => void; onAdd: () => void; onImport: () => void }) {
   return (
@@ -42,27 +42,31 @@ function Ring({ share, className }: { share: number; className: string }) {
   );
 }
 
-// One card per stage: how many, and its share of all leads. Tap to filter.
+// Five cards, one per group of stages: how many, and its share of all leads. Tap to filter to the group.
 export function LeadsStats({ stats, status, onStatus }: { stats: Record<string, number>; status: string; onStatus: (s: string) => void }) {
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {STATUS_LIST.map((s) => {
-        const n = stats[s] ?? 0;
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {STAGE_GROUPS.map((g) => {
+        const value = g.statuses.join(",");
+        const n = g.statuses.reduce((sum, s) => sum + (stats[s] ?? 0), 0);
         const share = total ? n / total : 0;
-        const active = status === s;
+        const active = status === value;
+        // Grouped cards say which stages they hold (the old In progress stage isn't listed).
+        const holds = g.statuses.length > 1 ? g.statuses.filter((s) => s !== "IN_PROGRESS").map((s) => STATUS_LABEL[s]).join(" · ") : "";
         return (
           <button
-            key={s} onClick={() => onStatus(active ? "" : s)} aria-pressed={active}
+            key={g.label} onClick={() => onStatus(active ? "" : value)} aria-pressed={active} title={holds || undefined}
             className={clsx(
               "flex items-center gap-3 rounded-xl border bg-surface p-3 text-left transition-colors",
               active ? "border-accent ring-1 ring-accent" : "border-border hover:border-foreground/30",
             )}
           >
-            <Ring share={share} className={STAGE_RING[s]} />
+            <Ring share={share} className={g.ring} />
             <span className="min-w-0 flex-1">
               <span className="block font-display text-2xl font-semibold leading-none tabular-nums text-foreground">{n.toLocaleString()}</span>
-              <span className={clsx("mt-1 block truncate text-sm font-medium", STAGE_LABEL[s])}>{STATUS_LABEL[s]}</span>
+              <span className={clsx("mt-1 block truncate text-sm font-medium", g.text)}>{g.label}</span>
+              {holds && <span className="block truncate text-[11px] text-muted">{holds}</span>}
             </span>
             <span className="self-end text-xs tabular-nums text-muted">{Math.round(share * 100)}%</span>
           </button>
