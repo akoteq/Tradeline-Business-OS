@@ -198,8 +198,8 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   });
   const kpiGroups: [string, Linkable[]][] = [
     ["Their KPIs", linkable.filter((k) => k.kind === "PERSONAL")],
-    ["Scorecard", linkable.filter((k) => k.kind === "SCORECARD")],
     ["Company KPIs", linkable.filter((k) => k.kind === "COMPANY")],
+    ["Scorecard", linkable.filter((k) => k.kind === "SCORECARD")],
   ];
 
   // Deals in the task's company this work can be for (the ones the person can see).
