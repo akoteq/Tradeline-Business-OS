@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { LogoMark } from "@/components/LogoMark";
 import { motion, useReducedMotion } from "framer-motion";
 
 interface BrandLoaderProps {
@@ -57,14 +57,7 @@ export function BrandLoader({ label = "Loading", fullScreen = true }: BrandLoade
           }
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         >
-          <Image
-            src="/icon.png"
-            alt="Trunqo"
-            fill
-            sizes="64px"
-            priority
-            className="object-contain"
-          />
+          <LogoMark sizes="64px" priority className="object-contain" />
         </motion.div>
       </div>
     </motion.div>

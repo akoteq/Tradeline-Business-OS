@@ -17,7 +17,7 @@ import { ImportLeadsSheet } from "./components/ImportLeadsSheet";
 import { LeadDrawer } from "./components/LeadDrawer";
 import { useLeadActions } from "./components/useLeadActions";
 import {
-  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, groupOf, sortLeads,
+  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, sortLeads,
   type BdoOption, type Filters, type Lead, type Scope, type SortKey,
 } from "./components/lib";
 
@@ -25,7 +25,7 @@ const NO_FILTERS: Filters = { status: "", bdo: "", priority: "", source: "" };
 const VIEW_KEY = "trunqo.leads.view";
 
 type View = "list" | "board";
-type LeadsRes = { data: Lead[]; total: number };
+type LeadsRes = { data: Lead[]; total: number; counts?: { overdue: number; week: number } };
 
 export default function LeadsPage() {
   const { user } = useAuth();
@@ -57,15 +57,24 @@ export default function LeadsPage() {
   const { data: stats = {} } = useQuery<Record<string, number>>({ queryKey: ["leads-stats"], queryFn: () => fetcher("/leads/stats") });
   const myName = bdos.find((b) => b.id === user?.bdoId)?.name ?? "";
 
+  // Search runs on the server so it reaches every page, a moment after typing stops.
+  const [searchTerm, setSearchTerm] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchTerm(search.trim()); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const setFilter = (key: keyof Filters, value: string) => { setFilters((f) => ({ ...f, [key]: value })); setPage(0); };
   const clearFilters = () => { setFilters((f) => ({ ...NO_FILTERS, status: f.status })); setPage(0); };
   const changeScope = (s: Scope) => { setScope(s); setPage(0); };
 
-  // "My leads" and "Shared" go to the server; Overdue and Due this week are worked out below.
+  // Every filter, the tabs and the search go to the server, so they work across all pages.
   const server: Record<string, string> = {
     ...filters,
-    ...(scope === "mine" && myName ? { bdo: myName } : {}),
+    search: searchTerm,
+    ...(scope === "mine" && user?.bdoId ? { bdoId: user.bdoId } : {}),
     ...(scope === "shared" ? { visibility: "PUBLIC" } : {}),
+    ...(scope === "overdue" || scope === "week" ? { followUp: scope } : {}),
   };
   const queryParams = new URLSearchParams({
     ...Object.fromEntries(Object.entries(server).filter(([, v]) => v)),
@@ -88,18 +97,16 @@ export default function LeadsPage() {
     enabled: view === "board",
   });
 
+  // The server has already applied the search and the tabs, for both views.
   const isLoading = view === null || (view === "board" ? boardLoading : listLoading);
   const source = view === "board" ? boardRes : leadsRes;
-  const loaded = source?.data ?? [];
   const total = source?.total ?? 0;
-  const q = search.trim().toLowerCase();
-  const searched = q ? loaded.filter((l) => [l.businessName, l.contactPerson, l.email, l.phone, l.bizId].some((v) => (v ?? "").toLowerCase().includes(q))) : loaded;
-  const visible = sortLeads(scope === "overdue" ? searched.filter((l) => groupOf(l) === "overdue") : scope === "week" ? searched.filter((l) => groupOf(l) === "soon") : searched, sort);
+  const visible = sortLeads(source?.data ?? [], sort);
 
   const counts = {
     all: Object.values(stats).reduce((a, b) => a + b, 0),
-    overdue: loaded.filter((l) => groupOf(l) === "overdue").length,
-    week: loaded.filter((l) => groupOf(l) === "soon").length,
+    overdue: source?.counts?.overdue ?? 0,
+    week: source?.counts?.week ?? 0,
   };
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["leads-stats"] }); };

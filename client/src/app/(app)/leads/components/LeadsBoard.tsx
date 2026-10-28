@@ -29,21 +29,23 @@ import {
 // PAGE_SIZE until it has everything (capped so a huge database can't freeze the browser).
 const MAX_LEADS = 2000;
 
-export async function fetchAllLeads(params: Record<string, string>): Promise<{ data: Lead[]; total: number }> {
+export async function fetchAllLeads(params: Record<string, string>): Promise<{ data: Lead[]; total: number; counts?: { overdue: number; week: number } }> {
   const out: Lead[] = [];
   let total = 0;
+  let counts: { overdue: number; week: number } | undefined;
   for (let skip = 0; skip < MAX_LEADS; skip += PAGE_SIZE) {
     const qs = new URLSearchParams({
       ...Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
       limit: String(PAGE_SIZE),
       skip: String(skip),
     });
-    const res: { data: Lead[]; total: number } = await fetcher(`/leads?${qs}`);
+    const res: { data: Lead[]; total: number; counts?: { overdue: number; week: number } } = await fetcher(`/leads?${qs}`);
     out.push(...res.data);
     total = res.total;
+    counts = res.counts;
     if (res.data.length < PAGE_SIZE || out.length >= total) break;
   }
-  return { data: out, total };
+  return { data: out, total, counts };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

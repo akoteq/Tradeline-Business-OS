@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { LogoMark } from "@/components/LogoMark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -345,7 +345,7 @@ function Brand({ onClose, onToggle, rail }: { onClose?: () => void; onToggle?: (
           aria-label={rail ? "Show sidebar" : undefined} title={rail ? "Show sidebar" : undefined}
           className={clsx("group/logo relative w-9 h-9 shrink-0 rounded-lg overflow-hidden", rail ? "md:cursor-pointer" : "cursor-default", focusRing)}
         >
-          <Image src="/icon.png" alt="Trunqo" fill sizes="36px" />
+          <LogoMark sizes="36px" />
           {rail && (
             <span className="absolute inset-0 hidden md:flex items-center justify-center bg-surface/90 text-foreground opacity-0 group-hover/logo:opacity-100 transition-opacity">
               <PanelLeftOpen size={18} />

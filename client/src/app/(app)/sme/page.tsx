@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
@@ -210,12 +211,12 @@ export default function SmePage() {
         onDelete={(row) => confirmAction({ title: `Delete ${row.companyName}?`, body: "The client is removed for everyone. This can't be undone.", confirmLabel: "Delete client" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); })}
         canEditRow={(row) => row.canEdit !== false}
         filterBar={
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <FilterSelect value={filters.status} options={[{ value: "", label: "All Statuses" }, ...STATUS_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]} onChange={(v) => setFilter("status", v)} />
             {tradelineView && <FilterSelect value={filters.tier} options={[{ value: "", label: "All Tiers" }, ...TIER_OPTS.map((t) => ({ value: t, label: t.replace("_", " ") }))]} onChange={(v) => setFilter("tier", v)} />}
-            <label className="flex items-center gap-1.5 text-sm text-gray-600 px-1"><input type="checkbox" checked={mine} onChange={(e) => { setMine(e.target.checked); setPage(0); }} /> Only mine</label>
+            <label className="flex items-center gap-1.5 text-sm text-foreground/80 px-1"><input type="checkbox" className="accent-accent" checked={mine} onChange={(e) => { setMine(e.target.checked); setPage(0); }} /> Only mine</label>
             <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...bdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilter("bdo", v)} />
-            <input value={filters.valueChain} onChange={(e) => setFilter("valueChain", e.target.value)} placeholder="Value chain…" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 w-32" />
+            <input value={filters.valueChain} onChange={(e) => setFilter("valueChain", e.target.value)} placeholder="Value chain…" className={clsx(control, "w-36")} />
             <FilterSelect value={filters.region} options={[{ value: "", label: "All Regions" }, ...GHANA_REGIONS.map((r) => ({ value: r, label: r }))]} onChange={(v) => setFilter("region", v)} />
           </div>
         }
@@ -259,9 +260,12 @@ export default function SmePage() {
 
 // ─── Filter select ─────────────────────────────────────────────────────────────
 
+// Same look as the leads toolbar, so the controls follow the theme in dark mode too.
+const control = "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40";
+
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={control}>
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -278,7 +282,7 @@ function DetailDrawer({ sme, serving, onClose, onEdit }: { sme: SME; serving: st
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl flex flex-col">
+      <div className="relative bg-surface w-full max-w-lg h-full overflow-y-auto shadow-2xl flex flex-col">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div>
             <h2 className="font-semibold text-gray-900">{sme.companyName}</h2>
@@ -561,13 +565,13 @@ function FollowUpLogSection({ smeId }: { smeId: string }) {
           onChange={(e) => setText(e.target.value)}
           rows={2}
           placeholder="Log a call, visit, or update…"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none bg-white"
+          className={clsx(control, "w-full resize-none")}
         />
         <div className="flex flex-wrap gap-2">
-          <select value={type} onChange={(e) => setType(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+          <select value={type} onChange={(e) => setType(e.target.value)} className={control}>
             {NOTE_TYPE_OPTS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white" />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={control} />
           <button
             onClick={addNote}
             disabled={saving || !text.trim()}

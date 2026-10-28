@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { LogoMark } from "@/components/LogoMark";
 import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
@@ -48,7 +48,7 @@ export default function ChangePasswordPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="relative mx-auto mb-4" style={{ width: 56, height: 56 }}>
-            <Image src="/icon.png" alt="Trunqo" fill sizes="56px" priority className="object-contain rounded-2xl" />
+            <LogoMark sizes="56px" priority className="object-contain rounded-2xl" />
           </div>
           <div className="text-xs font-semibold text-muted uppercase tracking-widest mb-1">Security</div>
           <h1 className="font-serif text-3xl text-foreground">Set your password</h1>

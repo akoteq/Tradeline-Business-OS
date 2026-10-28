@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { LogoMark } from "@/components/LogoMark";
 import Link from "next/link";
 import { site } from "@/lib/site";
 
@@ -11,7 +11,7 @@ export function Brand() {
   return (
     <Link href="/" prefetch={false} aria-label={`${site.name} home`} className="inline-flex items-center gap-2.5">
       <span className="relative size-7 shrink-0">
-        <Image src="/icon.png" alt="" fill sizes="28px" priority className="rounded-lg object-contain" />
+        <LogoMark alt="" sizes="28px" priority className="rounded-lg object-contain" />
       </span>
       <span className="font-display text-lg font-semibold">{site.name}</span>
     </Link>

@@ -34,6 +34,11 @@
         touching every component. Light fills become soft tints, dark text
         shades become light.
 ------------------------------------------------------------------- */
+/* Logo swap: see components/LogoMark.tsx */
+.logo-dark { display: none; }
+html[data-theme="dark"] .logo-light { display: none; }
+html[data-theme="dark"] .logo-dark { display: block; }
+
 html[data-theme="dark"] {
   color-scheme: dark;
 
