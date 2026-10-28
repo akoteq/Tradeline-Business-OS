@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ArrowRight, ChevronDown, GripVertical, ListChecks, Plus, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, Columns3, GripVertical, List, ListChecks, Plus, Search } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
@@ -44,12 +44,14 @@ import {
   type TabKey,
   type Task,
 } from "./components/task-utils";
+import { matchesFocus, TaskBoard } from "./components/TaskBoard";
 
 /**
  * Assign tasks. The page keeps the data and the filters; the pieces live in components/tasks:
  *   task-utils.ts   types, labels and date helpers
  *   TaskBits.tsx    pills, stat rings, filter select, row menu, confirm dialog
  *   TaskRow.tsx     one task in the list
+ *   TaskBoard.tsx   the drag-and-drop board (To do, In progress, Done, Cancelled)
  *   TaskForm.tsx    the three-step add / edit flow
  *   ResultPrompt.tsx  "Did this move the KPI?" after finishing linked work
  *   SortableStats.tsx the status cards, draggable into any order
@@ -58,6 +60,9 @@ import {
 
 
 const EMPTY_FILTERS = { priority: "", status: "", company: "", bdoId: "" };
+const VIEW_KEY = "trunqo.tasks.view";
+
+type View = "list" | "board";
 
 export default function TasksPage() {
   const { user } = useAuth();
@@ -85,6 +90,17 @@ export default function TasksPage() {
   const { focus, toggle: toggleFocus, clear: clearFocus, arrange } = useTaskFocus();
   const qc = useQueryClient();
 
+  // List or Board, remembered on this device. null until we've read it (localStorage doesn't exist
+  // on the server), so the page doesn't flash the wrong view first.
+  const [view, setView] = useState<View | null>(null);
+  useEffect(() => {
+    try { setView(localStorage.getItem(VIEW_KEY) === "board" ? "board" : "list"); } catch { setView("list"); }
+  }, []);
+  const changeView = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode: the choice just won't stick */ }
+  };
+
   // Managers approve the work staff finish; the alerts link here with ?view=approvals.
   const { data: approvals = [] } = useQuery<ApprovalTask[]>({
     queryKey: ["tasks", "approvals"],
@@ -97,6 +113,8 @@ export default function TasksPage() {
 
   const isProposalView = tab === "proposals";
   const isApprovalView = tab === "approvals";
+  // The board is for tasks; proposals and approvals keep their own screens.
+  const showBoard = view === "board" && !isProposalView && !isApprovalView;
 
   // Staff are always scoped to their own tasks; everyone else uses the filter bar.
   // Blocked isn't a stored status: the server works it out from "Can't start until".
@@ -108,9 +126,10 @@ export default function TasksPage() {
     ...(isBdo ? { bdoId: myBdoId ?? "" } : {}),
   };
   const params = new URLSearchParams(Object.fromEntries(Object.entries(effective).filter(([, v]) => v)));
+  const tasksKey = ["tasks", effective];
 
   const { data = [], isLoading, isError, refetch } = useQuery<Task[]>({
-    queryKey: ["tasks", effective],
+    queryKey: tasksKey,
     queryFn: () => fetcher(`/tasks?${params}`),
     enabled: !!user && (!isBdo || !!myBdoId),
   });
@@ -166,6 +185,16 @@ export default function TasksPage() {
     },
   });
 
+  // Board drop: the card jumps to the new column straight away, then the server catches up. If the
+  // server says no (the mutation's own toast explains why) the card goes back where it was.
+  // Finishing a task this way behaves exactly like ticking its checkbox, including the result prompt.
+  const moveTask = async (task: Task, to: string) => {
+    const setStatus = (status: string) =>
+      qc.setQueryData<Task[]>(tasksKey, (old) => old?.map((x) => (x.id === task.id ? { ...x, status } : x)));
+    setStatus(to);
+    try { await toggleMutation.mutateAsync({ task, status: to }); } catch { setStatus(task.status); }
+  };
+
   /* ---- derived numbers ---- */
   const total = data.length;
   const completedN = data.filter((t) => t.status === "COMPLETED").length;
@@ -217,10 +246,12 @@ export default function TasksPage() {
     (!filters.bdoId || t.bdoId === filters.bdoId),
   );
   const groups = arrange(visible);
+  // On the board a status card narrows the cards to what it counts, instead of pinning a group first.
+  const boardTasks = focus ? visible.filter((t) => matchesFocus(focus, t)) : visible;
   const focusProps = (key: FocusKey) => ({
     onClick: () => toggleFocus(key),
     active: focus === key,
-    hint: focus === key ? "Click to go back to the normal order" : "Click to show these first",
+    hint: focus === key ? (showBoard ? "Click to show every task again" : "Click to go back to the normal order") : (showBoard ? "Click to show only these" : "Click to show these first"),
   });
 
   const filtering = !!q || tab !== "all" || Object.values(filters).some(Boolean);
@@ -319,8 +350,8 @@ export default function TasksPage() {
 
       {focus && !isProposalView && (
         <div className="-mt-1 flex items-center gap-2 text-sm text-muted">
-          <span>Showing <span className="font-medium text-foreground">{FOCUS_LABEL[focus]}</span> first.</span>
-          <button onClick={clearFocus} className="font-medium text-accent hover:underline">Back to normal order</button>
+          <span>Showing <span className="font-medium text-foreground">{FOCUS_LABEL[focus]}</span> {showBoard ? "only" : "first"}.</span>
+          <button onClick={clearFocus} className="font-medium text-accent hover:underline">{showBoard ? "Show every task" : "Back to normal order"}</button>
         </div>
       )}
 
@@ -356,6 +387,25 @@ export default function TasksPage() {
         </div>
 
         <div className="flex w-full sm:w-auto items-center gap-2.5">
+          {!isProposalView && !isApprovalView && (
+            <div className="inline-flex shrink-0 rounded-lg border border-border bg-surface p-0.5">
+              {([["list", "List", List], ["board", "Board", Columns3]] as const).map(([k, label, Icon]) => (
+                <button
+                  key={k}
+                  onClick={() => changeView(k)}
+                  aria-pressed={view === k}
+                  title={`${label} view`}
+                  className={clsx(
+                    "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors",
+                    view === k ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon size={14} />
+                  <span className="max-sm:hidden">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {!isProposalView && (
             <div className="relative flex-1 sm:flex-none">
               <select
@@ -416,6 +466,12 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {showBoard && !isLoading && !isError && (
+        <p className="hidden text-xs text-muted sm:block -mt-1">
+          Drag a card to change its status. Dropping on Done works like ticking the box. Order inside a column follows your sort.
+        </p>
+      )}
+
       {/* Body */}
       {isApprovalView ? (
         approvals.length > 0 && shownApprovals.length === 0 ? (
@@ -438,7 +494,7 @@ export default function TasksPage() {
           onDelete={(row: Task) => setToDelete(row)}
           filterBar={null}
         />
-      ) : isLoading ? (
+      ) : isLoading || view === null ? (
         <div className="space-y-3" aria-busy="true">
           {[0, 1, 2].map((i) => <div key={i} className="h-28 rounded-xl bg-subtle animate-pulse" />)}
         </div>
@@ -462,6 +518,19 @@ export default function TasksPage() {
             action={<button onClick={clearFilters} className="text-sm font-medium text-accent hover:underline">Clear filters</button>}
           />
         )
+      ) : showBoard ? (
+        <TaskBoard
+          tasks={boardTasks}
+          showBdo={!isBdo}
+          // Staff only ever see their own tasks; this keeps it that way if that scoping ever loosens.
+          canMove={(t) => !isBdo || t.bdoId === myBdoId}
+          isUpdating={(t) => toggleMutation.isPending && toggleMutation.variables?.task.id === t.id}
+          onOpen={openEdit}
+          onMove={moveTask}
+          onReview={isBdo ? undefined : (t) => setReviewing(t)}
+          onLogResult={(t) => setPrompt(t)}
+          onAttach={(t) => setAttaching(t)}
+        />
       ) : (
         // Drag a section by its header to reorder. A status card pinned first (focus) wins over this.
         <SortableGroups
