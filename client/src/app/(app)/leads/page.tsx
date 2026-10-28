@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
 import { accessLevel, isManager } from "@/lib/auth";
@@ -14,7 +14,7 @@ import { ImportLeadsSheet } from "./components/ImportLeadsSheet";
 import { LeadDrawer } from "./components/LeadDrawer";
 import { useLeadActions } from "./components/useLeadActions";
 import {
-  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, groupOf, sortLeads,
+  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, sortLeads,
   type BdoOption, type Filters, type Lead, type Scope, type SortKey,
 } from "./components/lib";
 
@@ -39,36 +39,42 @@ export default function LeadsPage() {
   const { data: stats = {} } = useQuery<Record<string, number>>({ queryKey: ["leads-stats"], queryFn: () => fetcher("/leads/stats") });
   const myName = bdos.find((b) => b.id === user?.bdoId)?.name ?? "";
 
+  // Search runs on the server so it reaches every page, a moment after typing stops.
+  const [searchTerm, setSearchTerm] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchTerm(search.trim()); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const setFilter = (key: keyof Filters, value: string) => { setFilters((f) => ({ ...f, [key]: value })); setPage(0); };
   const clearFilters = () => { setFilters((f) => ({ ...NO_FILTERS, status: f.status })); setPage(0); };
   const changeScope = (s: Scope) => { setScope(s); setPage(0); };
 
-  // "My leads" and "Shared" go to the server; Overdue and Due this week are worked out below.
+  // Every filter, the tabs and the search go to the server, so they work across all pages.
   const server: Record<string, string> = {
     ...filters,
-    ...(scope === "mine" && myName ? { bdo: myName } : {}),
+    search: searchTerm,
+    ...(scope === "mine" && user?.bdoId ? { bdoId: user.bdoId } : {}),
     ...(scope === "shared" ? { visibility: "PUBLIC" } : {}),
+    ...(scope === "overdue" || scope === "week" ? { followUp: scope } : {}),
   };
   const queryParams = new URLSearchParams({
     ...Object.fromEntries(Object.entries(server).filter(([, v]) => v)),
     limit: String(PAGE_SIZE),
     skip: String(page * PAGE_SIZE),
   });
-  const { data: leadsRes, isLoading } = useQuery<{ data: Lead[]; total: number }>({
+  const { data: leadsRes, isLoading } = useQuery<{ data: Lead[]; total: number; counts?: { overdue: number; week: number } }>({
     queryKey: ["leads", server, page],
     queryFn: () => fetcher(`/leads?${queryParams}`),
   });
 
-  const loaded = leadsRes?.data ?? [];
   const total = leadsRes?.total ?? 0;
-  const q = search.trim().toLowerCase();
-  const searched = q ? loaded.filter((l) => [l.businessName, l.contactPerson, l.email, l.phone, l.bizId].some((v) => (v ?? "").toLowerCase().includes(q))) : loaded;
-  const visible = sortLeads(scope === "overdue" ? searched.filter((l) => groupOf(l) === "overdue") : scope === "week" ? searched.filter((l) => groupOf(l) === "soon") : searched, sort);
+  const visible = sortLeads(leadsRes?.data ?? [], sort);
 
   const counts = {
     all: Object.values(stats).reduce((a, b) => a + b, 0),
-    overdue: loaded.filter((l) => groupOf(l) === "overdue").length,
-    week: loaded.filter((l) => groupOf(l) === "soon").length,
+    overdue: leadsRes?.counts?.overdue ?? 0,
+    week: leadsRes?.counts?.week ?? 0,
   };
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["leads"] }); qc.invalidateQueries({ queryKey: ["leads-stats"] }); };

@@ -208,6 +208,14 @@ export default function TasksPage() {
     return sort === "latest" ? tb - ta : ta - tb;
   };
   const visible = data.filter((t) => matchesSearch(t) && matchesTab(t)).sort(sorter);
+  // The approvals feed isn't filtered by the server, so the filter bar applies here. Status is
+  // left out: everything waiting is done. Kept in the server's order, oldest submitted first.
+  const shownApprovals = approvals.filter((t) =>
+    matchesSearch(t) &&
+    (!filters.priority || t.priority === filters.priority) &&
+    (!filters.company || t.company === filters.company) &&
+    (!filters.bdoId || t.bdoId === filters.bdoId),
+  );
   const groups = arrange(visible);
   const focusProps = (key: FocusKey) => ({
     onClick: () => toggleFocus(key),
@@ -217,6 +225,7 @@ export default function TasksPage() {
 
   const filtering = !!q || tab !== "all" || Object.values(filters).some(Boolean);
   const clearFilters = () => { setFilters(EMPTY_FILTERS); setSearch(""); setTab("all"); };
+  const clearApprovalFilters = () => { setFilters(EMPTY_FILTERS); setSearch(""); };
 
   const gridCols = [
     "24px",
@@ -271,7 +280,7 @@ export default function TasksPage() {
     { key: "overdue", label: "Overdue", count: isProposalView ? null : overdueN, badge: "bg-red-50 text-red-600" },
     { key: "week", label: "Due this week", count: isProposalView ? null : weekN, badge: "" },
     { key: "proposals", label: "Proposals", count: isProposalView ? total : null, badge: "" },
-    ...(isBdo ? [] : [{ key: "approvals" as TabKey, label: "Awaiting approval", count: approvals.length, badge: approvals.length ? "bg-sky-50 text-sky-700" : "" }]),
+    ...(isBdo ? [] : [{ key: "approvals" as TabKey, label: "Awaiting approval", count: shownApprovals.length, badge: shownApprovals.length ? "bg-sky-50 text-sky-700" : "" }]),
   ];
 
   return (
@@ -377,10 +386,12 @@ export default function TasksPage() {
           <option value="">All priorities</option>
           {[...PRIORITIES].reverse().map((p) => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
         </FilterSelect>
-        <FilterSelect label="Filter by status" value={filters.status} onChange={(v) => setFilters((f) => ({ ...f, status: v }))}>
-          <option value="">All statuses</option>
-          {FILTER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-        </FilterSelect>
+        {!isApprovalView && (
+          <FilterSelect label="Filter by status" value={filters.status} onChange={(v) => setFilters((f) => ({ ...f, status: v }))}>
+            <option value="">All statuses</option>
+            {FILTER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          </FilterSelect>
+        )}
         {!oneCompany && (
           <FilterSelect label="Filter by company" value={filters.company} onChange={(v) => setFilters((f) => ({ ...f, company: v }))}>
             <option value="">All companies</option>
@@ -407,7 +418,15 @@ export default function TasksPage() {
 
       {/* Body */}
       {isApprovalView ? (
-        <ApprovalsList tasks={approvals} oneCompany={oneCompany} companyName={(k) => byKey[k]?.name ?? k} onChanged={refresh} />
+        approvals.length > 0 && shownApprovals.length === 0 ? (
+          <EmptyCard
+            title="Nothing matches those filters"
+            body={`${plural(approvals.length, "task is", "tasks are")} waiting for approval. Try a different search, or clear the filters.`}
+            action={<button onClick={clearApprovalFilters} className="text-sm font-medium text-accent hover:underline">Clear filters</button>}
+          />
+        ) : (
+          <ApprovalsList tasks={shownApprovals} oneCompany={oneCompany} companyName={(k) => byKey[k]?.name ?? k} onChanged={refresh} />
+        )
       ) : isProposalView ? (
         <DataTable
           columns={proposalColumns}

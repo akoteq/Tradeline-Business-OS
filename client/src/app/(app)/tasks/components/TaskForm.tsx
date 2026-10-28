@@ -467,7 +467,14 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
               <Field label="Which company is it for?">
                 <select
                   value={form.company}
-                  onChange={(e) => setForm((f) => ({ ...f, company: e.target.value, kpiId: "", dealId: "" }))}
+                  onChange={(e) => {
+                    const company = e.target.value;
+                    // The owner has to work at the chosen company; clear one who doesn't.
+                    setForm((f) => ({
+                      ...f, company, kpiId: "", dealId: "",
+                      bdoId: bdos.find((b) => b.id === f.bdoId)?.company === company ? f.bdoId : "",
+                    }));
+                  }}
                   className={inputClass}
                 >
                   {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
@@ -483,7 +490,10 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                   className={inputClass}
                 >
                   <option value="">Nobody yet</option>
-                  {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}{oneCompany ? "" : ` (${b.company})`}</option>)}
+                  {/* Only people at the chosen company. An older task filed under another company keeps its owner listed. */}
+                  {bdos
+                    .filter((b) => oneCompany || b.company === form.company || b.id === task?.bdoId)
+                    .map((b) => <option key={b.id} value={b.id}>{b.name}{!oneCompany && b.company !== form.company ? ` (${b.company})` : ""}</option>)}
                 </select>
               </Field>
             )}
