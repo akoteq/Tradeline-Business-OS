@@ -27,7 +27,7 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
   onToggle: () => void;
   onChangeStatus: (status: string) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   /** Opens the files-and-links dialog, no need to go through Edit details. */
   onAttach: () => void;
   /** Files dropped on the row. They are uploaded and saved on the task, no dialog needed. */
@@ -113,6 +113,7 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
               ) : (
                 <>{category} · {task.type === "PROPOSAL" ? "Proposal" : "Task"}</>
               )}
+              {task.project && <span title="The project this task is part of"> · {task.project.name}</span>}
               {task.deal && (
                 <span title="The deal this task is for">
                   {" "}· {task.deal.name}

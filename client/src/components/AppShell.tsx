@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { AssistantLauncher } from "./assistant/AssistantPanel";
 import { Toaster } from "./Toast";
 import { ConfirmHost } from "./Confirm";
+import { useAuth } from "./AuthProvider";
+import { isExternal, externalCanOpen } from "@/lib/auth";
 
 const NO_SHELL = ["/login", "/change-password"];
 const HIDDEN_KEY = "sidebar-hidden";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useAuth();
+  const external = isExternal(user);
+  // Outside collaborators only have their projects and tasks; anything else sends them there.
+  const blocked = external && !NO_SHELL.includes(pathname) && !externalCanOpen(pathname);
+  useEffect(() => { if (blocked) router.replace("/projects"); }, [blocked, router]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Desktop only, remembered per browser. Read after mount so the server render matches.
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -53,10 +61,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Deadlines, deals needing attention and KPI alerts live on the home page (Attention tab),
             not in a banner over every page. */}
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">{blocked ? null : children}</main>
       </div>
 
-      <AssistantLauncher />
+      {!external && <AssistantLauncher />}
       <Toaster />
       <ConfirmHost />
     </div>

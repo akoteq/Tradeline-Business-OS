@@ -26,6 +26,7 @@ import {
   type Task,
   type TaskAttachment,
   type TaskKpi,
+  type TaskProject,
 } from "./task-utils";
 import { AttachmentsField, discardUploads } from "./Attachments";
 
@@ -128,7 +129,9 @@ function MoreOptions({ open, onToggle, children }: { open: boolean; onToggle: ()
 /* The form                                                            */
 /* ------------------------------------------------------------------ */
 
-export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdoId, defaultType, onClose, onSaved }: {
+type ProjectRes = { id: string; name: string; company: string; canManage: boolean; members: { bdoId: string; name: string; external: boolean }[] };
+
+export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myBdoId, defaultType, project: projectProp, onClose, onSaved }: {
   task: Task | null;
   bdos: Bdo[];
   clients: ClientOption[];
@@ -137,6 +140,8 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   oneCompany: boolean;
   myBdoId: string | null;
   defaultType: "TASK" | "PROPOSAL";
+  /** Adding to, or editing in, a project: it sets the company, and only its members can own the task. */
+  project?: TaskProject | null;
   onClose: () => void;
   onSaved: (saved: Task, justCompleted: boolean) => void;
 }) {
@@ -144,6 +149,18 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   const { user } = useAuth();
   const ownCompany = oneCompany ? (user?.bdoCompany ?? null) : null;
   const editing = !!task;
+
+  // A project task opened from the task list: load its project so the owner list is its members.
+  const projectId = projectProp?.id ?? task?.projectId ?? null;
+  const { data: fetched } = useQuery<ProjectRes>({
+    queryKey: ["project", projectId],
+    queryFn: () => fetcher(`/projects/${projectId}`),
+    enabled: !!projectId && !projectProp,
+  });
+  const project: TaskProject | null = projectProp ?? (fetched ? { id: fetched.id, name: fetched.name, company: fetched.company, canManage: fetched.canManage, members: fetched.members } : null);
+  const projectCompany = projectProp && projectProp.company !== "SHARED" ? projectProp.company : null;
+  // Whoever runs the project picks any member; everyone else adds work for themselves.
+  const pickOwner = project ? project.canManage : !isBdo;
 
   const [form, setForm] = useState({
     priority: task?.priority ?? "MEDIUM",
@@ -153,7 +170,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
     // task with no start date stays empty so nothing is filled in behind your back.
     startDate: task ? (task.startDate ? task.startDate.slice(0, 10) : "") : inDays(0),
     status: task?.status === "OVERDUE" ? "PENDING" : task?.status ?? "PENDING",
-    company: task?.company ?? ownCompany ?? "TRADELINE",
+    company: task?.company ?? projectCompany ?? ownCompany ?? "TRADELINE",
     bdoId: task?.bdoId ?? "",
     notes: task?.notes ?? "",
     type: task?.type ?? defaultType,
@@ -188,15 +205,16 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const isProposal = form.type === "PROPOSAL";
-  const assignee = isBdo ? myBdoId : (form.bdoId || null);
+  const assignee = pickOwner ? (form.bdoId || null) : (task?.bdoId && project ? task.bdoId : myBdoId);
   const hasName = form.deliverable.trim().length > 0;
 
   // KPIs this work can serve: the assignee's own, their scorecard, and their company's.
   const { data: linkable = [] } = useQuery<Linkable[]>({
-    queryKey: ["kpi-linkable", assignee ?? "", form.company],
-    queryFn: () => fetcher(`/kpi-framework/linkable?${new URLSearchParams({ ...(assignee ? { bdoId: assignee } : {}), company: form.company })}`),
+    queryKey: ["kpi-linkable", assignee ?? "", form.company, projectId ?? ""],
+    queryFn: () => fetcher(`/kpi-framework/linkable?${new URLSearchParams({ ...(assignee ? { bdoId: assignee } : {}), company: form.company, ...(projectId ? { projectId } : {}) })}`),
   });
   const kpiGroups: [string, Linkable[]][] = [
+    ["Project KPIs", linkable.filter((k) => k.kind === "PROJECT")],
     ["Their KPIs", linkable.filter((k) => k.kind === "PERSONAL")],
     ["Company KPIs", linkable.filter((k) => k.kind === "COMPANY")],
     ["Scorecard", linkable.filter((k) => k.kind === "SCORECARD")],
@@ -258,6 +276,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
       proposalValueGhs: isProposal && form.proposalValueGhs ? Number(form.proposalValueGhs) : null,
       outcome: isProposal ? form.outcome : null,
       kpiId: form.kpiId || null,
+      projectId,
       completionCriteria: form.completionCriteria || null,
       dependsOn: form.dependsOn,
       expenseActual: form.expenseActual === "" ? null : Number(form.expenseActual),
@@ -463,7 +482,11 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
               <span className="text-muted"> · {summaryBits.join(" · ")}</span>
             </div>
 
-            {!oneCompany && (
+            {project && (
+              <p className="text-sm text-muted -mt-1">Part of <span className="font-medium text-foreground">{project.name}</span>. Everyone on the project can see it.</p>
+            )}
+
+            {!oneCompany && !project && (
               <Field label="Which company is it for?">
                 <select
                   value={form.company}
@@ -482,7 +505,20 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
               </Field>
             )}
 
-            {!isBdo && (
+            {pickOwner && project && (
+              <Field label="Who's responsible for it?" hint="(someone on the project)">
+                <select
+                  value={form.bdoId}
+                  onChange={(e) => setForm((f) => ({ ...f, bdoId: e.target.value, kpiId: "" }))}
+                  className={inputClass}
+                >
+                  <option value="">Nobody yet</option>
+                  {project.members.map((m) => <option key={m.bdoId} value={m.bdoId}>{m.name}{m.external ? " (outside collaborator)" : ""}</option>)}
+                </select>
+              </Field>
+            )}
+
+            {pickOwner && !project && (
               <Field label="Who's responsible for it?" hint="(you can pick later)">
                 <select
                   value={form.bdoId}
@@ -553,10 +589,10 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
 
               <div className="space-y-2">
                 <div className={clsx("grid gap-3", form.currency === "GHS" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
-                  <Field label="Money spent">
+                  <Field label="Expenditure">
                     <input type="number" min="0" value={form.expenseActual} onChange={(e) => set("expenseActual", e.target.value)} placeholder="0" className={inputClass} />
                   </Field>
-                  <Field label="Money brought in">
+                  <Field label="Expected revenue">
                     <input
                       type="number"
                       min="0"
@@ -580,8 +616,8 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                 </div>
                 <p className="text-xs text-muted">
                   {form.dealId
-                    ? `When you mark this done${isBdo ? " and your Business CEO approves it" : ""}, the money brought in is added as a payment on ${linkedDeal?.name ?? "the deal"}. It counts toward revenue for the deal, the people on it, the company and the group. Reopen the task and it comes off again.`
-                    : "To record money brought in, pick the deal it came from above."}
+                    ? `When you mark this done${isBdo ? " and your Business CEO approves it" : ""}, the expected revenue is added as a payment on ${linkedDeal?.name ?? "the deal"}. It counts toward revenue for the deal, the people on it, the company and the group. Reopen the task and it comes off again.`
+                    : "To record expected revenue, pick the deal it comes from above."}
                 </p>
               </div>
 

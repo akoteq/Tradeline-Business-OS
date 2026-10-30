@@ -1,403 +1,260 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { clsx } from "clsx";
+import { AlertCircle, CalendarDays, CheckCircle2, Crown, Eye, FolderKanban, MoreHorizontal, PauseCircle, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
+import { isExternal, isGroupOwner, isManager } from "@/lib/auth";
+import { useCompanies, companyBadgeClass } from "@/lib/companies";
 import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
-import { DataTable } from "@/components/DataTable";
-import { useAuth } from "@/components/AuthProvider";
-import { isGroupOwner } from "@/lib/auth";
-import { useCompanies, companyBadgeClass } from "@/lib/companies";
-import { X } from "lucide-react";
+import { Menu, MenuItem } from "../leads/components/Menu";
+import { Avatar, ProjectStatusPill, apiError, fmtDay, isClosed, type Project } from "./lib";
+import { ProjectFormSheet } from "./components/ProjectFormSheet";
+import {
+  Empty, FilterBar, GroupSection, PageHeader, PrimaryButton, RowsSkeleton, StatCards, TextTabs, selectClass,
+  type GroupStyle, type Stat, type TabDef,
+} from "./components/ui";
 
-type Project = {
-  id: string;
-  name: string;
-  leader: string;
-  status: string;
-  company: string;
-  description?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  notes?: string | null;
+/**
+ * Projects: small teams of chosen people, staff or outside collaborators, each with its own tasks
+ * and KPIs. Managers see every project in their reach; everyone else sees the ones they're on.
+ * Laid out like Leads: stat cards, tabs, a filter bar, then the projects grouped by what needs doing.
+ */
+
+type View = "all" | "mine" | "lead" | "attention";
+type GroupKey = "attention" | "active" | "hold" | "done";
+type Sort = "name" | "ending" | "newest";
+
+const GROUPS: Record<GroupKey, GroupStyle> = {
+  attention: { title: "Needs attention", Icon: AlertCircle, head: "bg-red-500/5", icon: "bg-red-500/10 text-red-600", text: "text-red-600" },
+  active: { title: "Active", Icon: FolderKanban, icon: "bg-emerald-500/10 text-emerald-600" },
+  hold: { title: "On hold", Icon: PauseCircle, icon: "bg-amber-500/10 text-amber-600" },
+  done: { title: "Finished", Icon: CheckCircle2, icon: "bg-foreground/5 text-foreground/70" },
 };
-
-const STATUS_COLORS: Record<string, string> = {
-  ACTIVE:    "bg-green-100 text-green-700",
-  COMPLETED: "bg-blue-100 text-blue-700",
-  ON_HOLD:   "bg-yellow-100 text-yellow-700",
-  CANCELLED: "bg-red-100 text-red-700",
-};
-
-
-const STATUS_LIST  = ["ACTIVE", "COMPLETED", "ON_HOLD", "CANCELLED"] as const;
-
-const EMPTY_FORM = {
-  name: "", leader: "", status: "ACTIVE", company: "SHARED",
-  description: "", startDate: "", endDate: "", notes: "",
-};
-
-// A project belongs to one company, or is SHARED across the group.
-function CompanyBadge({ value }: { value: string }) {
-  const { byKey } = useCompanies();
-  const co = byKey[value];
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${co ? companyBadgeClass(co.color) : "bg-gray-100 text-gray-700"}`}>
-      {co?.name ?? (value === "SHARED" ? "Shared" : value)}
-    </span>
-  );
-}
+const groupOf = (p: Project): GroupKey =>
+  isClosed(p) ? "done" : p.tasks.overdue > 0 ? "attention" : p.status === "ON_HOLD" ? "hold" : "active";
 
 export default function ProjectsPage() {
   const { user } = useAuth();
-  const { companies } = useCompanies();
-  const isAdmin = isGroupOwner(user);
+  const router = useRouter();
   const qc = useQueryClient();
-  const [editing, setEditing]   = useState<Project | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [detail, setDetail]     = useState<Project | null>(null);
-  const [filterStatus, setFilterStatus]   = useState("");
-  const [filterCompany, setFilterCompany] = useState("");
+  const { companies, byKey } = useCompanies();
+  const owner = isGroupOwner(user);
+  const manager = isManager(user);
+  const external = isExternal(user);
 
-  const { data: projects = [], isLoading } = useQuery<Project[]>({
+  const [view, setView] = useState<View>("all");
+  const [stat, setStat] = useState("");
+  const [company, setCompany] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<Sort>("name");
+  const [form, setForm] = useState<{ project: Project | null } | null>(null);
+
+  const { data: projects = [], isLoading, isError, refetch } = useQuery<Project[]>({
     queryKey: ["projects"],
     queryFn: () => fetcher("/projects"),
+    enabled: !!user,
   });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["projects"] });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["projects"] });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/projects/${id}`),
-    onSuccess: () => { toast.success("Project deleted"); invalidate(); },
-    onError: (err) => toast.failed("Couldn't delete the project", err),
-  });
-
-  const filtered = projects.filter((p) => {
-    if (filterStatus  && p.status  !== filterStatus)  return false;
-    if (filterCompany && p.company !== filterCompany) return false;
-    return true;
-  });
-
-  const statusCounts = STATUS_LIST.reduce<Record<string, number>>((acc, s) => {
-    acc[s] = projects.filter((p) => p.status === s).length;
-    return acc;
-  }, {});
-
-  const columns = [
-    {
-      key: "name", label: "Project", sortable: true,
-      render: (r: Project) => (
-        <button
-          onClick={() => setDetail(r)}
-          className="text-left font-semibold text-accent hover:underline"
-        >
-          {r.name}
-        </button>
-      ),
-    },
-    { key: "leader", label: "Leader", sortable: true },
-    {
-      key: "status", label: "Status", sortable: true,
-      render: (r: Project) => (
-        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? "bg-gray-100 text-gray-500"}`}>
-          {r.status.replace("_", " ")}
-        </span>
-      ),
-    },
-    {
-      key: "company", label: "Company",
-      render: (r: Project) => (
-        <CompanyBadge value={r.company} />
-      ),
-    },
-    {
-      key: "description", label: "Description",
-      render: (r: Project) => r.description
-        ? <span className="text-sm text-gray-500 truncate max-w-[220px] block" title={r.description}>{r.description}</span>
-        : <span className="text-gray-400">—</span>,
-    },
-    {
-      key: "startDate", label: "Start",
-      render: (r: Project) => r.startDate ? new Date(r.startDate).toLocaleDateString() : <span className="text-gray-400">—</span>,
-    },
-    {
-      key: "endDate", label: "End",
-      render: (r: Project) => r.endDate ? new Date(r.endDate).toLocaleDateString() : <span className="text-gray-400">—</span>,
-    },
+  const total = projects.length || 1;
+  const n = (f: (p: Project) => boolean) => projects.filter(f).length;
+  const stats: Stat[] = [
+    { key: "ACTIVE", label: "Active", value: n((p) => p.status === "ACTIVE"), share: n((p) => p.status === "ACTIVE") / total, ring: "text-emerald-500", text: "text-emerald-700" },
+    { key: "OVERDUE", label: "With overdue work", value: n((p) => !isClosed(p) && p.tasks.overdue > 0), share: n((p) => !isClosed(p) && p.tasks.overdue > 0) / total, ring: "text-red-500", text: "text-red-700" },
+    { key: "ON_HOLD", label: "On hold", value: n((p) => p.status === "ON_HOLD"), share: n((p) => p.status === "ON_HOLD") / total, ring: "text-amber-500", text: "text-amber-700" },
+    { key: "FINISHED", label: "Finished", value: n(isClosed), share: n(isClosed) / total, ring: "text-zinc-400", text: "text-foreground/70", note: "Completed · Cancelled" },
   ];
+  const matchesStat = (p: Project) =>
+    !stat || (stat === "OVERDUE" ? !isClosed(p) && p.tasks.overdue > 0 : stat === "FINISHED" ? isClosed(p) : p.status === stat);
+
+  const memberOf = n((p) => !!p.myRole);
+  const tabs: TabDef<View>[] = [
+    { id: "all", label: manager ? "All projects" : "My projects", count: projects.length },
+    ...(manager && memberOf ? [{ id: "mine" as const, label: "I'm on", count: memberOf }] : []),
+    ...(n((p) => p.myRole === "LEAD") ? [{ id: "lead" as const, label: "I lead", count: n((p) => p.myRole === "LEAD") }] : []),
+    { id: "attention", label: "Overdue work", count: n((p) => !isClosed(p) && p.tasks.overdue > 0), flag: true },
+  ];
+  const matchesView = (p: Project) =>
+    view === "mine" ? !!p.myRole : view === "lead" ? p.myRole === "LEAD" : view === "attention" ? !isClosed(p) && p.tasks.overdue > 0 : true;
+
+  const q = search.trim().toLowerCase();
+  const sorter = (a: Project, b: Project) =>
+    sort === "ending" ? (a.endDate ?? "9999").localeCompare(b.endDate ?? "9999")
+    : sort === "newest" ? b.id.localeCompare(a.id)
+    : a.name.localeCompare(b.name);
+  const shown = projects
+    .filter((p) => matchesView(p) && matchesStat(p) && (!company || p.company === company))
+    .filter((p) => !q || [p.name, p.description, p.lead?.name, byKey[p.company]?.name, ...p.members.map((m) => m.name)].some((v) => (v ?? "").toLowerCase().includes(q)))
+    .sort(sorter);
+  const anyFilter = !!(stat || company || q || view !== "all");
+  const clear = () => { setStat(""); setCompany(""); setSearch(""); setView("all"); };
+
+  const remove = async (p: Project) => {
+    const ok = await confirmAction({ title: `Delete ${p.name}?`, body: "The project, its people list and its KPIs go. Its tasks stay, without the project.", confirmLabel: "Delete project" });
+    if (!ok) return;
+    try { await api.delete(`/projects/${p.id}`); refresh(); toast.success("Project deleted", { description: p.name }); }
+    catch (err) { toast.error("Couldn't delete the project", { description: apiError(err, "Please try again.") }); }
+  };
+
+  const sub = external
+    ? "The projects you've been brought in to work on."
+    : manager
+    ? "Each project has its own people, tasks and KPIs. Only the people on a project see it."
+    : "Projects you're on. Only the people on a project see it.";
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-        <p className="text-sm text-gray-500 mt-1">{projects.length} project{projects.length !== 1 ? "s" : ""} across both companies</p>
-      </div>
-
-      {/* Status summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {STATUS_LIST.map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(filterStatus === s ? "" : s)}
-            className={`rounded-xl border p-3 text-left transition-all bg-white ${
-              filterStatus === s ? "ring-2 ring-accent/40 border-accent/30" : "border-gray-200 hover:border-gray-300"
-            }`}
-          >
-            <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mb-2 ${STATUS_COLORS[s]}`}>
-              {s.replace("_", " ")}
-            </div>
-            <div className="text-2xl font-bold text-gray-900">{statusCounts[s]}</div>
-          </button>
-        ))}
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        isLoading={isLoading}
-        title={`${filtered.length} project${filtered.length !== 1 ? "s" : ""}`}
-        onAdd={isAdmin ? () => { setEditing(null); setShowForm(true); } : undefined}
-        onEdit={isAdmin ? (row) => { setEditing(row); setShowForm(true); } : undefined}
-        onDelete={isAdmin ? (row) => {
-          confirmAction({ title: `Delete ${row.name}?`, body: "This project is removed for everyone. This can't be undone.", confirmLabel: "Delete project" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
-        } : undefined}
-        filterBar={
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30"
-            >
-              <option value="">All Statuses</option>
-              {STATUS_LIST.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+    <div className="space-y-4 p-4 md:p-6">
+      <PageHeader
+        title={manager ? "Projects" : "My projects"}
+        sub={sub}
+        actions={
+          <>
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort projects" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40">
+              <option value="name">Name A–Z</option>
+              <option value="ending">Ending soonest</option>
+              <option value="newest">Newest first</option>
             </select>
-            <select
-              value={filterCompany}
-              onChange={(e) => setFilterCompany(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30"
-            >
-              <option value="">All Companies</option>
-              <option value="SHARED">Shared</option>
-              {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-            </select>
-          </div>
+            {manager && <PrimaryButton icon={Plus} onClick={() => setForm({ project: null })}>New project</PrimaryButton>}
+          </>
         }
       />
 
-      {showForm && (
-        <ProjectFormModal
-          project={editing}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); invalidate(); }}
-        />
-      )}
+      {projects.length > 0 && <StatCards stats={stats} active={stat} onSelect={setStat} />}
 
-      {detail && (
-        <DetailDrawer
-          project={detail}
-          onClose={() => setDetail(null)}
-          onEdit={isAdmin ? () => { setEditing(detail); setDetail(null); setShowForm(true); } : undefined}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── Add / Edit modal ──────────────────────────────────────────────────────────
-
-function ProjectFormModal({
-  project, onClose, onSaved,
-}: {
-  project: Project | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { companies } = useCompanies();
-  const [form, setForm] = useState({
-    ...EMPTY_FORM,
-    ...(project ? {
-      name:        project.name,
-      leader:      project.leader,
-      status:      project.status,
-      company:     project.company,
-      description: project.description ?? "",
-      startDate:   project.startDate ? project.startDate.slice(0, 10) : "",
-      endDate:     project.endDate   ? project.endDate.slice(0, 10)   : "",
-      notes:       project.notes ?? "",
-    } : {}),
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState("");
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async () => {
-    if (!form.name.trim())   { setError("Project name is required.");  return; }
-    if (!form.leader.trim()) { setError("Leader name is required."); return; }
-    setSaving(true); setError("");
-    const body = {
-      ...form,
-      description: form.description || null,
-      startDate:   form.startDate   || null,
-      endDate:     form.endDate     || null,
-      notes:       form.notes       || null,
-    };
-    try {
-      project
-        ? await api.put(`/projects/${project.id}`, body)
-        : await api.post("/projects", body);
-      toast.success(project ? "Project updated" : "Project added");
-      onSaved();
-    } catch {
-      setError("Failed to save. Check the server.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-gray-900">{project ? "Edit Project" : "Add Project"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Project Name *" value={form.name}   onChange={(v) => set("name", v)}   span={2} />
-            <Field label="Leader *"       value={form.leader} onChange={(v) => set("leader", v)} span={2} />
-
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Status</label>
-              <select value={form.status} onChange={(e) => set("status", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                {["ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"].map((s) => (
-                  <option key={s} value={s}>{s.replace("_", " ")}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Company</label>
-              <select value={form.company} onChange={(e) => set("company", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                <option value="SHARED">Shared</option>
+      {projects.length > 0 && (
+        <div className="space-y-3">
+          <TextTabs label="Project views" tabs={tabs} active={view} onSelect={setView} />
+          <FilterBar search={search} onSearch={setSearch} placeholder="Search by project or person" onClear={anyFilter ? clear : undefined}>
+            {owner && (
+              <select value={company} onChange={(e) => setCompany(e.target.value)} className={selectClass} aria-label="Company">
+                <option value="">All companies</option>
                 {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+                <option value="SHARED">Shared</option>
               </select>
-            </div>
-
-            <Field label="Start Date" type="date" value={form.startDate} onChange={(v) => set("startDate", v)} />
-            <Field label="End Date"   type="date" value={form.endDate}   onChange={(v) => set("endDate", v)} />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Description</label>
-            <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
-          </div>
-
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-        </div>
-
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
-            {saving ? "Saving…" : project ? "Update Project" : "Add Project"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Detail drawer ─────────────────────────────────────────────────────────────
-
-function DetailDrawer({
-  project, onClose, onEdit,
-}: {
-  project: Project;
-  onClose: () => void;
-  onEdit?: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-md h-full overflow-y-auto shadow-2xl flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="font-semibold text-gray-900">{project.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Leader: {project.leader}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {onEdit && (
-              <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">
-                Edit
-              </button>
             )}
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-          </div>
+          </FilterBar>
         </div>
+      )}
 
-        <div className="p-5 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-500"}`}>
-              {project.status.replace("_", " ")}
-            </span>
-            <CompanyBadge value={project.company} />
-          </div>
-
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <DItem label="Start Date" value={project.startDate ? new Date(project.startDate).toLocaleDateString() : null} />
-            <DItem label="End Date"   value={project.endDate   ? new Date(project.endDate).toLocaleDateString()   : null} />
-          </dl>
-
-          {project.description && (
-            <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Description</p>
-              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{project.description}</p>
-            </div>
-          )}
-
-          {project.notes && (
-            <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Notes</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{project.notes}</p>
-            </div>
-          )}
+      {isLoading ? (
+        <RowsSkeleton />
+      ) : isError ? (
+        <Empty title="We couldn't load projects" body="Check your connection and try again." action={<button onClick={() => refetch()} className="text-sm font-medium text-accent hover:underline">Try again</button>} />
+      ) : projects.length === 0 ? (
+        <Empty
+          title={manager ? "No projects yet" : "You're not on any projects yet"}
+          body={manager ? "Start one, add the people working on it (staff or outside collaborators), then give them tasks." : "When someone adds you to a project it shows up here."}
+          action={manager ? <button onClick={() => setForm({ project: null })} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90">Start a project</button> : undefined}
+        />
+      ) : shown.length === 0 ? (
+        <Empty title="No projects match" body="Try a different search, or clear the filters." action={<button onClick={clear} className="text-sm font-medium text-accent hover:underline">Clear filters</button>} />
+      ) : (
+        <div className="space-y-3">
+          {(Object.keys(GROUPS) as GroupKey[]).map((g) => {
+            const rows = shown.filter((p) => groupOf(p) === g);
+            if (!rows.length) return null;
+            return (
+              <GroupSection key={g} group={GROUPS[g]} count={rows.length} noun={["project", "projects"]}>
+                {(limit) => (limit ? rows.slice(0, limit) : rows).map((p) => (
+                  <ProjectRow
+                    key={p.id} p={p} iconTone={GROUPS[g].icon} showCompany={owner}
+                    companyName={byKey[p.company]?.name ?? (p.company === "SHARED" ? "Shared" : p.company)} companyColor={byKey[p.company]?.color}
+                    onOpen={() => router.push(`/projects/${p.id}`)}
+                    onEdit={p.canManage ? () => setForm({ project: p }) : undefined}
+                    onDelete={p.canDelete ? () => remove(p) : undefined}
+                  />
+                ))}
+              </GroupSection>
+            );
+          })}
         </div>
-      </div>
+      )}
+
+      {form && (
+        <ProjectFormSheet
+          project={form.project}
+          canPickCompany={owner}
+          onClose={() => setForm(null)}
+          onSaved={(saved) => {
+            const wasNew = !form.project;
+            setForm(null);
+            refresh();
+            if (wasNew) {
+              toast.success("Project started", { description: "Now add the people working on it." });
+              router.push(`/projects/${saved.id}?tab=people`);
+            } else toast.success("Project updated", { description: saved.name });
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function Field({
-  label, value, onChange, type = "text", span,
-}: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; span?: number;
+function ProjectRow({ p, iconTone, showCompany, companyName, companyColor, onOpen, onEdit, onDelete }: {
+  p: Project; iconTone: string; showCompany: boolean; companyName: string; companyColor?: string;
+  onOpen: () => void; onEdit?: () => void; onDelete?: () => void;
 }) {
+  const pct = p.tasks.total ? Math.round((p.tasks.done / p.tasks.total) * 100) : 0;
+  const outsiders = p.members.filter((m) => m.external).length;
+  const sub = p.description || (p.members.length ? `${p.members.length} ${p.members.length === 1 ? "person" : "people"}${outsiders ? `, ${outsiders} from outside` : ""}` : "No one added yet");
+  const ends = fmtDay(p.endDate);
   return (
-    <div className={span === 2 ? "col-span-2" : ""}>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
-      />
-    </div>
-  );
-}
+    <li onClick={onOpen} className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle/50">
+      <span className={clsx("grid h-9 w-9 shrink-0 place-items-center rounded-full", iconTone)}><FolderKanban size={16} /></span>
 
-function DItem({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs text-gray-400 font-medium">{label}</dt>
-      <dd className="text-gray-800 mt-0.5">{value ?? "—"}</dd>
-    </div>
+      <div className="min-w-0 flex-[1.6_1_0%]">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-accent">{p.name}</span>
+          {p.myRole === "LEAD" && <span title="You lead this" className="shrink-0 text-accent"><Crown size={12} /></span>}
+        </div>
+        <div className="truncate text-xs text-muted">{sub}</div>
+      </div>
+
+      {showCompany && (
+        <div className="hidden min-w-[7rem] flex-[0.7_1_0%] md:block">
+          <span className={clsx("inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium", companyBadgeClass(companyColor))}>{companyName}</span>
+        </div>
+      )}
+
+      <div className="hidden min-w-[8rem] flex-[1_1_0%] items-center gap-2 lg:flex">
+        {p.lead?.name ? (
+          <><Avatar name={p.lead.name} size="h-6 w-6 text-[10px]" /><span className="truncate text-sm text-foreground">{p.lead.name}</span></>
+        ) : <span className="text-sm text-muted">{p.leader || "No lead"}</span>}
+      </div>
+
+      <div className="hidden min-w-[9rem] flex-[1_1_0%] sm:block">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted">{p.tasks.total ? `${p.tasks.done}/${p.tasks.total} done` : "No tasks"}</span>
+          {p.tasks.overdue > 0 && !isClosed(p) && <span className="font-medium text-red-600">{p.tasks.overdue} overdue</span>}
+        </div>
+        <div className="mt-1 h-1.5 rounded-full bg-foreground/5"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
+      </div>
+
+      <div className="hidden min-w-[7.5rem] items-center gap-1.5 text-sm xl:flex">
+        <CalendarDays size={14} className="shrink-0 text-muted" />
+        {ends ? <span className="whitespace-nowrap text-foreground/80">{ends}</span> : <span className="text-muted">—</span>}
+      </div>
+
+      <div className="w-24 shrink-0"><ProjectStatusPill status={p.status} /></div>
+
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <Menu width={190} trigger={({ toggle }) => (
+          <button onClick={toggle} title="More actions" aria-label="More actions" className="rounded-lg p-1.5 text-muted transition-colors hover:bg-accent/10 hover:text-accent"><MoreHorizontal size={16} /></button>
+        )}>
+          {(close) => (
+            <>
+              <MenuItem icon={<Eye size={14} />} onClick={() => { close(); onOpen(); }}>Open project</MenuItem>
+              {onEdit && <MenuItem icon={<Pencil size={14} />} onClick={() => { close(); onEdit(); }}>Edit details</MenuItem>}
+              {onDelete && <MenuItem icon={<Trash2 size={14} />} danger onClick={() => { close(); onDelete(); }}>Delete</MenuItem>}
+            </>
+          )}
+        </Menu>
+      </div>
+    </li>
   );
 }

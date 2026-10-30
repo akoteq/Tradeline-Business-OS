@@ -9,11 +9,12 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
 import { type ClientOption } from "@/components/ClientSelect";
 import { useAuth } from "@/components/AuthProvider";
-import { isStaff, isGroupOwner } from "@/lib/auth";
+import { isStaff, isGroupOwner, isExternal } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
 import { toast } from "@/components/Toast";
 import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
+import { CollaboratorTaskSheet } from "./components/CollaboratorTaskSheet";
 import { ResultPrompt } from "./components/ResultPrompt";
 import { ApprovalsList } from "./components/ApprovalsList";
 import { ReviewModal } from "./components/ReviewModal";
@@ -67,6 +68,8 @@ type View = "list" | "board";
 export default function TasksPage() {
   const { user } = useAuth();
   const isBdo = isStaff(user);
+  // Outside collaborators: only the tasks they were given on their projects, updated in a short form.
+  const external = isExternal(user);
   // Staff and Business CEOs only ever work inside one company, so company pickers and
   // the company column are for the Group Owner alone.
   const oneCompany = !isGroupOwner(user);
@@ -86,6 +89,7 @@ export default function TasksPage() {
   const [toDelete, setToDelete] = useState<Task | null>(null);
   const [reviewing, setReviewing] = useState<Task | null>(null);
   const [attaching, setAttaching] = useState<Task | null>(null);
+  const [updating, setUpdating] = useState<Task | null>(null);
   // Which group the person asked to see first (clicking a status card), remembered on this device.
   const { focus, toggle: toggleFocus, clear: clearFocus, arrange } = useTaskFocus();
   const qc = useQueryClient();
@@ -143,6 +147,7 @@ export default function TasksPage() {
   const { data: smeRes } = useQuery<{ data: ClientOption[]; total: number }>({
     queryKey: ["sme-options"],
     queryFn: () => fetcher("/sme?limit=500"),
+    enabled: !external,
   });
   const clients = smeRes?.data ?? [];
 
@@ -270,7 +275,7 @@ export default function TasksPage() {
     "28px",
   ].join(" ");
 
-  const openEdit = (row: Task) => { setEditing(row); setShowForm(true); };
+  const openEdit = (row: Task) => { if (external) { setUpdating(row); return; } setEditing(row); setShowForm(true); };
   const openAdd = () => { setEditing(null); setShowForm(true); };
 
   const proposalColumns: Column<Task>[] = [
@@ -310,7 +315,7 @@ export default function TasksPage() {
     ...(!isBdo && myBdoId ? [{ key: "mine" as TabKey, label: "My tasks", count: isProposalView ? null : mineN, badge: "" }] : []),
     { key: "overdue", label: "Overdue", count: isProposalView ? null : overdueN, badge: "bg-red-50 text-red-600" },
     { key: "week", label: "Due this week", count: isProposalView ? null : weekN, badge: "" },
-    { key: "proposals", label: "Proposals", count: isProposalView ? total : null, badge: "" },
+    ...(external ? [] : [{ key: "proposals" as TabKey, label: "Proposals", count: isProposalView ? total : null, badge: "" }]),
     ...(isBdo ? [] : [{ key: "approvals" as TabKey, label: "Awaiting approval", count: shownApprovals.length, badge: shownApprovals.length ? "bg-sky-50 text-sky-700" : "" }]),
   ];
 
@@ -323,6 +328,7 @@ export default function TasksPage() {
         <p className="text-sm text-muted mt-1">
           {isProposalView
             ? isBdo ? "Your client proposals and how they turned out." : `Client proposals and how they turned out across ${scopeName}.`
+            : external ? "The work you've been given on your projects. Update it as you go and add files that show it's done."
             : isBdo ? "Everything assigned to you, in one place." : `Give work to your team and follow it through to done across ${scopeName}.`}
         </p>
       </div>
@@ -421,12 +427,14 @@ export default function TasksPage() {
               <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
             </div>
           )}
-          <button
-            onClick={openAdd}
-            className="h-9 shrink-0 flex items-center gap-1.5 bg-accent text-accent-foreground rounded-lg px-3.5 text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            <Plus size={16} /> {isProposalView ? "New proposal" : "New task"}
-          </button>
+          {!external && (
+            <button
+              onClick={openAdd}
+              className="h-9 shrink-0 flex items-center gap-1.5 bg-accent text-accent-foreground rounded-lg px-3.5 text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              <Plus size={16} /> {isProposalView ? "New proposal" : "New task"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -580,7 +588,7 @@ export default function TasksPage() {
                       onToggle={() => toggleMutation.mutate({ task: t, status: t.status === "COMPLETED" ? "PENDING" : "COMPLETED" })}
                       onChangeStatus={(status) => toggleMutation.mutate({ task: t, status })}
                       onEdit={() => openEdit(t)}
-                      onDelete={() => setToDelete(t)}
+                      onDelete={external ? undefined : () => setToDelete(t)}
                       onAttach={() => setAttaching(t)}
                       onDropFiles={(files) => quickAttach.attach(t, files)}
                       uploading={quickAttach.busy.has(t.id)}
@@ -617,6 +625,15 @@ export default function TasksPage() {
             // Finishing work that is linked to a manual KPI: ask whether it produced a result.
             if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
           }}
+        />
+      )}
+
+      {updating && (
+        <CollaboratorTaskSheet
+          task={updating}
+          readOnly={updating.project?.status === "COMPLETED" || updating.project?.status === "CANCELLED"}
+          onClose={() => setUpdating(null)}
+          onSaved={(saved) => { setUpdating(null); refresh(); toast.success("Update saved", { description: saved.deliverable }); }}
         />
       )}
 

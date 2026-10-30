@@ -55,6 +55,9 @@ export type Task = {
   // The deal this work is for; money brought in is recorded as a payment on it.
   dealId: string | null;
   deal: { id: string; source: string; name: string } | null;
+  // The project this work belongs to (its members can all see it).
+  projectId?: string | null;
+  project?: { id: string; name: string; status: string; company: string } | null;
   // Approval: work staff finish counts toward KPIs only once their Business CEO or the Group
   // Owner approves it. approvedAt set + PENDING = a change to approved work is waiting.
   approval: "PENDING" | "APPROVED" | "REJECTED" | null;
@@ -89,7 +92,16 @@ export const counts = (t: Task) => t.status === "COMPLETED" && (t.approval !== "
 
 export type DealOption = { id: string; source: string; name: string; stage: string; receivedGhs: number };
 export type Bdo = { id: string; name: string; company: string };
-export type Linkable = { id: string; metric: string; company: string; source: string; unit: string; kind: "PERSONAL" | "SCORECARD" | "COMPANY" };
+export type Linkable = { id: string; metric: string; company: string; source: string; unit: string; kind: "PERSONAL" | "SCORECARD" | "COMPANY" | "PROJECT" };
+
+// The project a task is being added to or edited in: who can own it and who runs it.
+export type TaskProject = {
+  id: string;
+  name: string;
+  company: string;
+  members: { bdoId: string; name: string; external: boolean }[];
+  canManage: boolean;
+};
 
 export type TabKey = "all" | "mine" | "overdue" | "week" | "proposals" | "approvals";
 export type SortKey = "soonest" | "latest" | "priority";

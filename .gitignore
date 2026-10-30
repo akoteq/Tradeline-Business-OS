@@ -7,3 +7,9 @@ dist
 # The API lives in its own repository — this repo tracks the client only.
 server/
 .vercel
+
+# Internal planning docs (AI plan, modules design, decks) — kept out of the repo.
+docs/
+
+# Local data exports (client lists etc.) — kept out of the repo.
+data/

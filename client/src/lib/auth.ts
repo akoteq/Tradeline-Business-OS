@@ -1,7 +1,7 @@
 export type AuthUser = {
   id: string;
   email: string;
-  role: "ADMIN" | "CEO" | "BUSINESS_CEO" | "MANAGING_PARTNER" | "SENIOR_PARTNER" | "SENIOR_BDO" | "BDO" | "JUNIOR_BDO" | "INTERN";
+  role: "ADMIN" | "CEO" | "BUSINESS_CEO" | "MANAGING_PARTNER" | "SENIOR_PARTNER" | "SENIOR_BDO" | "BDO" | "JUNIOR_BDO" | "INTERN" | "EXTERNAL";
   bdoId: string | null;
   bdoName: string | null;
   bdoCompany: string | null;
@@ -27,5 +27,12 @@ export const ACCESS_LEVEL_LABEL: Record<AccessLevel, string> = {
 export const isGroupOwner = (u: Pick<AuthUser, "role"> | null | undefined) => !!u && accessLevel(u.role) === "GROUP_OWNER";
 export const isBusinessCeo = (u: Pick<AuthUser, "role"> | null | undefined) => !!u && accessLevel(u.role) === "BUSINESS_CEO";
 export const isStaff = (u: Pick<AuthUser, "role"> | null | undefined) => !!u && accessLevel(u.role) === "STAFF";
+// Outside collaborators (role EXTERNAL) count as Staff, the narrowest level, and on top of that
+// only see the projects they're on: the server refuses everything else, and the app sends them to
+// /projects (AppShell). Mirrors isExternalRole() in server/src/models/User.ts.
+export const isExternal = (u: Pick<AuthUser, "role"> | null | undefined) => !!u && u.role === "EXTERNAL";
+export const EXTERNAL_PATHS = ["/projects", "/tasks", "/help", "/change-password"];
+export const externalCanOpen = (pathname: string) => EXTERNAL_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+
 // Group Owner or Business CEO — the two levels that manage other people's work.
 export const isManager = (u: Pick<AuthUser, "role"> | null | undefined) => !!u && accessLevel(u.role) !== "STAFF";
