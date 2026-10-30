@@ -203,7 +203,7 @@ export function FilterSelect({ value, onChange, label, children }: { value: stri
   );
 }
 
-export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; onDelete: () => void; onAttach?: () => void }) {
+export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; onDelete?: () => void; onAttach?: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -240,9 +240,11 @@ export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; on
           <button onClick={() => { setOpen(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">
             <Pencil size={14} /> Edit details
           </button>
-          <button onClick={() => { setOpen(false); onDelete(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-            <Trash2 size={14} /> Delete
-          </button>
+          {onDelete && (
+            <button onClick={() => { setOpen(false); onDelete(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+              <Trash2 size={14} /> Delete
+            </button>
+          )}
         </div>
       )}
     </div>

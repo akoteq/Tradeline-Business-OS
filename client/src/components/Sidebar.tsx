@@ -24,13 +24,14 @@ import {
   AlertTriangle,
   Contact,
   Briefcase,
+  FolderKanban,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
 import { useCompanies } from "@/lib/companies";
-import { accessLevel, ACCESS_LEVEL_LABEL } from "@/lib/auth";
+import { accessLevel, ACCESS_LEVEL_LABEL, isExternal } from "@/lib/auth";
 
 /**
  * One nav per role (Group Owner / Business CEO / Staff). Stored roles fold into these via
@@ -160,6 +161,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
       title: "Manage",
       items: [
         { href: "/tasks", label: "Assign tasks", icon: ListChecks, hint: "Give tasks to one or more people" },
+        { href: "/projects", label: "Projects", icon: FolderKanban, hint: "Project teams, their tasks and KPIs" },
         { href: "/admin/team", label: "Team & access", icon: UsersRound, hint: "Invite people and choose what each person can see" },
         { href: "/admin/companies", label: "Add a company", icon: Building2 },
       ],
@@ -181,6 +183,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
       title: "Work",
       items: [
         { href: "/tasks", label: "Assign tasks", icon: ListChecks, hint: "Give tasks to one or more people" },
+        { href: "/projects", label: "Projects", icon: FolderKanban, hint: "Project teams, their tasks and KPIs" },
         { href: "/team", label: "Team", icon: UsersRound },
       ],
     },
@@ -220,6 +223,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
       items: [
         { href: "/overview", label: "Home", icon: LayoutDashboard, hint: "What needs your attention today" },
         { href: "/tasks", label: "My tasks", icon: ListChecks },
+        { href: "/projects", label: "My projects", icon: FolderKanban, hint: "Projects you're on" },
         { href: "/leads", label: "My leads", icon: Users },
         { href: "/sme", label: "Clients", icon: Briefcase },
         { href: "/contacts", label: "Contacts", icon: Contact },
@@ -231,9 +235,21 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
     },
   ];
 
-  const nav = level === "GROUP_OWNER" ? groupOwnerNav : level === "BUSINESS_CEO" ? businessCeoNav : staffNav;
+  // Outside collaborators: only their projects and the tasks in them.
+  const externalNav: NavSection[] = [
+    {
+      items: [
+        { href: "/projects", label: "My projects", icon: FolderKanban },
+        { href: "/tasks", label: "My tasks", icon: ListChecks },
+        { href: "/help", label: "Help", icon: HelpCircle, hint: "Guides and definitions" },
+      ],
+    },
+  ];
 
-  const portalLabel = ACCESS_LEVEL_LABEL[level];
+  const external = isExternal(user);
+  const nav = external ? externalNav : level === "GROUP_OWNER" ? groupOwnerNav : level === "BUSINESS_CEO" ? businessCeoNav : staffNav;
+
+  const portalLabel = external ? "Collaborator" : ACCESS_LEVEL_LABEL[level];
 
   // Folded on desktop, the sidebar narrows to an icon rail; the phone drawer always shows in full.
   const rail = hidden;

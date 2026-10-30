@@ -171,7 +171,7 @@ export default function AdminPage() {
                           ? "bg-emerald-50 text-emerald-700"
                           : "bg-primary/5 text-muted"
                       }`}>
-                        {ACCESS_LEVEL_LABEL[accessLevel(u.role)]}
+                        {u.role === "EXTERNAL" ? "Outside collaborator" : ACCESS_LEVEL_LABEL[accessLevel(u.role)]}
                       </span>
                     </td>
                     <td className="px-4 py-3">
