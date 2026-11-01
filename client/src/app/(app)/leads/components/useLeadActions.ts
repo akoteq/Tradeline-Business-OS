@@ -16,6 +16,12 @@ export function useLeadActions(canAssign: boolean, onDone: () => void) {
       return { ...lead, ...(data?.id ? data : {}), status };
     },
 
+    async followUp(lead: Lead, followUpDate: string): Promise<Lead> {
+      const { data } = await api.put(`/leads/${lead.id}`, formToBody({ ...leadToForm(lead), followUpDate }, canAssign));
+      onDone();
+      return { ...lead, ...(data?.id ? data : {}), followUpDate: followUpDate || null };
+    },
+
     async visibility(lead: Lead): Promise<Lead> {
       const { data } = await api.put(`/leads/${lead.id}/visibility`, { visibility: lead.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC" });
       onDone();

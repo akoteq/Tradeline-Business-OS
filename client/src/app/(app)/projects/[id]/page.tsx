@@ -125,7 +125,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       )}
 
-      <StatCards stats={stats} />
+      {/* The Tasks tab has its own status rings, like the Tasks page. */}
+      {tab !== "tasks" && <StatCards stats={stats} />}
 
       <TextTabs
         label="Project sections"

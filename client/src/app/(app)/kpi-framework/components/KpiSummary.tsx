@@ -36,7 +36,7 @@ export function Ring({ pct, size = 92 }: { pct: number | null; size?: number }) 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeOpacity={0.14} strokeWidth={stroke} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-accent)" strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v / 100)}
@@ -54,8 +54,8 @@ function AchievementCard({ avg, withTarget, live, counts, total }: {
   avg: number | null; withTarget: number; live: number; counts: Record<string, number>; total: number;
 }) {
   return (
-    <div className="col-span-2 sm:col-span-3 lg:col-span-1 lg:row-span-2 rounded-2xl bg-primary text-accent-foreground p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
-      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/5 blur-2xl" />
+    <div className="col-span-2 sm:col-span-3 lg:col-span-1 lg:row-span-2 rounded-2xl bg-primary text-background p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-background/5 blur-2xl" />
       <div className="flex items-center gap-2 relative">
         <BarChart3 size={16} className="opacity-80" />
         <span className="text-[13px] font-medium opacity-90">Overall progress</span>
@@ -72,7 +72,7 @@ function AchievementCard({ avg, withTarget, live, counts, total }: {
       </div>
       {/* Distribution: how every KPI splits across statuses */}
       <div className="relative">
-        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-white/15 gap-px">
+        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-background/15 gap-px">
           {total > 0 && CARD_STATUSES.map((s) => (counts[s] ?? 0) > 0 && (
             <div key={s} className={STATUS_CARD[s]!.bar} style={{ width: `${((counts[s] ?? 0) / total) * 100}%` }} title={`${KPI_STATUS_LABEL[s]}: ${counts[s]}`} />
           ))}

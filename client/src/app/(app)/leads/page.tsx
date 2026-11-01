@@ -17,7 +17,7 @@ import { ImportLeadsSheet } from "./components/ImportLeadsSheet";
 import { LeadDrawer } from "./components/LeadDrawer";
 import { useLeadActions } from "./components/useLeadActions";
 import {
-  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, sortLeads,
+  PAGE_SIZE, SCOPE_NOTE, STATUS_LABEL, apiError, canEditLead, exportLeads, followUpInfo, sortLeads,
   type BdoOption, type Filters, type Lead, type Scope, type SortKey,
 } from "./components/lib";
 
@@ -127,6 +127,10 @@ export default function LeadsPage() {
       keepDetail(await actions.stage(l, s));
       toast.success(`Moved to ${STATUS_LABEL[s] ?? s}`, { description: l.businessName });
     }, "Couldn't move this lead to a new stage."),
+    onFollowUp: (l: Lead, date: string) => guard(async () => {
+      keepDetail(await actions.followUp(l, date));
+      toast.success("Follow-up date changed", { description: `${l.businessName} · ${followUpInfo(date)?.text ?? date}` });
+    }, "Couldn't change the follow-up date."),
     onConvert: (l: Lead) => guard(async () => {
       const u = await actions.convert(l);
       if (!u) return false;

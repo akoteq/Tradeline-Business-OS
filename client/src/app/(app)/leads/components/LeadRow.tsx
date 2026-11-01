@@ -5,12 +5,14 @@ import { Building2, CalendarDays, ChevronDown, Lock, MessageCircle, MoreHorizont
 import { PriorityBadge } from "@/components/Badges";
 import { Menu, MenuItem } from "./Menu";
 import { StatusBadge } from "./badges";
-import { EDITABLE_STATUSES, STATUS_COLORS, STATUS_LABEL, followUpInfo, initials, whatsappLink, type Lead } from "./lib";
+import { EDITABLE_STATUSES, STATUS_COLORS, STATUS_LABEL, followUpInfo, inDays, initials, whatsappLink, type Lead } from "./lib";
 
 const TONE = { late: "text-red-600 font-medium", soon: "text-amber-700 font-medium", ok: "text-foreground/80" };
+const FOLLOW_UP_QUICK: [number, string][] = [[0, "Today"], [1, "Tomorrow"], [3, "In 3 days"], [7, "In a week"], [14, "In 2 weeks"]];
 
 export type RowHandlers = {
   onOpen: (l: Lead) => void; onEdit: (l: Lead) => void; onStage: (l: Lead, s: string) => void;
+  onFollowUp: (l: Lead, date: string) => void;
   onConvert: (l: Lead) => void; onShare: (l: Lead) => void; onDelete: (l: Lead) => void;
 };
 
@@ -39,7 +41,8 @@ export function LeadRow({ lead: l, iconTone, canEdit, canShare, h }: { lead: Lea
         </div>
       </div>
 
-      {/* Priority, owner and follow-up are read-only here: clicking them does nothing rather than opening the lead. */}
+      {/* Priority and owner are read-only here: clicking them does nothing rather than opening the lead.
+          Follow-up and stage open a quick menu, for anyone who can edit the lead. */}
       <div className="hidden min-w-[5rem] flex-[0.6_1_0%] cursor-default md:block" onClick={(e) => e.stopPropagation()}>{l.priority ? <PriorityBadge value={l.priority} /> : <span className="text-muted/60">—</span>}</div>
 
       <div className="hidden min-w-[8rem] flex-[1_1_0%] cursor-default items-center gap-2 lg:flex" onClick={(e) => e.stopPropagation()}>
@@ -51,9 +54,41 @@ export function LeadRow({ lead: l, iconTone, canEdit, canShare, h }: { lead: Lea
         ) : <span className="text-sm text-muted">Unassigned</span>}
       </div>
 
-      <div className="hidden min-w-[9.5rem] flex-[1_1_0%] cursor-default items-center gap-1.5 text-sm sm:flex" onClick={(e) => e.stopPropagation()}>
-        <CalendarDays size={14} className="shrink-0 text-muted" />
-        {f ? <span className={clsx("whitespace-nowrap", TONE[f.tone])}>{f.text}</span> : <span className="text-muted">—</span>}
+      <div className="hidden min-w-[9.5rem] flex-[1_1_0%] cursor-default items-center text-sm sm:flex" onClick={(e) => e.stopPropagation()}>
+        {canEdit && !closed ? (
+          <Menu width={200} trigger={({ toggle }) => (
+            <button onClick={toggle} title="Change follow-up date" className="-mx-2 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-1 transition-colors hover:bg-subtle">
+              <CalendarDays size={14} className="shrink-0 text-muted" />
+              {f ? <span className={TONE[f.tone]}>{f.text}</span> : <span className="text-muted">Set date</span>}
+              <ChevronDown size={12} className="text-muted" />
+            </button>
+          )}>
+            {(close) => (
+              <>
+                {FOLLOW_UP_QUICK.map(([n, label]) => {
+                  const date = inDays(n);
+                  return (
+                    <MenuItem key={n} active={l.followUpDate?.slice(0, 10) === date} onClick={() => { close(); if (l.followUpDate?.slice(0, 10) !== date) h.onFollowUp(l, date); }}>{label}</MenuItem>
+                  );
+                })}
+                <div className="mt-1 border-t border-border px-3 pb-2 pt-2">
+                  <p className="mb-1 text-xs text-muted">Pick a date</p>
+                  <input
+                    type="date" defaultValue={l.followUpDate?.slice(0, 10) ?? ""} aria-label="Follow-up date"
+                    onChange={(e) => { const v = e.target.value; // Typing the year fires on each digit ("0002"…), so wait for a real one.
+                      if (v && v >= "2000" && v !== l.followUpDate?.slice(0, 10)) { close(); h.onFollowUp(l, v); } }}
+                    className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+              </>
+            )}
+          </Menu>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays size={14} className="shrink-0 text-muted" />
+            {f ? <span className={clsx("whitespace-nowrap", TONE[f.tone])}>{f.text}</span> : <span className="text-muted">—</span>}
+          </span>
+        )}
       </div>
 
       <div className="w-32 shrink-0" onClick={(e) => e.stopPropagation()}>
