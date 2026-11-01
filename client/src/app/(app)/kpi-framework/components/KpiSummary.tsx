@@ -50,12 +50,14 @@ export function Ring({ pct, size = 92 }: { pct: number | null; size?: number }) 
   );
 }
 
+// The card sits on bg-primary, which stays dark in both themes, so its text uses accent-foreground
+// (light in both) and its overlays use white, not the theme background.
 function AchievementCard({ avg, withTarget, live, counts, total }: {
   avg: number | null; withTarget: number; live: number; counts: Record<string, number>; total: number;
 }) {
   return (
-    <div className="col-span-2 sm:col-span-3 lg:col-span-1 lg:row-span-2 rounded-2xl bg-primary text-background p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
-      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-background/5 blur-2xl" />
+    <div className="col-span-2 sm:col-span-3 lg:col-span-1 lg:row-span-2 rounded-2xl bg-primary text-accent-foreground p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/5 blur-2xl" />
       <div className="flex items-center gap-2 relative">
         <BarChart3 size={16} className="opacity-80" />
         <span className="text-[13px] font-medium opacity-90">Overall progress</span>
@@ -63,21 +65,21 @@ function AchievementCard({ avg, withTarget, live, counts, total }: {
       <div className="flex items-center gap-4 relative">
         <Ring pct={avg} />
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wider opacity-50">Being tracked</div>
+          <div className="text-[11px] uppercase tracking-wider opacity-60">Being tracked</div>
           <div className="text-2xl font-semibold tabular-nums leading-tight">{live}</div>
-          <div className="text-[11px] opacity-60 leading-snug">
+          <div className="text-[11px] opacity-70 leading-snug">
             {live ? `${withTarget} with a target` : "Set a target to start tracking"}
           </div>
         </div>
       </div>
       {/* Distribution: how every KPI splits across statuses */}
       <div className="relative">
-        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-background/15 gap-px">
+        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-white/15 gap-px">
           {total > 0 && CARD_STATUSES.map((s) => (counts[s] ?? 0) > 0 && (
             <div key={s} className={STATUS_CARD[s]!.bar} style={{ width: `${((counts[s] ?? 0) / total) * 100}%` }} title={`${KPI_STATUS_LABEL[s]}: ${counts[s]}`} />
           ))}
         </div>
-        <div className="mt-1.5 flex justify-between text-[10px] opacity-50">
+        <div className="mt-1.5 flex justify-between text-[10px] opacity-60">
           <span>Status split</span>
           <span>{total} KPI{total === 1 ? "" : "s"}</span>
         </div>

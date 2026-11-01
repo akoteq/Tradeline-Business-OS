@@ -41,7 +41,7 @@ export const KPI_STATUS_HINT: Record<KpiStatus, string> = {
   OFF_TRACK: "Below the at-risk line of where it should be by today",
   OVERDUE: "The window ended and the target was missed",
   ACHIEVED: "Target reached",
-  STALE: "No result logged in 7 days",
+  STALE: "No progress logged in 7 days",
   NOT_STARTED: "The window hasn't started yet",
   NO_TARGET: "No target set yet",
   DRAFT: "Not live yet — not judged or counted",
@@ -174,7 +174,7 @@ export function WorkChip({ work }: { work: KpiRow["work"] }) {
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted whitespace-nowrap" title="Weighted progress of the tasks linked to this KPI. A signal only — it never changes the actual.">
       <span className="tabular-nums text-foreground font-medium">{work.pct ?? 0}%</span> work · {work.done}/{work.tasks}
       {work.blocked > 0 && <span className="inline-flex items-center gap-0.5 text-amber-700"><Ban size={10} />{work.blocked}</span>}
-      {work.noResult > 0 && <span className="inline-flex items-center gap-0.5 text-sky-700" title="Finished tasks with no result logged"><AlertCircle size={10} />{work.noResult}</span>}
+      {work.noResult > 0 && <span className="inline-flex items-center gap-0.5 text-sky-700" title="Finished tasks with no progress logged"><AlertCircle size={10} />{work.noResult}</span>}
     </span>
   );
 }
@@ -246,7 +246,7 @@ function apiError(err: unknown, fallback: string) {
 const inputCls = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent disabled:opacity-60";
 const btnPrimary = "px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity";
 
-// ─── KPI detail: the number, the chain, the KPIs under it, results and work ─
+// ─── KPI detail: the number, the chain, the KPIs under it, progress and work ─
 type Detail = {
   row: KpiRow;
   children: KpiRow[];
@@ -307,7 +307,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
           <PaceBar attainment={row.attainment} expected={row.expected} status={row.status} className="h-2" />
           <p className="text-[11px] text-muted">
             {isAuto ? "Calculated live from deals, payments and other records for this scope and window."
-              : row.aggregation === "SUM" ? "Total of the results logged in the window, including those logged on the KPIs under it."
+              : row.aggregation === "SUM" ? "Total of the progress logged in the window, including what's logged on the KPIs under it."
               : row.aggregation === "LATEST" ? "The latest reading logged." : "The average of the readings logged."}
             {row.children.count > 0 && data.attributed != null && <> KPIs under it account for <strong>{fmtKpiVal(data.attributed, d.unit)}</strong>.</>}
           </p>
@@ -336,10 +336,10 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
           )}
 
           {!isAuto && !locked && <LogResult row={row} bdoId={bdoId ?? row.bdoId} tasks={data.tasks.filter((t) => t.kpiId === d.id)} onSaved={refresh} />}
-          {locked && <p className="text-xs text-foreground bg-foreground/5 rounded-lg px-3 py-2 flex items-center gap-1.5"><Lock size={12} /> This period is locked. A Group Owner must reopen it before results can change.</p>}
+          {locked && <p className="text-xs text-foreground bg-foreground/5 rounded-lg px-3 py-2 flex items-center gap-1.5"><Lock size={12} /> This period is locked. A Group Owner must reopen it before progress can change.</p>}
 
           {data.updates.length > 0 && (
-            <Section title="Results">
+            <Section title="Progress history">
               <ul className="space-y-1.5 max-h-56 overflow-y-auto border-l border-border pl-3">
                 {data.updates.map((u) => (
                   <li key={u.id} className="text-[11px] text-muted flex items-start justify-between gap-2">
@@ -354,10 +354,10 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                     </div>
                     {u.canDelete && (
                       <button
-                        title="Remove this result"
+                        title="Remove this entry"
                         onClick={async () => {
-                          if (!(await confirmAction({ title: "Remove this result?", body: "It no longer counts toward the KPI.", confirmLabel: "Remove" }))) return;
-                          try { await api.delete(`/kpi-framework/updates/${u.id}`); toast.success("Result removed"); refresh(); }
+                          if (!(await confirmAction({ title: "Remove this entry?", body: "It no longer counts toward the KPI.", confirmLabel: "Remove" }))) return;
+                          try { await api.delete(`/kpi-framework/updates/${u.id}`); toast.success("Entry removed"); refresh(); }
                           catch (err) { toast.error("Couldn't remove it", { description: apiError(err, "Please try again.") }); }
                         }}
                         className="shrink-0 p-0.5 rounded text-muted hover:text-red-600"
@@ -378,7 +378,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                   <li key={t.id} className="py-1.5 flex items-center gap-2 text-xs">
                     <span className="flex-1 min-w-0 truncate text-foreground">{t.deliverable}</span>
                     {t.blocked && <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-medium">Blocked</span>}
-                    {t.noResult && <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-700 font-medium">No result logged</span>}
+                    {t.noResult && <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-700 font-medium">No progress logged</span>}
                     <span className="text-muted whitespace-nowrap">{t.bdo ?? "Unassigned"}</span>
                     <span className="text-muted tabular-nums w-10 text-right">{t.status === "COMPLETED" ? "Done" : `${t.progress}%`}</span>
                     <span className="text-muted/60 w-6 text-right" title="Weight">×{t.weight}</span>
@@ -411,7 +411,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// Log a result line: an amount added (total KPIs) or a new reading (rates, scores).
+// Update progress: an amount added (total KPIs) or a new reading (rates, scores).
 export function LogResult({ row, bdoId, tasks = [], onSaved, defaultTaskId }: {
   row: KpiRow; bdoId?: string | null; tasks?: { id: string; deliverable: string }[]; onSaved: () => void; defaultTaskId?: string | null;
 }) {
@@ -429,18 +429,18 @@ export function LogResult({ row, bdoId, tasks = [], onSaved, defaultTaskId }: {
     try {
       await api.post("/kpi-framework/updates", { kpiId: row.definition.id, value, date, note: note || undefined, taskId: taskId || undefined, bdoId: bdoId ?? undefined });
       setValue(""); setNote(""); setTaskId("");
-      toast.success("Result logged", { description: row.definition.metric });
+      toast.success("Progress updated", { description: row.definition.metric });
       onSaved();
     } catch (err) {
-      setError(apiError(err, "Couldn't log the result."));
+      setError(apiError(err, "Couldn't save your progress."));
     } finally { setBusy(false); }
   };
 
   return (
     <div className="rounded-xl border border-border bg-background/60 p-3 space-y-2">
-      <p className="text-xs font-semibold text-muted">{sum ? "Log a result" : "Log a new reading"}</p>
+      <p className="text-xs font-semibold text-muted">Update progress</p>
       <div className="grid grid-cols-2 gap-2">
-        <input type="number" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} className={inputCls + " tabular-nums"} placeholder={sum ? "e.g. 1 (adds to the total)" : "Current reading"} />
+        <input type="number" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} className={inputCls + " tabular-nums"} placeholder={sum ? "How much? e.g. 1 (adds to your total)" : "Your latest reading"} />
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
         {tasks.length > 0 && (
           <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className={inputCls + " col-span-2"}>
@@ -448,11 +448,11 @@ export function LogResult({ row, bdoId, tasks = [], onSaved, defaultTaskId }: {
             {tasks.map((t) => <option key={t.id} value={t.id}>From: {t.deliverable}</option>)}
           </select>
         )}
-        <input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls + " col-span-2"} placeholder="Note (optional), e.g. ERP deal, Client E" maxLength={200} />
+        <input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls + " col-span-2"} placeholder="What was it? (optional) e.g. ERP deal, Client E" maxLength={200} />
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex justify-end">
-        <button onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : sum ? "Add result" : "Save reading"}</button>
+        <button onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : "Save progress"}</button>
       </div>
     </div>
   );

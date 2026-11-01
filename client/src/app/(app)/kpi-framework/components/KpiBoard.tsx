@@ -4,7 +4,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
-  Settings2, Archive, Pencil, ChevronLeft, ChevronRight, Search, Filter, ArrowUpDown, MoreHorizontal, Target, Users,
+  Settings2, Archive, ChevronLeft, ChevronRight, Search, Filter, ArrowUpDown, MoreHorizontal, Target, Users,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
@@ -63,8 +63,8 @@ export function KpiBoard({
     && r.definition.unit === "COUNT" && r.entry?.reviewStatus !== "LOCKED" && r.status !== "DRAFT";
   const quickAdd = useMutation({
     mutationFn: (r: KpiRow) => api.post("/kpi-framework/quick-update", { definitionId: r.definition.id, period, delta: 1 }),
-    onSuccess: (_res, r) => { toast.success("Added 1", { description: r.definition.metric }); onChanged(); },
-    onError: (err) => toast.error("Couldn't add to this KPI", { description: apiError(err, "Please try again.") }),
+    onSuccess: (_res, r) => { toast.success("Progress added", { description: `+1 on ${r.definition.metric}` }); onChanged(); },
+    onError: (err) => toast.error("Couldn't add progress", { description: apiError(err, "Please try again.") }),
   });
 
   // Status filter → search → sort.
@@ -240,10 +240,15 @@ export function KpiBoard({
                       <td className="pl-4 pr-5 py-4">
                         <div className="flex items-center gap-0.5 justify-end">
                           {canQuickAdd(r) && (
-                            <button onClick={() => quickAdd.mutate(r)} disabled={quickAdd.isPending} title="Add 1 to this result"
+                            <button onClick={() => quickAdd.mutate(r)} disabled={quickAdd.isPending} title="Add 1 to progress"
                               className="px-1.5 py-0.5 mr-1 rounded-md border border-border text-xs font-medium text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50">+1</button>
                           )}
-                          <IconButton title="View details" onClick={() => onOpen(r.definition.id)}><Pencil size={15} /></IconButton>
+                          <button
+                            onClick={() => onOpen(r.definition.id)}
+                            className="px-3 py-1.5 mr-1 rounded-lg border border-border text-xs font-medium text-foreground whitespace-nowrap hover:border-accent hover:text-accent transition-colors"
+                          >
+                            Update progress
+                          </button>
                           {canManage && (
                             <Menu width={210} trigger={({ toggle }) => (
                               <IconButton title="More actions" onClick={toggle}><MoreHorizontal size={16} /></IconButton>

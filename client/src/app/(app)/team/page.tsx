@@ -200,11 +200,11 @@ export default function TeamPage() {
                   aria-pressed={selected}
                   className={clsx(
                     "h-8 px-3 rounded-full border text-sm transition-colors inline-flex items-center gap-1.5",
-                    selected ? "bg-foreground text-white border-foreground" : "bg-surface border-border text-muted hover:text-foreground hover:border-foreground/30"
+                    selected ? "bg-foreground text-background border-foreground" : "bg-surface border-border text-muted hover:text-foreground hover:border-foreground/30"
                   )}
                 >
                   {label}
-                  <span className={clsx("tabular-nums text-xs", selected ? "text-white/70" : "text-muted/80")}>{counts[key]}</span>
+                  <span className={clsx("tabular-nums text-xs", selected ? "text-background/70" : "text-muted/80")}>{counts[key]}</span>
                 </button>
               );
             })}

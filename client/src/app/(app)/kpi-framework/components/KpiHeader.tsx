@@ -20,7 +20,7 @@ function CompanyTabs({ options, value, onChange }: { options: CompanyOpt[]; valu
             onClick={() => onChange(c.key)}
             className={clsx(
               "px-4 py-2 text-sm rounded-xl whitespace-nowrap transition-colors",
-              value === c.key ? "bg-primary text-background font-semibold shadow-sm" : "text-foreground/70 hover:bg-primary/5",
+              value === c.key ? "bg-primary text-accent-foreground font-semibold shadow-sm" : "text-foreground/70 hover:bg-primary/5",
             )}
           >
             {c.name}
@@ -90,7 +90,7 @@ export function KpiHeader({
                 key={v}
                 onClick={() => onView(v)}
                 title={v === "cascade" ? "See how each Group target is split across companies and people" : undefined}
-                className={clsx("flex items-center gap-1.5 px-3.5 py-2.5 transition-colors", i > 0 && "border-l border-border", view === v ? "bg-primary text-background font-medium" : "text-foreground/70 hover:bg-primary/5")}
+                className={clsx("flex items-center gap-1.5 px-3.5 py-2.5 transition-colors", i > 0 && "border-l border-border", view === v ? "bg-primary text-accent-foreground font-medium" : "text-foreground/70 hover:bg-primary/5")}
               >
                 <Icon size={15} /> {label}
               </button>
