@@ -24,7 +24,7 @@ export type Filters = { status: string; bdo: string; priority: string; source: s
 export type Scope = "all" | "mine" | "overdue" | "week" | "shared";
 
 // ─── Stages ─────────────────────────────────────────────────────────────────
-export const STATUS_LIST = ["NEW", "CONTACTED", "QUALIFIED", "MEETING_BOOKED", "PROPOSAL_SENT", "NEGOTIATION", "CONVERTED", "LOST"] as const;
+export const STATUS_LIST = ["NEW", "QUALIFIED", "CONTACTED", "MEETING_BOOKED", "PROPOSAL_SENT", "NEGOTIATION", "CONVERTED", "LOST"] as const;
 // IN_PROGRESS is the old catch-all stage. Older leads may still carry it, so it keeps a label and
 // colours below, but it isn't in the list, so nobody can pick it any more.
 // A lead only reaches CONVERTED through "Convert to customer", never by picking the stage.
@@ -59,7 +59,7 @@ export const STAGE_LABEL: Record<string, string> = {
 // as Working so every lead lands in a card.
 export const STAGE_GROUPS: { label: string; statuses: string[]; ring: string; text: string }[] = [
   { label: "New", statuses: ["NEW"], ring: "text-zinc-400", text: "text-foreground/70" },
-  { label: "Working", statuses: ["CONTACTED", "QUALIFIED", "IN_PROGRESS"], ring: "text-sky-500", text: "text-sky-700" },
+  { label: "Working", statuses: ["QUALIFIED", "CONTACTED", "IN_PROGRESS"], ring: "text-sky-500", text: "text-sky-700" },
   { label: "In pipeline", statuses: ["MEETING_BOOKED", "PROPOSAL_SENT", "NEGOTIATION"], ring: "text-blue-500", text: "text-blue-700" },
   { label: "Converted", statuses: ["CONVERTED"], ring: "text-emerald-500", text: "text-emerald-700" },
   { label: "Lost", statuses: ["LOST"], ring: "text-red-500", text: "text-red-700" },

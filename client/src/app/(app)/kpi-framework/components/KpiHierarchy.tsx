@@ -61,7 +61,7 @@ function Branch({ node, depth, collapsed, onToggle, onOpen, companyName }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={clsx("text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
-              level === "Group" ? "bg-primary text-accent-foreground" : level === "Person" ? "bg-foreground/5 text-foreground/70" : "bg-accent/10 text-accent")}>
+              level === "Group" ? "bg-primary text-background" : level === "Person" ? "bg-foreground/5 text-foreground/70" : "bg-accent/10 text-accent")}>
               {level === "Person" ? (r.owner?.name ?? "Person") : level}
             </span>
             <button onClick={() => onOpen(id)} className="font-semibold text-foreground hover:text-accent text-left">{d.metric}</button>

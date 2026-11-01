@@ -381,8 +381,8 @@ function TeamCard({ avg, people, signedIn, pending, notInvited }: {
     [notInvited, "bg-zinc-400", "Not invited"],
   ];
   return (
-    <div className="sm:col-span-3 lg:col-span-1 rounded-2xl bg-primary text-accent-foreground p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
-      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/5 blur-2xl" />
+    <div className="sm:col-span-3 lg:col-span-1 rounded-2xl bg-primary text-background p-4 shadow-sm flex flex-col justify-between gap-3 relative overflow-hidden">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-background/5 blur-2xl" />
       <div className="flex items-center gap-2 h-6 relative">
         <BarChart3 size={16} className="opacity-80" />
         <span className="text-[13px] font-semibold opacity-90">Team progress this month</span>
@@ -396,7 +396,7 @@ function TeamCard({ avg, people, signedIn, pending, notInvited }: {
         </div>
       </div>
       <div className="relative">
-        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-white/15 gap-px">
+        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-background/15 gap-px">
           {people > 0 && split.map(([n, bar, label]) => n > 0 && (
             <div key={label} className={bar} style={{ width: `${(n / people) * 100}%` }} title={`${label}: ${n}`} />
           ))}
