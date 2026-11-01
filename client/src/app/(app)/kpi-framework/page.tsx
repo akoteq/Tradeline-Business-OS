@@ -86,7 +86,8 @@ export default function KpiFrameworkPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
+    // Wider cap (was 1400px) so the page fills the area beside the sidebar; still stops on ultra-wide screens.
+    <div className="p-4 md:p-6 w-full max-w-[1920px] mx-auto space-y-6">
       <KpiHeader
         ownCompany={ownCompany} companyName={companyName}
         period={period} onPeriod={setPeriod}
@@ -151,4 +152,3 @@ function apiError(err: Error, fallback: string): string {
   }
   return error.message?.trim() || fallback;
 }
-

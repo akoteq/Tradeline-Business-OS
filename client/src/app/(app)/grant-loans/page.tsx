@@ -33,15 +33,21 @@ type BdoOption = { id: string; name: string; company: string };
 
 const STATUS_OPTS = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "DISBURSED", "REJECTED", "WITHDRAWN"] as const;
 
+// Neutral statuses use theme tokens; coloured ones use palette shades that the dark theme remaps
+// (blue, amber, green, emerald, red). Avoid yellow/gray-400 etc. — they aren't remapped.
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-500",
+  DRAFT: "bg-subtle text-muted",
   SUBMITTED: "bg-blue-100 text-blue-700",
-  UNDER_REVIEW: "bg-yellow-100 text-yellow-700",
+  UNDER_REVIEW: "bg-amber-100 text-amber-700",
   APPROVED: "bg-green-100 text-green-700",
   DISBURSED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-700",
-  WITHDRAWN: "bg-gray-100 text-gray-400",
+  WITHDRAWN: "bg-subtle text-muted",
 };
+
+// Shared input look so every field follows the theme.
+const INPUT =
+  "border border-border bg-surface text-foreground rounded-lg px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30";
 
 const EMPTY_FORM = {
   clientName: "", bdoId: "", grantLoanType: "", funderDfi: "",
@@ -116,7 +122,7 @@ export default function GrantLoansPage() {
     {
       key: "status", label: "Status", sortable: true,
       render: (r: GrantLoan) => (
-        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? "bg-gray-100"}`}>
+        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status] ?? "bg-subtle text-muted"}`}>
           {r.status.replace(/_/g, " ")}
         </span>
       ),
@@ -129,8 +135,8 @@ export default function GrantLoansPage() {
     <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Grant & Loan Tracker</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Grant & Loan Tracker</h1>
+        <p className="text-sm text-muted mt-1">
           {isBdoRole ? "Your grant applications & loan facilitation" : "Finance Factory & Tradeline — grant applications & loan facilitation"}
         </p>
       </div>
@@ -141,12 +147,12 @@ export default function GrantLoansPage() {
           <button
             key={s}
             onClick={() => setFilters((f) => ({ ...f, status: f.status === s ? "" : s }))}
-            className={`rounded-xl border p-2.5 text-left transition-all bg-white ${filters.status === s ? "ring-2 ring-accent/40 border-accent/30" : "border-gray-200 hover:border-gray-300"}`}
+            className={`rounded-xl border p-2.5 text-left transition-all bg-surface shadow-sm ${filters.status === s ? "ring-2 ring-accent/40 border-accent/40" : "border-border hover:border-foreground/25"}`}
           >
             <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mb-1.5 ${STATUS_COLORS[s]}`}>
               {s.replace(/_/g, " ")}
             </div>
-            <div className="text-xl font-bold text-gray-900">{statusCounts[s] ?? 0}</div>
+            <div className="text-xl font-bold text-foreground">{statusCounts[s] ?? 0}</div>
           </button>
         ))}
       </div>
@@ -201,7 +207,7 @@ export default function GrantLoansPage() {
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="text-sm border border-border bg-surface text-foreground rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30">
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -267,10 +273,10 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-gray-900">{g ? "Edit Record" : "Add Grant / Loan"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+      <div className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <h2 className="font-semibold text-foreground">{g ? "Edit Record" : "Add Grant / Loan"}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto">
@@ -278,8 +284,8 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Client / SME Name *" value={form.clientName} onChange={(v) => set("clientName", v)} span={2} />
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Assigned BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
+                <label className="text-xs font-medium text-muted block mb-1">Assigned BDO</label>
+                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className={`w-full ${INPUT}`}>
                   <option value="">— Unassigned —</option>
                   {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
                 </select>
@@ -300,24 +306,24 @@ function GrantFormModal({ g, bdos, onClose, onSaved }: { g: GrantLoan | null; bd
               <Field label="Amount Disbursed (GHS)" type="number" value={form.disbursed} onChange={(v) => set("disbursed", v)} />
               <Field label="Commission %" type="number" value={form.commissionPct} onChange={(v) => set("commissionPct", v)} />
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Commission Received (GHS)</label>
+                <label className="text-xs font-medium text-muted block mb-1">Commission Received (GHS)</label>
                 <div className="flex gap-1">
-                  <input type="number" value={form.commissionReceived} onChange={(e) => set("commissionReceived", e.target.value)} className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
-                  <button type="button" onClick={autoCommission} title="Calculate from approved amount × commission %" className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-500 shrink-0">Auto</button>
+                  <input type="number" value={form.commissionReceived} onChange={(e) => set("commissionReceived", e.target.value)} className={`flex-1 min-w-0 ${INPUT}`} />
+                  <button type="button" onClick={autoCommission} title="Calculate from approved amount × commission %" className="px-2 py-1 text-xs bg-subtle hover:bg-border rounded-lg text-muted hover:text-foreground transition-colors shrink-0">Auto</button>
                 </div>
               </div>
             </div>
           </Section>
 
           <Section label="Notes">
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className={`w-full resize-none ${INPUT}`} />
           </Section>
 
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {error && <p className="text-red-700 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         </div>
 
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-foreground rounded-lg border border-border hover:bg-subtle transition-colors">Cancel</button>
           <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving…" : g ? "Update Record" : "Add Record"}
           </button>
@@ -333,21 +339,21 @@ function DetailDrawer({ g, onClose, onEdit }: { g: GrantLoan; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div className="relative bg-surface border-l border-border w-full max-w-lg h-full overflow-y-auto shadow-2xl flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div>
-            <h2 className="font-semibold text-gray-900">{g.clientName}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{g.grantLoanType ?? "Grant / Loan"}</p>
+            <h2 className="font-semibold text-foreground">{g.clientName}</h2>
+            <p className="text-xs text-muted mt-0.5">{g.grantLoanType ?? "Grant / Loan"}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90">Edit</button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <button onClick={onClose} aria-label="Close" className="text-muted hover:text-foreground"><X size={18} /></button>
           </div>
         </div>
 
         <div className="p-5 space-y-5">
           <div className="flex flex-wrap gap-2">
-            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[g.status] ?? "bg-gray-100"}`}>
+            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[g.status] ?? "bg-subtle text-muted"}`}>
               {g.status.replace(/_/g, " ")}
             </span>
           </div>
@@ -372,8 +378,8 @@ function DetailDrawer({ g, onClose, onEdit }: { g: GrantLoan; onClose: () => voi
 
           {g.notes && (
             <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Notes</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-3">{g.notes}</p>
+              <p className="text-xs font-semibold text-muted mb-1.5">Notes</p>
+              <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed bg-subtle rounded-lg p-3">{g.notes}</p>
             </div>
           )}
         </div>
@@ -384,9 +390,9 @@ function DetailDrawer({ g, onClose, onEdit }: { g: GrantLoan; onClose: () => voi
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function FinCard({ label, value, highlight, raw }: { label: string; value: string | null | undefined; highlight?: boolean; raw?: boolean }) {
+function FinCard({ label, value, highlight }: { label: string; value: string | null | undefined; highlight?: boolean; raw?: boolean }) {
   return (
-    <div className={`border rounded-lg p-3 text-center ${highlight ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+    <div className={`border rounded-lg p-3 text-center ${highlight ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-subtle border-border text-foreground"}`}>
       <div className="text-xs font-medium opacity-75">{label}</div>
       <div className="font-bold text-sm mt-0.5">{value ?? "—"}</div>
     </div>
@@ -396,7 +402,7 @@ function FinCard({ label, value, highlight, raw }: { label: string; value: strin
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{label}</p>
+      <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-3">{label}</p>
       {children}
     </div>
   );
@@ -405,8 +411,8 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 function Field({ label, value, onChange, type = "text", span, placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number; placeholder?: string }) {
   return (
     <div className={span === 2 ? "col-span-2" : ""}>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" />
+      <label className="text-xs font-medium text-muted block mb-1">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${INPUT}`} />
     </div>
   );
 }
@@ -414,8 +420,8 @@ function Field({ label, value, onChange, type = "text", span, placeholder }: { l
 function FormSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
+      <label className="text-xs font-medium text-muted block mb-1">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={`w-full ${INPUT}`}>
         {options.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     </div>
@@ -425,8 +431,8 @@ function FormSelect({ label, value, options, onChange }: { label: string; value:
 function DetailItem({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs text-gray-400 font-medium">{label}</dt>
-      <dd className="text-gray-800 mt-0.5">{value ?? "—"}</dd>
+      <dt className="text-xs text-muted font-medium">{label}</dt>
+      <dd className="text-foreground mt-0.5">{value ?? "—"}</dd>
     </div>
   );
 }

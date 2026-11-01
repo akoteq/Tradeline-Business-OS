@@ -45,9 +45,6 @@ html[data-theme="dark"] {
   --background: #121214;
   --foreground: #ececf0;
 
-  /* "Ink" colour used as a fill (bg-primary) — flips to light so it stays visible on a dark page.
-     Pair with text-background for the label colour. */
-  --color-primary: #ececf0;
   --color-accent: #e8633a;
   --color-accent-foreground: #ffffff;
 
