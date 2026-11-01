@@ -6,7 +6,7 @@ import { clsx } from "clsx";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Plus, Trash2, ChevronLeft, ChevronDown, Search, Filter, ArrowUpDown, MoreVertical,
-  Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X, Ban, AlarmClock, ListTodo,
+  Target, Check, AlertTriangle, AlertCircle, CalendarDays, ArrowUp, ArrowDown, X, Ban, AlarmClock, ListTodo, Users,
 } from "lucide-react";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,13 +15,16 @@ import { confirmAction } from "@/components/Confirm";
 import { isManager } from "@/lib/auth";
 import { useCompanies } from "@/lib/companies";
 import {
-  KpiStatus, KpiRow, KPI_STATUS_LIST, KPI_STATUS_STYLE, KPI_STATUS_LABEL, KPI_STATUS_HINT,
-  fmtKpiVal, PaceBar, AutoTag, Tag, StatusPill, WorkChip, KpiSheet, KpiDetailSheet, windowLabel, daysLeftIn,
+  KpiStatus, KpiRow, fmtKpiVal, PaceBar, KpiSheet, KpiDetailSheet, windowLabel,
   type ParentOpt, fitsUnder, ShareHint, FREQ_WORD,
 } from "@/components/kpi";
+import { KpiSummary } from "../kpi-framework/components/KpiSummary";
+import { Picker } from "../kpi-framework/components/ui";
+import { buildMonthOptions } from "../kpi-framework/components/lib";
+import { MyKpiList, type MyRow } from "./components/MyKpiList";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-type Row = KpiRow & { kind: "PERSONAL" | "STANDARD" | "ACCOUNTABLE"; canManage: boolean; canSetTarget: boolean };
+type Row = MyRow;
 type MyKpis = { owner: { id: string; name: string; company: string }; rows: Row[] };
 type AutoKey = { key: string; label: string; unit: string; kind: string; personal: boolean };
 type Bdo = { id: string; name: string; company: string };
@@ -81,7 +84,7 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
           className={clsx(
             "flex-1 px-3 py-2 transition-colors",
             i > 0 && "border-l border-border",
-            value === key ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5",
+            value === key ? "bg-primary text-background" : "bg-background text-foreground/70 hover:bg-primary/5",
           )}
         >
           {label}
@@ -135,7 +138,8 @@ export default function MyKpisPage() {
   // Staff whose login has no staff profile have nothing to track yet.
   const unlinked = !isTeam && !personId && !hasProfile;
 
-  const go = (v: string) => { setCreating(false); setView(v); };
+  const [statusFilter, setStatusFilter] = useState<KpiStatus | "">("");
+  const go = (v: string) => { setCreating(false); setStatusFilter(""); setView(v); };
 
   const { data: people = [] } = useQuery<Bdo[]>({
     queryKey: ["bdos"],
@@ -163,53 +167,40 @@ export default function MyKpisPage() {
     onError: (err) => toast.error("Couldn't update the KPI", { description: apiError(err, "Please try again.") }),
   });
 
-  const counts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
   const title = isTeam ? "Individual KPIs" : viewingSomeoneElse && data ? `${data.owner.name}'s KPIs` : "My KPIs";
   const canCreate = !isTeam && !!data;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
+      {/* Same header as Company KPIs: title left, period and actions right from lg up. */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 lg:flex-1">
           {canAssign && !isTeam && (
             <button onClick={() => go("team")} className="text-xs text-muted hover:text-accent transition-colors mb-1 inline-flex items-center gap-1">
               <ChevronLeft size={13} /> Team
             </button>
           )}
-          <h1 className="font-serif text-3xl md:text-4xl text-foreground">{title}</h1>
-          <p className="text-sm text-muted mt-1.5">
+          <h1 className="font-serif text-3xl md:text-5xl text-foreground tracking-tight">{title}</h1>
+          <p className="text-sm text-muted mt-2 max-w-3xl">
             {isTeam
               ? "Track targets, progress and the work behind them. People who need attention are listed first."
-              : <>{periodLabel(period)} for recurring KPIs; fixed-date KPIs show their whole window. The tick on each bar is where you should be by today.</>}
+              : <>See how each KPI is pacing against its target. The tick on each bar marks where {viewingSomeoneElse ? "they" : "you"} should be by today. Recurring KPIs show {periodLabel(period)}; KPIs with a fixed deadline show their full run.</>}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap lg:shrink-0">
           {canAssign && (
-            <SelectField value={current} onChange={(e) => go(e.target.value)} className="min-w-[160px]">
+            <Picker icon={Users} value={current} onChange={go} className="min-w-[180px]">
               <option value="team">Whole team</option>
               {hasProfile && <option value="me">Me</option>}
               {people.filter((p) => p.id !== user?.bdoId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </SelectField>
+            </Picker>
           )}
-          <div className="relative">
-            <CalendarDays size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground/70" />
-            <input
-              type="month"
-              value={period}
-              onChange={(e) => e.target.value && setPeriod(e.target.value)}
-              className={clsx(
-                selectClass, "relative pl-9 cursor-pointer",
-                // Hide the browser's own icon but keep the whole field clickable.
-                "[&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0",
-                "[&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full",
-                "[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
-              )}
-            />
-          </div>
+          <Picker icon={CalendarDays} value={period} onChange={setPeriod} className="min-w-[190px]">
+            {buildMonthOptions(period).map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </Picker>
           {canCreate && (
-            <button onClick={() => setCreating(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 transition-opacity">
-              <Plus size={15} /> {viewingSomeoneElse ? "Assign KPI" : "New KPI"}
+            <button onClick={() => setCreating(true)} className="flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-accent text-accent-foreground rounded-xl shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap">
+              <Plus size={16} /> {viewingSomeoneElse ? "Assign KPI" : "Add KPI"}
             </button>
           )}
         </div>
@@ -221,40 +212,24 @@ export default function MyKpisPage() {
           onOpen={(id) => go(id)}
           onAssign={(id) => { setView(id); setCreating(true); }}
         />
+      ) : unlinked ? (
+        <Empty text="Your login isn't linked to a staff profile yet, so there are no KPIs to track. Ask a Group Owner to link it in Team & Access." />
+      ) : isLoading ? (
+        <Empty text="Loading…" />
+      ) : error ? (
+        <Empty text={apiError(error, "Couldn't load KPIs.")} />
+      ) : rows.length === 0 ? (
+        <Empty
+          text={viewingSomeoneElse ? `${data?.owner.name ?? "They"} has no KPIs yet.` : "No KPIs yet. Add one: a title, a target, and the company KPI it counts toward."}
+          action={<button onClick={() => setCreating(true)} className="mt-3 text-sm font-medium text-accent hover:underline">{viewingSomeoneElse ? "Assign the first KPI" : "Add your first KPI"}</button>}
+        />
       ) : (
         <>
-          {rows.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {KPI_STATUS_LIST.filter((s) => counts[s]).map((s) => (
-                <span key={s} title={KPI_STATUS_HINT[s]} className={`px-2.5 py-1 rounded-full text-xs font-medium ${KPI_STATUS_STYLE[s]}`}>
-                  {counts[s]} {KPI_STATUS_LABEL[s]}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {unlinked ? (
-            <Empty text="Your login isn't linked to a staff profile yet, so there are no KPIs to track. Ask a Group Owner to link it in Team & Access." />
-          ) : isLoading ? (
-            <Empty text="Loading…" />
-          ) : error ? (
-            <Empty text={apiError(error, "Couldn't load KPIs.")} />
-          ) : rows.length === 0 ? (
-            <Empty text="No KPIs yet. Create one: a title, a target, and the company KPI it contributes to." action={<button onClick={() => setCreating(true)} className="mt-3 text-sm font-medium text-accent hover:underline">Create the first KPI</button>} />
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {rows.map((r) => (
-                <KpiCard
-                  key={`${r.definition.id}-${r.kind}`}
-                  row={r}
-                  companyName={companyName}
-                  onOpen={() => setOpenRow(r)}
-                  onPlusOne={() => quickAdd.mutate(r)}
-                  busy={quickAdd.isPending}
-                />
-              ))}
-            </div>
-          )}
+          <KpiSummary board={rows} statusFilter={statusFilter} onStatus={setStatusFilter} />
+          <MyKpiList
+            rows={rows} statusFilter={statusFilter} onStatusFilter={setStatusFilter} companyName={companyName}
+            onOpen={setOpenRow} onPlusOne={(r) => quickAdd.mutate(r)} busy={quickAdd.isPending} someoneElse={viewingSomeoneElse}
+          />
         </>
       )}
 
@@ -719,58 +694,6 @@ function Empty({ text, action }: { text: string; action?: React.ReactNode }) {
     <div className="rounded-xl border border-border bg-surface px-4 py-12 text-center">
       <p className="text-muted">{text}</p>
       {action}
-    </div>
-  );
-}
-
-function KpiCard({ row, onOpen, onPlusOne, busy, companyName }: { row: Row; onOpen: () => void; onPlusOne: () => void; busy: boolean; companyName: (k: string) => string }) {
-  const { definition: d, current, target, status } = row;
-  const isAuto = d.source === "AUTO";
-  const locked = row.entry?.reviewStatus === "LOCKED";
-  const left = daysLeftIn(row.window);
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4 flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <button onClick={onOpen} className="min-w-0 text-left group">
-          <div className="font-medium text-foreground leading-snug group-hover:text-accent">{d.metric}</div>
-          <div className="flex flex-wrap items-center gap-1 mt-1">
-            {isAuto && <AutoTag />}
-            {d.assignedBy && <Tag>Assigned</Tag>}
-            {row.kind === "STANDARD" && <Tag>Scorecard</Tag>}
-            {row.kind === "ACCOUNTABLE" && <Tag title="A company KPI you are accountable for">Owner</Tag>}
-            {!d.higherIsBetter && <Tag>Decrease</Tag>}
-            {d.state === "DRAFT" && <Tag>Draft</Tag>}
-          </div>
-          {row.parent && <div className="text-[11px] text-muted mt-1 truncate">↳ part of {row.parent.metric} ({companyName(row.parent.company)})</div>}
-        </button>
-        <StatusPill status={status} className="shrink-0" />
-      </div>
-
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-3xl font-semibold text-foreground tabular-nums">{fmtKpiVal(current, d.unit)}</span>
-        <span className="text-sm text-muted tabular-nums">/ {fmtKpiVal(target, d.unit)}</span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <PaceBar attainment={row.attainment} expected={row.expected} status={status} className="h-2" />
-        <span className="text-xs tabular-nums text-muted w-9 text-right">{row.attainment != null ? `${row.attainment}%` : "—"}</span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-        <span>{windowLabel(row.window, d.frequency)}{left != null && ` · ${left} day${left === 1 ? "" : "s"} left`}</span>
-        <WorkChip work={row.work} />
-      </div>
-
-      <div className="flex items-center gap-2 mt-auto pt-1">
-        {!isAuto && row.aggregation === "SUM" && d.unit === "COUNT" && !locked && d.state !== "DRAFT" && (
-          <button onClick={onPlusOne} disabled={busy} className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-foreground hover:border-accent hover:text-accent transition-colors disabled:opacity-50">
-            +1
-          </button>
-        )}
-        <button onClick={onOpen} className="flex-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/5 text-foreground hover:bg-primary/10 transition-colors">
-          {isAuto ? "Details" : "Log result"}
-        </button>
-      </div>
     </div>
   );
 }
