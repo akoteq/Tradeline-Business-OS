@@ -84,7 +84,7 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
           className={clsx(
             "flex-1 px-3 py-2 transition-colors",
             i > 0 && "border-l border-border",
-            value === key ? "bg-primary text-background" : "bg-background text-foreground/70 hover:bg-primary/5",
+            value === key ? "bg-primary text-accent-foreground" : "bg-background text-foreground/70 hover:bg-primary/5",
           )}
         >
           {label}

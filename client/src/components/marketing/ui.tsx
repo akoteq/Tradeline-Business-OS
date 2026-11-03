@@ -6,7 +6,7 @@ export function Container({ children, className = "" }: { children: ReactNode; c
 
 /** Primary action. Ink on white keeps contrast well above 4.5:1; the orange is kept for accents. */
 export const buttonPrimary =
-  "inline-flex h-11 items-center rounded-lg bg-primary px-5 text-base font-medium text-background transition-opacity hover:opacity-90";
+  "inline-flex h-11 items-center rounded-lg bg-primary px-5 text-base font-medium text-accent-foreground transition-opacity hover:opacity-90";
 
 /**
  * Heading on the left, content on the right, a hairline above. The heading stays in view while
