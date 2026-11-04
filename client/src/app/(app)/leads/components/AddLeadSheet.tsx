@@ -15,10 +15,10 @@ import {
 
 const STEPS = [
   { title: "Who's the lead?", subtitle: "Start with the business. The rest can wait.", nudge: "Let's start" },
-  { title: "What happens next?", subtitle: "Set a follow-up so this lead doesn't go cold.", nudge: "Last step" },
+  { title: "What happens next?", subtitle: "Add what you know. The follow-up date can wait.", nudge: "Last step" },
 ] as const;
 
-const QUICK_DAYS: [string, string][] = [["1", "Tomorrow"], ["3", "In 3 days"], ["7", "Next week"], ["custom", "Pick a date"]];
+const QUICK_DAYS: [string, string][] = [["none", "Not yet"], ["1", "Tomorrow"], ["3", "In 3 days"], ["7", "Next week"], ["custom", "Pick a date"]];
 
 export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLead }: {
   lead: Lead | null; bdos: BdoOption[]; canAssign: boolean; onClose: () => void; onSaved: () => void;
@@ -43,16 +43,13 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
   const hasName = form.businessName.trim() !== "";
   // A new lead needs its industry; region stays optional.
   const needsIndustry = !isEdit && !form.industry;
-  // A new lead must have a follow-up date so it doesn't go cold.
-  const needsFollowUp = !isEdit && !form.followUpDate;
   const quick = ["1", "3", "7"].find((n) => inDays(Number(n)) === form.followUpDate);
-  const quickValue = customDate || (form.followUpDate && !quick) ? "custom" : quick ?? "";
+  const quickValue = customDate || (form.followUpDate && !quick) ? "custom" : quick ?? "none";
   const stages = form.status === "CONVERTED" ? STATUS_LIST : EDITABLE_STATUSES;
 
   const save = async (allowDuplicate = false) => {
     if (!hasName) { setError("Add the business name first."); go(0); return; }
     if (needsIndustry) { setError("Pick the industry this business is in."); go(0); return; }
-    if (needsFollowUp) { setError("Pick when you'll follow up with this lead."); return; }
     setSaving(true); setError(""); setBlocked(null);
     try {
       const body = { ...formToBody(form, canAssign), ...(allowDuplicate ? { allowDuplicate: true } : {}) };
@@ -71,7 +68,7 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
     <WizardShell
       steps={STEPS} step={step} dir={dir} reached={reached} onGo={go} onClose={onClose} error={error}
       primary={last
-        ? { label: saving ? "Saving…" : isEdit ? "Save changes" : "Add lead", disabled: saving || !hasName || needsIndustry || needsFollowUp || !!blocked, onClick: () => save() }
+        ? { label: saving ? "Saving…" : isEdit ? "Save changes" : "Add lead", disabled: saving || !hasName || needsIndustry || !!blocked, onClick: () => save() }
         : { label: "Continue", disabled: !hasName || needsIndustry, onClick: () => go(step + 1) }}
     >
       {step === 0 && (
@@ -154,20 +151,19 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
             <Chips label="Stage" value={form.status} onChange={(v) => set("status", v)} options={stages.map((s) => [s, STATUS_LABEL[s]] as [string, string])} />
           </div>
           <div>
-            <Label hint={isEdit ? undefined : "(required)"}>When will you follow up?</Label>
+            <Label hint="(optional)">When will you follow up?</Label>
             <Chips
               label="Follow-up" value={quickValue}
-              onChange={(v) => { setError(""); if (v === "custom") setCustomDate(true); else { setCustomDate(false); set("followUpDate", inDays(Number(v))); } }}
+              onChange={(v) => { setError(""); if (v === "custom") setCustomDate(true); else { setCustomDate(false); set("followUpDate", v === "none" ? "" : inDays(Number(v))); } }}
               options={QUICK_DAYS}
             />
             {quickValue === "custom" && (
               <input
-                type="date" value={form.followUpDate} required={!isEdit} min={isEdit ? undefined : inDays(0)}
+                type="date" value={form.followUpDate} min={isEdit ? undefined : inDays(0)}
                 onChange={(e) => { set("followUpDate", e.target.value); setError(""); }}
                 className={inputClass + " mt-2"} aria-label="Follow-up date"
               />
             )}
-            {needsFollowUp && <p className="mt-1.5 text-xs text-muted">Pick a day to add the lead.</p>}
           </div>
           <div>
             <Label>Where did it come from?</Label>

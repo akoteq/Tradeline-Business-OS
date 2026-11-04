@@ -105,7 +105,7 @@ export function Toaster() {
               transition={{ type: "spring", stiffness: 420, damping: 32 }}
               role={t.kind === "error" ? "alert" : "status"}
               aria-live={t.kind === "error" ? "assertive" : "polite"}
-              className="pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-2xl bg-primary text-background shadow-xl shadow-black/20 ring-1 ring-white/10"
+              className="pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-2xl bg-primary text-accent-foreground shadow-xl shadow-black/20 ring-1 ring-white/10"
             >
               <div className="flex items-start gap-3 py-3 pl-3.5 pr-2.5">
                 <Icon size={18} className={clsx("mt-0.5 shrink-0", tone)} aria-hidden />

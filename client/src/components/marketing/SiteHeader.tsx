@@ -23,7 +23,7 @@ export function SiteHeader() {
         </nav>
         <Link
           href={site.loginHref}
-          className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-base font-medium text-background transition-opacity hover:opacity-90"
+          className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-base font-medium text-accent-foreground transition-opacity hover:opacity-90"
         >
           Log in
         </Link>

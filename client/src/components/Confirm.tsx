@@ -133,7 +133,7 @@ function Dialog({ req, reduce }: { req: Request; reduce: boolean }) {
               disabled={blocked}
               className={clsx(
                 "rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-                danger ? "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500" : "bg-primary text-background hover:bg-primary/90 focus-visible:ring-primary"
+                danger ? "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500" : "bg-primary text-accent-foreground hover:bg-primary/90 focus-visible:ring-primary"
               )}
             >
               {confirmLabel ?? (danger ? "Delete" : "Continue")}

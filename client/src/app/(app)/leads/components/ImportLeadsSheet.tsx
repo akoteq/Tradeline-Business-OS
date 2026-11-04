@@ -114,7 +114,6 @@ export function ImportLeadsSheet({ bdos, canAssign, onClose, onImported }: {
   const commit = async () => {
     const chosen = rows.filter((r) => r.include && isValid(r.lead));
     if (!chosen.length) return;
-    if (!followUp) { setError("Pick a follow-up date for rows that don't have one."); return; }
     setSaving(true); setError("");
     try {
       const { data } = await api.post<Result>("/leads/import/commit", {
@@ -214,6 +213,10 @@ export function ImportLeadsSheet({ bdos, canAssign, onClose, onImported }: {
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-muted">Follow up rows without a date:</span>
+                    <button
+                      type="button" onClick={() => setFollowUp("")} aria-pressed={!followUp}
+                      className={clsx("rounded-full border px-2.5 py-1 text-xs", !followUp ? "border-accent bg-accent/10 font-medium text-foreground" : "border-border text-muted hover:text-foreground")}
+                    >Not yet</button>
                     {QUICK.map(([d, label]) => (
                       <button
                         key={d} type="button" onClick={() => setFollowUp(inDays(d))} aria-pressed={followUp === inDays(d)}

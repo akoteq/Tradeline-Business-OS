@@ -396,7 +396,7 @@ function TeamCard({ avg, people, signedIn, pending, notInvited }: {
         </div>
       </div>
       <div className="relative">
-        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-background/15 gap-px">
+        <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-white/15 gap-px">
           {people > 0 && split.map(([n, bar, label]) => n > 0 && (
             <div key={label} className={bar} style={{ width: `${(n / people) * 100}%` }} title={`${label}: ${n}`} />
           ))}
