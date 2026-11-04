@@ -30,8 +30,10 @@ const MET = ["MEETING", "REFERRAL", "EVENT", "PARTNERSHIP", "OTHER"];
 const t = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ");
 const showDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString() : "—");
 const errText = (e: unknown, f: string) => (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? f;
-const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30";
-const STAGE_STYLE: Record<string, string> = { NEW: "bg-gray-100 text-gray-600", DEVELOPING: "bg-blue-100 text-blue-700", ACTIVE: "bg-green-100 text-green-700", STRONG: "bg-emerald-100 text-emerald-800", DORMANT: "bg-slate-100 text-slate-500" };
+// Theme-aware: bg-surface / text-foreground / border-border / text-muted all flip with data-theme.
+const inputCls = "w-full border border-border bg-surface text-foreground placeholder:text-muted rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30";
+// DORMANT uses the gray scale (not slate) so it flips with the dark theme.
+const STAGE_STYLE: Record<string, string> = { NEW: "bg-gray-100 text-gray-600", DEVELOPING: "bg-blue-100 text-blue-700", ACTIVE: "bg-green-100 text-green-700", STRONG: "bg-emerald-100 text-emerald-800", DORMANT: "bg-gray-100 text-gray-500" };
 
 export default function ContactsPage() {
   const qc = useQueryClient();
@@ -70,7 +72,7 @@ export default function ContactsPage() {
         onDelete={(r) => confirmAction({ title: `Delete ${r.name}?`, body: "Their interactions and commitments go with them.", confirmLabel: "Delete contact" }).then((ok) => { if (ok) api.delete(`/contacts/${r.id}`).then(() => { toast.success("Contact deleted", { description: r.name }); refresh(); }, (e) => toast.failed("Couldn't delete the contact", e)); })}
         filterBar={
           <div className="flex gap-3 flex-wrap items-center">
-            <select value={stage} onChange={(e) => setStage(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5"><option value="">All stages</option>{STAGES.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
+            <select value={stage} onChange={(e) => setStage(e.target.value)} className="text-sm border border-border text-foreground rounded-lg px-2 py-1.5"><option value="">All stages</option>{STAGES.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
             <label className="flex items-center gap-1.5 text-sm text-gray-600"><input type="checkbox" checked={dueOnly} onChange={(e) => setDueOnly(e.target.checked)} /> Follow-up due</label>
           </div>
         }
@@ -102,12 +104,12 @@ function ContactDrawer({ id, onClose, onEdit }: { id: string; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
+      <div className="relative bg-surface text-foreground w-full max-w-lg h-full overflow-y-auto shadow-2xl">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div><h2 className="font-semibold text-gray-900">{c.name}</h2><p className="text-xs text-gray-500">{[c.role, c.organisation].filter(Boolean).join(", ")}</p></div>
           <div className="flex items-center gap-2">
             {c.canEdit && <button onClick={() => onEdit(c)} className="px-3 py-1.5 text-xs font-medium bg-accent text-accent-foreground rounded-lg">Edit</button>}
-            <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>
         <div className="p-5 space-y-5 text-sm">
@@ -129,13 +131,13 @@ function ContactDrawer({ id, onClose, onEdit }: { id: string; onClose: () => voi
               <div key={m.id} className="flex items-center justify-between gap-2 border-l-2 border-accent/30 pl-3 py-1">
                 <div><p className={m.status === "DONE" ? "line-through text-gray-400" : "text-gray-800"}>{m.description}</p>
                   <p className="text-xs text-gray-400">{m.owedBy === "US" ? `We owe it${m.ownerName ? ` (${m.ownerName})` : ""}` : "They owe it"}{m.dueDate ? ` · by ${showDate(m.dueDate)}` : ""}{m.status === "OPEN" && m.dueDate && new Date(m.dueDate) < new Date() ? " · overdue" : ""}</p></div>
-                <select value={m.status} onChange={(e) => setStatus(m.id, e.target.value)} className="text-xs border border-gray-200 rounded px-1 py-1">{["OPEN", "DONE", "CANCELLED"].map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
+                <select value={m.status} onChange={(e) => setStatus(m.id, e.target.value)} className="text-xs border border-border text-foreground rounded px-1 py-1">{["OPEN", "DONE", "CANCELLED"].map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
               </div>
             ))}
             <div className="flex flex-wrap gap-2 mt-2">
               <input value={commit.description} onChange={(e) => setCommit({ ...commit, description: e.target.value })} placeholder="Something agreed…" className={`${inputCls} flex-1 min-w-40`} />
-              <select value={commit.owedBy} onChange={(e) => setCommit({ ...commit, owedBy: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2"><option value="US">We owe</option><option value="THEM">They owe</option></select>
-              <input type="date" value={commit.dueDate} onChange={(e) => setCommit({ ...commit, dueDate: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2" />
+              <select value={commit.owedBy} onChange={(e) => setCommit({ ...commit, owedBy: e.target.value })} className="text-sm border border-border bg-surface text-foreground rounded-lg px-2"><option value="US">We owe</option><option value="THEM">They owe</option></select>
+              <input type="date" value={commit.dueDate} onChange={(e) => setCommit({ ...commit, dueDate: e.target.value })} className="text-sm border border-border bg-surface text-foreground rounded-lg px-2" />
               <button disabled={!commit.description.trim()} onClick={() => add("commitments", { ...commit, dueDate: commit.dueDate || null }, () => setCommit({ description: "", owedBy: "US", dueDate: "" }))} className="px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded-lg disabled:opacity-50">Add</button>
             </div>
           </div>
@@ -143,10 +145,10 @@ function ContactDrawer({ id, onClose, onEdit }: { id: string; onClose: () => voi
           <div>
             <p className="text-xs font-semibold text-gray-400 mb-1.5">Conversations</p>
             <div className="bg-gray-50 rounded-lg p-3 space-y-2 mb-3">
-              <textarea value={note.summary} onChange={(e) => setNote({ ...note, summary: e.target.value })} rows={2} placeholder="What was discussed?" className={`${inputCls} bg-white resize-none`} />
+              <textarea value={note.summary} onChange={(e) => setNote({ ...note, summary: e.target.value })} rows={2} placeholder="What was discussed?" className={`${inputCls} resize-none`} />
               <div className="flex gap-2">
-                <select value={note.type} onChange={(e) => setNote({ ...note, type: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 bg-white">{["MEETING", "CALL", "EMAIL", "EVENT", "OTHER"].map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
-                <input type="date" value={note.date} onChange={(e) => setNote({ ...note, date: e.target.value })} className="text-sm border border-gray-200 rounded-lg px-2 bg-white" />
+                <select value={note.type} onChange={(e) => setNote({ ...note, type: e.target.value })} className="text-sm border border-border bg-surface text-foreground rounded-lg px-2">{["MEETING", "CALL", "EMAIL", "EVENT", "OTHER"].map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
+                <input type="date" value={note.date} onChange={(e) => setNote({ ...note, date: e.target.value })} className="text-sm border border-border bg-surface text-foreground rounded-lg px-2" />
                 <button disabled={!note.summary.trim()} onClick={() => add("interactions", note, () => setNote({ ...note, summary: "" }))} className="ml-auto px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded-lg disabled:opacity-50">Log</button>
               </div>
             </div>
@@ -207,19 +209,19 @@ function ContactModal({ contact, onClose, onSaved, onOpen }: { contact: ContactR
   };
 
   const F = (label: string, k: keyof typeof form, type = "text") => (
-    <div><label className="text-xs font-medium text-gray-600 block mb-1">{label}</label><input type={type} value={form[k] as string} onChange={(e) => set(k, e.target.value)} className={inputCls} /></div>
+    <div><label className="text-xs font-medium text-muted block mb-1">{label}</label><input type={type} value={form[k] as string} onChange={(e) => set(k, e.target.value)} className={inputCls} /></div>
   );
   const matches = clientSearch.trim() ? clients.filter((c) => c.companyName.toLowerCase().includes(clientSearch.toLowerCase()) && !form.smeIds.includes(c.id)).slice(0, 6) : [];
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] flex flex-col">
-        <div className="px-5 py-4 border-b flex items-center justify-between"><h2 className="font-semibold">{contact ? `Edit ${contact.name}` : "New contact"}</h2><button onClick={onClose} className="text-gray-400"><X size={18} /></button></div>
+      <div className="bg-surface text-foreground rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between"><h2 className="font-semibold text-foreground">{contact ? `Edit ${contact.name}` : "New contact"}</h2><button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button></div>
         <div className="p-5 space-y-3 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {error && <div className="bg-red-50 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
           {dups && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-              <p className="font-medium text-amber-900">Similar contacts already exist:</p>
+              <p className="font-medium text-amber-800">Similar contacts already exist:</p>
               {dups.map((d) => <p key={d.id} className="flex justify-between mt-1"><span>{d.name}{d.organisation ? ` · ${d.organisation}` : ""}</span><button onClick={() => onOpen(d.id)} className="text-xs font-semibold text-accent">Open</button></p>)}
               <p className="text-xs text-amber-800 mt-1">If this is a different person, save anyway.</p>
             </div>
@@ -228,25 +230,25 @@ function ContactModal({ contact, onClose, onSaved, onOpen }: { contact: ContactR
             {F("Name *", "name")}{F("Organisation", "organisation")}{F("Role", "role")}{F("Sector", "sector")}
             <div className="sm:col-span-2">{F("Interests (comma-separated)", "interests")}</div>
             {!contact?.contactDetailsHidden && <>{F("Phone", "phone")}{F("Email", "email", "email")}</>}
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">How we met</label><select value={form.howMet} onChange={(e) => set("howMet", e.target.value)} className={inputCls}>{MET.map((m) => <option key={m} value={m}>{t(m)}</option>)}</select></div>
+            <div><label className="text-xs font-medium text-muted block mb-1">How we met</label><select value={form.howMet} onChange={(e) => set("howMet", e.target.value)} className={inputCls}>{MET.map((m) => <option key={m} value={m}>{t(m)}</option>)}</select></div>
             {F("Details (event, who referred…)", "howMetDetails")}
             {F("Introduced by", "introducedBy")}
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Relationship owner</label>
+            <div><label className="text-xs font-medium text-muted block mb-1">Relationship owner</label>
               <select value={form.ownerBdoId} disabled={staff} onChange={(e) => set("ownerBdoId", e.target.value)} className={inputCls}><option value="">—</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-            <div><label className="text-xs font-medium text-gray-600 block mb-1">Stage</label><select value={form.stage} onChange={(e) => set("stage", e.target.value)} className={inputCls}>{STAGES.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select></div>
+            <div><label className="text-xs font-medium text-muted block mb-1">Stage</label><select value={form.stage} onChange={(e) => set("stage", e.target.value)} className={inputCls}>{STAGES.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select></div>
             {F("Next follow-up", "nextFollowUpDate", "date")}
             <div className="sm:col-span-2">
-              <label className="text-xs font-medium text-gray-600 block mb-1">Linked clients</label>
+              <label className="text-xs font-medium text-muted block mb-1">Linked clients</label>
               <div className="flex flex-wrap gap-1 mb-1">{form.smeIds.map((id) => <span key={id} className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded flex items-center gap-1">{clients.find((c) => c.id === id)?.companyName ?? "Client"}<button onClick={() => set("smeIds", form.smeIds.filter((x) => x !== id))}><X size={10} /></button></span>)}</div>
               <input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Search clients to link…" className={inputCls} />
-              {matches.map((c) => <button key={c.id} onClick={() => { set("smeIds", [...form.smeIds, c.id]); setClientSearch(""); }} className="block w-full text-left text-sm px-2 py-1 hover:bg-gray-50">{c.companyName}</button>)}
+              {matches.map((c) => <button key={c.id} onClick={() => { set("smeIds", [...form.smeIds, c.id]); setClientSearch(""); }} className="block w-full text-left text-sm px-2 py-1 hover:bg-subtle">{c.companyName}</button>)}
             </div>
             <div className="sm:col-span-2">{F("Consent note (Data Protection Act, 2012)", "consentNote")}</div>
-            {canSeePrivate && <div className="sm:col-span-2"><label className="text-xs font-medium text-gray-600 block mb-1">Private notes (you and the Group Owner only)</label><textarea value={form.privateNotes} onChange={(e) => set("privateNotes", e.target.value)} rows={2} className={`${inputCls} resize-none`} /></div>}
+            {canSeePrivate && <div className="sm:col-span-2"><label className="text-xs font-medium text-muted block mb-1">Private notes (you and the Group Owner only)</label><textarea value={form.privateNotes} onChange={(e) => set("privateNotes", e.target.value)} rows={2} className={`${inputCls} resize-none`} /></div>}
           </div>
         </div>
-        <div className="px-5 py-3 border-t flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-border text-foreground hover:bg-subtle rounded-lg">Cancel</button>
           <button onClick={save} disabled={saving || !form.name.trim()} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Saving…" : dups ? "Save anyway" : "Save"}</button>
         </div>
       </div>
