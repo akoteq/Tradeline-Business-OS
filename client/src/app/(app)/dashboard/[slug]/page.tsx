@@ -86,7 +86,7 @@ export default function CompanyDashboardPage({ params }: { params: Promise<{ slu
                 <OverviewTab data={data} isBapx={!!isBapx} stats={buildStats(data, !!isBapx)} alerts={buildAlerts(data, !!isBapx)} onGo={goTo} />
               </TabPanel>
             )}
-            {activeId === "finance" && <TabPanel id="finance"><FinanceTab finance={data.finance} /></TabPanel>}
+            {activeId === "finance" && <TabPanel id="finance"><FinanceTab companyKey={data.company.key} /></TabPanel>}
             {activeId === "deals" && (
               <TabPanel id="deals"><DealsTab deals={data.topDeals} isBapx={!!isBapx} dealsHref={company ? companyHref(company) : undefined} /></TabPanel>
             )}

@@ -8,9 +8,10 @@ export type CompanyDash = {
   closedWon: number;
   byStage: { dealStage: string; count: number }[];
   byHealth: { dealHealth: string; count: number }[];
+  byPayment?: { status: string; count: number }[];
   invoice: { status: string; count: number }[];
   revenue: { revenuePotential: number; revenueReceived: number; outstanding: number };
-  topDeals: { id: string; businessName: string; dealStage: string; dealHealth: string; received: number; potential: number; invoiceStatus: string }[];
+  topDeals: { id: string; businessName: string; dealStage: string; dealHealth: string; paymentStatus?: string | null; received: number; potential: number; invoiceStatus: string }[];
   tasks: { open: number; overdue: number; completed: number };
   /**
    * Period comparison. Optional until the API ships it. With it, flow numbers

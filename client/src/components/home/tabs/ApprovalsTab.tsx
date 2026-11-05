@@ -1,5 +1,6 @@
 "use client";
 
+import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "@/app/(app)/tasks/components/TaskMoney";
 import Link from "next/link";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,14 +19,14 @@ const fmtDay = (d: string | null) => {
   return isNaN(dt.getTime()) ? null : dt.toLocaleDateString("en-GH", { month: "short", day: "numeric" });
 };
 
-const money = (t: PendingApproval) => (t.revenueActual ? `${t.currency && t.currency !== "GHS" ? t.currency : "GHS"} ${t.revenueActual.toLocaleString()}` : null);
+const money = (t: PendingApproval) => (t.expectedRevenue ? `${t.currency && t.currency !== "GHS" ? t.currency : "GHS"} ${t.expectedRevenue.toLocaleString()}` : null);
 
 // Approving moves KPIs, deal payments and alerts, so everything that reads them refreshes.
-const AFFECTED = ["tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "alerts", "executive-dashboard"];
+const AFFECTED = ["finance", "tasks", "my-kpis", "kpi-board", "kpi-cascade", "deal-payments", "tradeline", "bapx", "company-deals", "alerts", "executive-dashboard"];
 
 /**
- * Work staff finished, waiting for the Group Owner (or their Business CEO). Approving makes its
- * money and results count; rejecting sends it back to In progress with the reason, or, for a
+ * Work staff finished, waiting for the Group Owner (or their Business CEO). Approving records what
+ * was really received and spent, and makes its results count; rejecting sends it back to In progress with the reason, or, for a
  * change to already-approved work, keeps the approved version.
  */
 export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[]; byKey: CompanyMap }) {
@@ -34,15 +35,17 @@ export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  const [moneyFor, setMoneyFor] = useState<PendingApproval | null>(null);
 
-  const review = async (t: PendingApproval, action: "approve" | "reject") => {
+  const review = async (t: PendingApproval, action: "approve" | "reject", money?: ReturnType<typeof moneyBody>) => {
     setBusy(t.id);
     setError(null);
     try {
-      await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : {});
+      await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : money ? { money } : {});
       toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: t.deliverable });
       setRejecting(null);
       setReason("");
+      setMoneyFor(null);
       for (const key of AFFECTED) qc.invalidateQueries({ queryKey: [key] });
     } catch (err) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? `Couldn't ${action} the task.`;
@@ -54,6 +57,13 @@ export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[
 
   return (
     <TabPanel className="space-y-4">
+      {moneyFor && (
+        <TaskMoneySheet
+          task={moneyFor} title="Approve this task" confirmLabel="Approve" busy={busy === moneyFor.id}
+          error={error?.id === moneyFor.id ? error.message : undefined}
+          onConfirm={(m) => review(moneyFor, "approve", m)} onClose={() => { setMoneyFor(null); setError(null); }}
+        />
+      )}
       <SectionHeader
         icon={ClipboardCheck}
         label="Waiting for your approval"
@@ -99,7 +109,7 @@ export function ApprovalsTab({ approvals, byKey }: { approvals: PendingApproval[
                     </button>
                     <button
                       type="button"
-                      onClick={() => review(t, "approve")}
+                      onClick={() => (hasTaskMoney(t) ? setMoneyFor(t) : review(t, "approve"))}
                       disabled={isBusy}
                       className="rounded-full bg-accent px-3.5 py-1 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                     >

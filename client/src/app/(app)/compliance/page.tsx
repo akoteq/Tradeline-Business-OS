@@ -22,7 +22,7 @@ type Rec = {
   applicability: string; notApplicableReason?: string; status: string; referenceNumber?: string; issueDate?: string | null; expiryDate?: string | null;
   nextRenewalDate?: string | null; evidenceDocIds: string[]; verified: boolean; verifiedByName?: string | null; verifiedAt?: string | null;
   responsibleBdoId?: string | null; responsibleName?: string | null; nextAction?: string; nextActionDate?: string | null;
-  opportunityDealId?: string | null; state: string; renewalDue: boolean; dueDate: string | null; daysToDue: number | null; lastOutreachAt?: string | null;
+  opportunityDealId?: string | null; opportunityLeadId?: string | null; state: string; renewalDue: boolean; dueDate: string | null; daysToDue: number | null; lastOutreachAt?: string | null;
 };
 type ReqType = { id: string; code: string; regulator: string; name: string; perSubject: boolean; renewal: { kind: string; intervalMonths?: number | null } };
 type Bdo = { id: string; name: string; company: string };
@@ -91,9 +91,10 @@ export default function CompliancePage() {
           {r.state === "AWAITING_VERIFICATION" && <button onClick={() => verify(r, true)} className="font-semibold text-green-700 hover:underline">Verify</button>}
           {r.state === "VERIFIED" && <button onClick={() => confirmAction({ title: "Mark as not verified?", body: `${r.requirementName} for ${r.clientName} goes back to awaiting verification.`, confirmLabel: "Unverify", danger: false }).then((ok) => { if (ok) verify(r, false); })} className="text-gray-500 hover:underline">Unverify</button>}
           <button onClick={() => setOutreach(r)} className="text-accent hover:underline flex items-center gap-1"><Phone size={11} /> Log outreach</button>
-          {!r.opportunityDealId && companies.find((c) => c.key === r.company)?.modules?.complianceOpportunities && r.state !== "NOT_APPLICABLE" &&
+          {!r.opportunityDealId && !r.opportunityLeadId && companies.find((c) => c.key === r.company)?.modules?.complianceOpportunities && r.state !== "NOT_APPLICABLE" &&
             <button onClick={() => setOpportunity(r)} className="text-accent hover:underline flex items-center gap-1"><Briefcase size={11} /> Opportunity</button>}
-          {r.opportunityDealId && <span className="text-gray-400">In pipeline</span>}
+          {r.opportunityLeadId && <span className="text-gray-400">In leads</span>}
+          {r.opportunityDealId && <span className="text-gray-400">In deals</span>}
         </div>
       ),
     },
@@ -332,7 +333,6 @@ function OutreachModal({ record, onClose, onSaved }: { record: Rec; onClose: () 
 }
 
 function OpportunityModal({ record, onClose, onSaved }: { record: Rec; onClose: () => void; onSaved: () => void }) {
-  const { byKey } = useCompanies();
   const { data: bdos = [] } = useQuery<Bdo[]>({ queryKey: ["bdos", record.company], queryFn: () => fetcher(`/bdo?company=${record.company}`) });
   const renewal = ["VERIFIED", "AWAITING_VERIFICATION"].includes(record.state) && record.renewalDue;
   const [form, setForm] = useState({ ownerBdoId: record.responsibleBdoId ?? "", potentialFeeGhs: "", nextAction: "", nextActionDate: "", serviceType: renewal ? "Renewal support" : "Registration assistance" });
@@ -343,16 +343,15 @@ function OpportunityModal({ record, onClose, onSaved }: { record: Rec; onClose: 
     setSaving(true); setError("");
     try {
       await api.post(`/compliance/${record.id}/opportunity`, { ...form, potentialFeeGhs: form.potentialFeeGhs || null, nextActionDate: form.nextActionDate || null });
-      const c = byKey[record.company];
-      setDone(c ? `${companyHref(c)}?q=${encodeURIComponent(record.clientName)}` : "/");
+      setDone(`/leads?q=${encodeURIComponent(record.clientName)}`);
     } catch (e) { setError(errText(e, "Failed to create the opportunity.")); } finally { setSaving(false); }
   };
   return (
     <Modal title={`New opportunity — ${record.clientName}`} onClose={done ? onSaved : onClose} footer={done
-      ? <><Link href={done} className="px-4 py-2 text-sm font-medium text-accent">Open in pipeline →</Link><button onClick={onSaved} className="px-4 py-2 text-sm border rounded-lg">Close</button></>
+      ? <><Link href={done} className="px-4 py-2 text-sm font-medium text-accent">Open in leads →</Link><button onClick={onSaved} className="px-4 py-2 text-sm border rounded-lg">Close</button></>
       : <><button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-        <button onClick={save} disabled={saving || !form.ownerBdoId} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Creating…" : "Create deal"}</button></>}>
-      {done ? <p className="text-sm text-green-700">The deal is in the pipeline and counts towards the dashboards and KPIs like any other.</p> : <>
+        <button onClick={save} disabled={saving || !form.ownerBdoId} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Creating…" : "Create lead"}</button></>}>
+      {done ? <p className="text-sm text-green-700">This is now a lead, linked to the client. When it is won, convert it and add a deal.</p> : <>
         {error && <div className="bg-red-50 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
         <p className="text-xs text-gray-500">{record.regulator} {record.requirementName}{record.subject ? ` (${record.subject})` : ""} — {STATE_LABEL[record.state]}.</p>
         <L label="Service"><input value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} className={inputCls} /></L>

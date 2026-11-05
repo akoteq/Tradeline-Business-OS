@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { api } from "@/lib/api";
+import { api, fetcher } from "@/lib/api";
 import { KpiSheet } from "@/components/kpi";
 import { useCompanies } from "@/lib/companies";
 import { Field, FormError, PROJECT_STATUSES, STATUS_LABEL, apiError, inputClass, primaryBtn, secondaryBtn, type Project } from "../lib";
@@ -12,16 +13,21 @@ import { Field, FormError, PROJECT_STATUSES, STATUS_LABEL, apiError, inputClass,
  * page. Only the Group Owner picks the company (or Shared); a Business CEO's projects are their
  * own company's.
  */
-export function ProjectFormSheet({ project, canPickCompany, onClose, onSaved }: {
+export type ProjectPrefill = { dealId: string; dealSource: string; company: string; name: string };
+
+export function ProjectFormSheet({ project, prefill, canPickCompany, onClose, onSaved }: {
   project: Project | null;
+  /** Started from a deal: the deal is already chosen. */
+  prefill?: ProjectPrefill | null;
   canPickCompany: boolean;
   onClose: () => void;
   onSaved: (saved: Project) => void;
 }) {
   const { companies } = useCompanies();
   const [form, setForm] = useState({
-    name: project?.name ?? "",
-    company: project?.company ?? companies[0]?.key ?? "SHARED",
+    name: project?.name ?? prefill?.name ?? "",
+    company: project?.company ?? prefill?.company ?? companies[0]?.key ?? "SHARED",
+    deal: project?.dealId ? `${project.dealSource}:${project.dealId}` : prefill ? `${prefill.dealSource}:${prefill.dealId}` : "",
     status: project?.status ?? "ACTIVE",
     startDate: project?.startDate?.slice(0, 10) ?? "",
     endDate: project?.endDate?.slice(0, 10) ?? "",
@@ -31,6 +37,13 @@ export function ProjectFormSheet({ project, canPickCompany, onClose, onSaved }: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => { setForm((f) => ({ ...f, [k]: v })); if (error) setError(""); };
+
+  // Deals in this project's company. Optional: not all projects come from a deal.
+  const { data: deals = [] } = useQuery<{ id: string; source: string; name: string }[]>({
+    queryKey: ["task-deal-options", form.company],
+    queryFn: () => fetcher(`/tasks/deal-options?company=${encodeURIComponent(form.company)}`),
+    enabled: form.company !== "SHARED",
+  });
 
   const save = async () => {
     if (!form.name.trim()) { setError("Give the project a name."); return; }
@@ -44,6 +57,8 @@ export function ProjectFormSheet({ project, canPickCompany, onClose, onSaved }: 
       endDate: form.endDate || null,
       description: form.description.trim() || null,
       notes: form.notes.trim() || null,
+      dealId: form.deal ? form.deal.split(":")[1] : null,
+      dealSource: form.deal ? form.deal.split(":")[0] : null,
     };
     try {
       const res = project ? await api.put(`/projects/${project.id}`, body) : await api.post("/projects", body);
@@ -78,9 +93,19 @@ export function ProjectFormSheet({ project, canPickCompany, onClose, onSaved }: 
 
         {canPickCompany && (
           <Field label="Which company is it for?">
-            <select value={form.company} onChange={(e) => set("company", e.target.value)} className={inputClass}>
+            <select value={form.company} onChange={(e) => { const company = e.target.value; setForm((f) => ({ ...f, company, deal: "" })); }} className={inputClass}>
               {companies.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
               <option value="SHARED">Shared across the group</option>
+            </select>
+          </Field>
+        )}
+
+        {form.company !== "SHARED" && (deals.length > 0 || form.deal) && (
+          <Field label="Which deal does it deliver?" hint="(optional)">
+            <select value={form.deal} onChange={(e) => set("deal", e.target.value)} className={inputClass}>
+              <option value="">No deal</option>
+              {form.deal && !deals.some((d) => `${d.source}:${d.id}` === form.deal) && <option value={form.deal}>The linked deal</option>}
+              {deals.map((d) => <option key={d.id} value={`${d.source}:${d.id}`}>{d.name}</option>)}
             </select>
           </Field>
         )}

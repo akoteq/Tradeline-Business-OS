@@ -72,9 +72,12 @@ function AttentionCard({ alerts, onGo }: { alerts: Alert[]; onGo: (tab: string) 
   );
 }
 
-// Won is green, lost is faded, on hold is amber; the rest are neutral. Biggest stage first.
+// Paid is green, part paid amber, overdue red; the rest are neutral. Biggest first.
 const stageBar = (stage: string) => {
   const v = stage.toLowerCase();
+  if (v === "paid") return "bg-emerald-500";
+  if (v === "overdue") return "bg-red-500";
+  if (v === "partial") return "bg-amber-500";
   if (v.includes("won")) return "bg-emerald-500";
   if (v.includes("lost")) return "bg-foreground/25";
   if (v.includes("hold")) return "bg-amber-500";
@@ -85,7 +88,7 @@ function StageCard({ stages, total }: { stages: CompanyDash["byStage"]; total: n
   const sorted = [...stages].sort((a, b) => b.count - a.count || a.dealStage.localeCompare(b.dealStage));
   const max = Math.max(...sorted.map((s) => s.count), 1);
   return (
-    <Panel title="Deals by stage" aside={<span className="text-xs text-muted">{plural(total, "deal")}</span>}>
+    <Panel title="Deals by payment" aside={<span className="text-xs text-muted">{plural(total, "deal")}</span>}>
       {sorted.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-muted">No deals yet.</p>
       ) : (
@@ -148,7 +151,7 @@ export function OverviewTab({ data, isBapx, stats, alerts, onGo }: {
       {/* Attention + pipeline: same shell, same height */}
       <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-5">
         <div className="lg:col-span-3"><AttentionCard alerts={alerts} onGo={onGo} /></div>
-        <div className="lg:col-span-2"><StageCard stages={data.byStage} total={data.total} /></div>
+        <div className="lg:col-span-2"><StageCard stages={(data.byPayment ?? []).map((p) => ({ dealStage: p.status, count: p.count }))} total={data.total} /></div>
       </div>
 
       {isBapx ? (

@@ -1,49 +1,48 @@
 "use client";
 
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetcher } from "@/lib/api";
 import { clsx } from "clsx";
 import { Landmark, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { formatMoney as fmt } from "@/lib/format";
 import type { CompanyDash } from "./types";
 import { EmptyState, MoneyTile, PrimaryLink, SectionHeader, Tag, TextLink, card } from "./ui";
 
-export function FinanceTab({ finance }: { finance: CompanyDash["finance"] }) {
-  const max = Math.max(...(finance?.expensesByCategory.map((x) => x.amount) ?? []), 1);
+// This week's money for the company, one currency at a time. The full report is on the Finance page.
+export function FinanceTab({ companyKey }: { companyKey: string }) {
+  const now = new Date();
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  const from = monday.toISOString().slice(0, 10);
+  const to = new Date(monday.getTime() + 6 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = useQuery<{ currencies: { currency: string; expectedRevenue: number; actualRevenue: number; expectedExpense: number; actualExpense: number; expectedNet: number; actualNet: number }[] }>({
+    queryKey: ["finance", "summary", companyKey, from, to],
+    queryFn: () => fetcher(`/finance/summary?company=${encodeURIComponent(companyKey)}&from=${from}&to=${to}`),
+  });
+  const [picked, setPicked] = useState<string | null>(null);
+  const all = data?.currencies ?? [];
+  const withMoney = all.filter((t) => t.expectedRevenue || t.actualRevenue || t.expectedExpense || t.actualExpense);
+  const code = picked ?? withMoney[0]?.currency ?? "GHS";
+  const t = all.find((x) => x.currency === code);
+  const show = (n: number) => n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
   return (
     <>
-      <SectionHeader icon={Landmark} title="Finance" hint="What the business kept, spent and got back. Updated every night." />
-      {!finance ? (
-        <EmptyState title="Finance numbers aren't available yet" body="Net profit, monthly spending and return on investment will appear here once your accounts are connected." />
-      ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <MoneyTile icon={Landmark} label="Net profit" amount={finance.netProfit} display={fmt(finance.netProfit)} hint="What's left after every expense" flag={finance.netProfit < 0} />
-            <MoneyTile icon={TrendingDown} label="Monthly burn" amount={finance.burnRate} display={`${fmt(finance.burnRate)}/mo`} hint="How much cash goes out each month" />
-            <MoneyTile icon={TrendingUp} label="Return on investment" amount={finance.roi} display={`${finance.roi.toFixed(1)}×`} hint="What you get back for every cedi put in" />
-          </div>
-
-          <div className={clsx(card, "p-4")}>
-            <div className="flex items-center justify-between gap-3">
-              <p className="type-colhead">Spending by category</p>
-              <p className="text-xs text-muted">Total invested: {fmt(finance.totalInvested)}</p>
-            </div>
-            {finance.expensesByCategory.length === 0 ? (
-              <p className="mt-3 text-sm text-muted">No categorised spending yet.</p>
-            ) : (
-              <ul className="mt-2 divide-y divide-border">
-                {finance.expensesByCategory.slice().sort((a, b) => b.amount - a.amount).map((e) => (
-                  <li key={e.category} className="py-2.5">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-foreground">{e.category}</span>
-                      <span className="font-medium tabular-nums text-foreground">{fmt(e.amount)}</span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.06]">
-                      <div className={clsx("h-full rounded-full", e.category.toLowerCase().includes("discretionary") ? "bg-accent" : "bg-foreground/40")} style={{ width: `${(e.amount / max) * 100}%` }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      <SectionHeader icon={Landmark} title="This week's money" hint="Expected and actual." action={<TextLink href={`/finance?company=${encodeURIComponent(companyKey)}`}>Open Finance</TextLink>} />
+      <div role="tablist" aria-label="Currency" className="mb-3 inline-flex rounded-xl border border-border bg-surface p-1 text-sm">
+        {all.map((x) => (
+          <button key={x.currency} role="tab" aria-selected={code === x.currency} onClick={() => setPicked(x.currency)} className={clsx("rounded-lg px-3 py-1.5", code === x.currency ? "bg-foreground font-medium text-background" : "text-muted hover:text-foreground")}>{x.currency}</button>
+        ))}
+      </div>
+      {t && (
+        <div className={clsx(card, "max-w-xl p-4")}>
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border"><th /><th className="type-colhead py-1.5 text-right">Expected</th><th className="type-colhead py-1.5 text-right">Actual</th></tr></thead>
+            <tbody className="divide-y divide-border tabular-nums">
+              <tr><td className="py-2 text-foreground">Revenue</td><td className="py-2 text-right">{show(t.expectedRevenue)}</td><td className="py-2 text-right">{show(t.actualRevenue)}</td></tr>
+              <tr><td className="py-2 text-foreground">Expenses</td><td className="py-2 text-right">{show(t.expectedExpense)}</td><td className="py-2 text-right">{show(t.actualExpense)}</td></tr>
+              <tr className="font-semibold"><td className="py-2 text-foreground">Net</td><td className="py-2 text-right">{show(t.expectedNet)}</td><td className="py-2 text-right">{show(t.actualNet)}</td></tr>
+            </tbody>
+          </table>
         </div>
       )}
     </>
@@ -51,7 +50,7 @@ export function FinanceTab({ finance }: { finance: CompanyDash["finance"] }) {
 }
 
 export function DealsTab({ deals, isBapx, dealsHref }: { deals: CompanyDash["topDeals"]; isBapx: boolean; dealsHref?: string }) {
-  const heads = ["Business", "Stage", "Health", isBapx ? "Target" : "Value", ...(isBapx ? [] : ["Received"]), "Invoice"];
+  const heads = ["Business", "Payment", "Value", ...(isBapx ? [] : ["Received"]), "Invoice"];
   return (
     <>
       <SectionHeader icon={Target} title="Top deals" hint="Your biggest deals by value." action={dealsHref && <TextLink href={dealsHref}>See every deal</TextLink>} />
@@ -73,8 +72,7 @@ export function DealsTab({ deals, isBapx, dealsHref }: { deals: CompanyDash["top
                 return (
                   <tr key={d.id} className="transition-colors hover:bg-subtle/50">
                     <td className="max-w-[220px] truncate px-4 py-3 font-medium text-foreground">{d.businessName}</td>
-                    <td className="px-4 py-3"><Tag value={d.dealStage} /></td>
-                    <td className="px-4 py-3"><Tag value={d.dealHealth} /></td>
+                    <td className="px-4 py-3"><Tag value={d.paymentStatus ?? "UNPAID"} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums text-foreground">{fmt(d.potential)}</td>
                     {!isBapx && (
                       <td className="px-4 py-3">

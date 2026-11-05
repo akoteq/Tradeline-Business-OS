@@ -6,10 +6,11 @@ import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { apiError, fmtDate, type ApprovalTask } from "./task-utils";
 import { TaskEvidence } from "@/components/TaskEvidence";
+import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "./TaskMoney";
 
 /**
- * Work staff finished, waiting for a manager. Approving makes its money, its "on time" count and
- * the results logged from it count; rejecting sends it back with the reason (or, for a change to
+ * Work staff finished, waiting for a manager. Approving records what was really received and spent,
+ * and makes its "on time" count and the results logged from it count; rejecting sends it back with the reason (or, for a change to
  * already-approved work, keeps the approved version).
  */
 export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
@@ -22,15 +23,17 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  const [moneyFor, setMoneyFor] = useState<ApprovalTask | null>(null);
 
-  const review = async (t: ApprovalTask, action: "approve" | "reject") => {
+  const review = async (t: ApprovalTask, action: "approve" | "reject", money?: ReturnType<typeof moneyBody>) => {
     setBusy(t.id);
     setError(null);
     try {
-      await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : {});
+      await api.post(`/tasks/${t.id}/${action}`, action === "reject" ? { reason } : money ? { money } : {});
       toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: t.deliverable });
       setRejecting(null);
       setReason("");
+      setMoneyFor(null);
       onChanged();
     } catch (err) {
       setError({ id: t.id, message: apiError(err, `Couldn't ${action} the task.`) });
@@ -53,8 +56,15 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
 
   return (
     <div className="space-y-3">
+      {moneyFor && (
+        <TaskMoneySheet
+          task={moneyFor} title="Approve this task" confirmLabel="Approve" busy={busy === moneyFor.id}
+          error={error?.id === moneyFor.id ? error.message : undefined}
+          onConfirm={(money) => review(moneyFor, "approve", money)} onClose={() => { setMoneyFor(null); setError(null); }}
+        />
+      )}
       {tasks.map((t) => {
-        const money = t.revenueActual ? `${t.currency && t.currency !== "GHS" ? t.currency : "GHS"} ${t.revenueActual.toLocaleString()}` : null;
+        const money = t.expectedRevenue ? `${t.currency && t.currency !== "GHS" ? t.currency : "GHS"} ${t.expectedRevenue.toLocaleString()}` : null;
         const isBusy = busy === t.id;
         return (
           <section key={t.id} className="bg-surface border border-border rounded-xl shadow-card p-4 space-y-2">
@@ -77,7 +87,7 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
                   Reject
                 </button>
                 <button
-                  onClick={() => review(t, "approve")}
+                  onClick={() => (hasTaskMoney(t) ? setMoneyFor(t) : review(t, "approve"))}
                   disabled={isBusy}
                   className="h-8 px-3.5 text-xs font-semibold rounded-lg bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
@@ -87,8 +97,8 @@ export function ApprovalsList({ tasks, oneCompany, companyName, onChanged }: {
             </div>
             <ul className="text-xs text-muted space-y-0.5">
               {t.kpi && <li className="flex items-center gap-1"><Target size={11} className="text-accent" />KPI: <span className="text-foreground/80">{t.kpi.metric}</span></li>}
-              {t.deal && <li>Deal: <span className="text-foreground/80">{t.deal.name}</span>{money ? ` · brought in ${money}` : ""}</li>}
-              {!t.deal && money && <li>Brought in {money}</li>}
+              {t.deal && <li>Deal: <span className="text-foreground/80">{t.deal.name}</span></li>}
+              {money && <li>Expected revenue {money}</li>}
               {t.pendingResults.map((r, i) => (
                 <li key={i}>Result logged: {r.value.toLocaleString()} on {fmtDate(r.date)}{r.note ? ` · ${r.note}` : ""}</li>
               ))}

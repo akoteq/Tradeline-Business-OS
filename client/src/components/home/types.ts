@@ -58,7 +58,8 @@ export type CoSummary = {
   investment?: number;
 };
 
-export type DealRow = { businessName: string; company: string; amount: number; dealStage: string; dealHealth: string };
+export type DealRow = {
+  paymentStatus?: string | null; businessName: string; company: string; amount: number; dealStage: string; dealHealth: string };
 export type LeadsSummary = { total: number; public: number; private: number; wonThisMonth: number };
 
 export type KpiHealth = { onTrack: number; atRisk: number; offTrack: number; noTarget: number };
@@ -91,7 +92,11 @@ export type PendingApproval = {
   submittedAt: string | null;
   /** Set when this is a change to already-approved work; the approved version counts until then. */
   approvedAt: string | null;
-  revenueActual: number | null;
+  expectedRevenue: number | null;
+  expectedExpense?: number | null;
+  receivedSoFar?: number;
+  spentSoFar?: number;
+  dealId?: string | null;
   currency: string | null;
   completionCriteria: string | null;
   notes: string | null;

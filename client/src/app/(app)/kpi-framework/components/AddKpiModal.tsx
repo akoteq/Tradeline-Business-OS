@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { useAuth } from "@/components/AuthProvider";
 import { fitsUnder, type KpiDef, type ParentOpt } from "@/components/kpi";
 import {
   AGG_LABEL, FREQ_OPTS, UNIT_OPTS, apiError, defaultAgg, periodLabelFor,
@@ -21,6 +22,7 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
   defaultCompany: string; period: string; onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!editDef;
+  const { user } = useAuth();
   const { data: autoKeys = [] } = useQuery<AutoKey[]>({ queryKey: ["kpi-auto-keys"], queryFn: () => fetcher("/kpi-framework/auto-keys") });
   const { data: people = [] } = useQuery<Bdo[]>({ queryKey: ["bdos"], queryFn: () => fetcher("/bdo") });
 
@@ -64,6 +66,14 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
   const parentChoices = parents.filter((p) => fits(p) || p.id === form.parentId);
   const parent = parents.find((p) => p.id === form.parentId);
   const owners = people.filter((p) => form.company === "GROUP" || p.company === form.company);
+
+  // A new KPI starts with the logged-in person responsible, when they work at the chosen company.
+  // "Nobody yet" stays available, and changing company starts this over.
+  useEffect(() => {
+    if (isEdit || !user?.bdoId) return;
+    const me = user.bdoId;
+    setForm((f) => (!f.ownerId && (f.company === "GROUP" || user.bdoCompany === f.company) ? { ...f, ownerId: me } : f));
+  }, [isEdit, user?.bdoId, user?.bdoCompany, form.company]);
 
   const pickFrequency = (frequency: string) => setForm((f) => {
     const p = parents.find((x) => x.id === f.parentId);

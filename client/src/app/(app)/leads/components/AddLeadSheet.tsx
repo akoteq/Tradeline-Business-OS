@@ -170,6 +170,10 @@ export function AddLeadSheet({ lead, bdos, canAssign, onClose, onSaved, onOpenLe
             <Chips label="Source" value={form.source} onChange={(v) => set("source", v)} options={[...SOURCES.map((s) => [s, s] as [string, string]), ["", "Not sure"] as [string, string]]} />
           </div>
           <div>
+            <Label hint="(optional)">What might this be worth? (GHS)</Label>
+            <input type="number" min="0" value={form.estimatedValueGhs} onChange={(e) => set("estimatedValueGhs", e.target.value)} className={inputClass} placeholder="e.g. 5000" />
+          </div>
+          <div>
             <Label hint="(optional)">Anything worth remembering?</Label>
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className={inputClass + " resize-none"} placeholder="What they need, what you promised, who referred them…" />
           </div>

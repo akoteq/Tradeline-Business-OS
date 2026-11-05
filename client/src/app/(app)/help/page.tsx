@@ -1,4 +1,4 @@
-import { DealHealthBadge, DealStageBadge, PriorityBadge, TaskStatusBadge } from "@/components/Badges";
+import { PriorityBadge, TaskStatusBadge } from "@/components/Badges";
 
 // A plain-language dictionary of the system, aimed at newly invited members.
 
@@ -8,9 +8,7 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "overview", title: "What is this system?" },
   { id: "companies", title: "The Companies" },
   { id: "roles", title: "Roles & Access" },
-  { id: "pipeline", title: "Deals & Pipeline" },
-  { id: "stages", title: "Deal Stages" },
-  { id: "health", title: "Deal Health" },
+  { id: "pipeline", title: "Deals" },
   { id: "revenue", title: "Revenue & Payment" },
   { id: "leads", title: "Leads & Clients" },
   { id: "scheme", title: "Scheme of Work" },
@@ -20,12 +18,12 @@ const SECTIONS: { id: string; title: string }[] = [
 ];
 
 const COMPANIES: Def[] = [
-  { term: "BAPX", desc: "Business advisory and support for SMEs. Its pipeline tracks advisory engagements by their target value (it does not track revenue collected)." },
+  { term: "BAPX", desc: "Business advisory and support for SMEs. Its deals track advisory work, its value, the money received and the balance." },
   { term: "Tradeline Consult", desc: "Investment and grant facilitation for institutional clients. Tracks the full money picture — potential, expected, received and outstanding revenue — plus grant applications." },
-  { term: "Alpha Africa Consult Ltd", desc: "A group company. Its deals are tracked in the shared companies pipeline, with revenue and payment details." },
-  { term: "Finance Factory Limited", desc: "A group company. Its deals are tracked in the shared companies pipeline, with revenue and payment details." },
-  { term: "Community Finance Ltd", desc: "A group company. Its deals are tracked in the shared companies pipeline, with revenue and payment details." },
-  { term: "Akoteq Ltd", desc: "A group company. Its deals are tracked in the shared companies pipeline, with revenue and payment details." },
+  { term: "Alpha Africa Consult Ltd", desc: "A group company. Its deals show the value, the money received and the balance." },
+  { term: "Finance Factory Limited", desc: "A group company. Its deals show the value, the money received and the balance." },
+  { term: "Community Finance Ltd", desc: "A group company. Its deals show the value, the money received and the balance." },
+  { term: "Akoteq Ltd", desc: "A group company. Its deals show the value, the money received and the balance." },
 ];
 
 const ROLES: Def[] = [
@@ -34,30 +32,14 @@ const ROLES: Def[] = [
   { term: "BDO (Business Development Officer)", desc: "Owns a set of clients and deals. Signs in and lands on their own dashboard for their company only, and sees only their own deals, clients, tasks and alerts." },
 ];
 
-const STAGES: Def[] = [
-  { term: "Qualification", badge: <DealStageBadge value="QUALIFICATION" />, desc: "Early check — is this a real, viable opportunity worth pursuing?" },
-  { term: "Discovery", badge: <DealStageBadge value="DISCOVERY" />, desc: "Understanding the client's needs and whether we're a good fit." },
-  { term: "Proposal Sent", badge: <DealStageBadge value="PROPOSAL_SENT" />, desc: "A formal proposal or quote has been sent to the client." },
-  { term: "Negotiation", badge: <DealStageBadge value="NEGOTIATION" />, desc: "Discussing terms, pricing and scope." },
-  { term: "Contract Review", badge: <DealStageBadge value="CONTRACT_REVIEW" />, desc: "The client is reviewing or signing the contract." },
-  { term: "Closed Won", badge: <DealStageBadge value="CLOSED_WON" />, desc: "The deal was won — the client signed or engaged us." },
-  { term: "Closed Lost", badge: <DealStageBadge value="CLOSED_LOST" />, desc: "The deal was lost — the client declined or went elsewhere." },
-  { term: "On Hold", badge: <DealStageBadge value="ON_HOLD" />, desc: "Paused for now, to be picked up later." },
-];
-
-const HEALTH: Def[] = [
-  { term: "Active", badge: <DealHealthBadge value="ACTIVE" />, desc: "Moving forward and on track." },
-  { term: "Stale", badge: <DealHealthBadge value="STALE" />, desc: "No recent activity — it needs a nudge or follow-up." },
-  { term: "At Risk", badge: <DealHealthBadge value="AT_RISK" />, desc: "In danger of being lost; needs attention." },
-  { term: "Closed Won", badge: <DealHealthBadge value="CLOSED_WON" />, desc: "Final outcome — the deal was won." },
-  { term: "Closed Lost", badge: <DealHealthBadge value="CLOSED_LOST" />, desc: "Final outcome — the deal was lost." },
-];
-
 const REVENUE: Def[] = [
-  { term: "Revenue Potential", desc: "The full possible value of the deal if everything comes through." },
-  { term: "Expected Revenue", desc: "What we realistically expect to actually collect from the deal." },
-  { term: "Revenue Received", desc: "The amount collected from the client so far." },
-  { term: "Outstanding / Balance", desc: "What is still owed. Calculated as Expected minus Received." },
+  { term: "Deal value", desc: "What the client agreed to pay. Saving a deal adds it as expected revenue in Finance." },
+  { term: "Actual revenue", desc: "Money that has come in. Only the Business CEO adds it, by hand, and can link it to a deal." },
+  { term: "Received", desc: "The actual revenue linked to a deal so far." },
+  { term: "Balance", desc: "What is still owed: Deal value minus Received." },
+  { term: "Unpaid, Part paid, Paid, Overdue", desc: "Worked out for you from the money received and the expected payment date." },
+  { term: "Cancelled", desc: "Won work that fell through. Its balance stops counting as owed. It can be restored." },
+  { term: "Expected and actual", desc: "Always kept apart, so you can compare what you planned with what happened." },
 ];
 
 const PAYMENT: Def[] = [
@@ -95,7 +77,8 @@ const GRANTS: Def[] = [
 
 const PAGES: Def[] = [
   { term: "Dashboard", desc: "Your home screen. The CEO/Admin dashboard shows the whole group; a BDO dashboard shows that person's own numbers." },
-  { term: "Pipeline", desc: "The list of deals for a company, where you add and update deals as they move through the stages." },
+  { term: "Deals", desc: "The list of a company's won work, with the value, money received and balance of each." },
+  { term: "Finance", desc: "A company's expected and actual money, per currency, with the weekly report. Staff see My expenses instead." },
   { term: "Leads DB", desc: "The list of potential clients not yet converted." },
   { term: "Client Overview", desc: "The directory of all clients (SMEs) and who owns them." },
   { term: "Scheme of Work", desc: "Your tasks and proposals with their target dates." },

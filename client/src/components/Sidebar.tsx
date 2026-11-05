@@ -25,12 +25,14 @@ import {
   Contact,
   Briefcase,
   FolderKanban,
+  Handshake,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
-import { useCompanies } from "@/lib/companies";
+import { companyHref, useCompanies } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL, isExternal } from "@/lib/auth";
 
 /**
@@ -140,6 +142,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
     {
       title: "Money",
       items: [
+        { href: "/finance", label: "Company finance", icon: Wallet, hint: "One company's money and weekly report" },
         { href: "/consolidated", label: "Group finances", icon: Database, hint: "All your companies' numbers, combined" },
       ],
     },
@@ -192,12 +195,16 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
       items: [
         { href: "/leads", label: "Leads", icon: Users },
         { href: "/sme", label: "Clients", icon: Briefcase },
+        ...(ownCompany ? [{ href: companyHref(ownCompany), label: "Deals", icon: Handshake, hint: "Won work: value, money received and balance" }] : []),
         { href: "/contacts", label: "Contacts", icon: Contact },
       ],
     },
     {
       title: "Money",
-      items: [{ href: "/grant-loans", label: "Grants & loans", icon: DollarSign }],
+      items: [
+        { href: "/finance", label: "Finance", icon: Wallet, hint: "Expected and actual money, and the weekly report" },
+        { href: "/grant-loans", label: "Grants & loans", icon: DollarSign },
+      ],
     },
     {
       title: "Performance",
@@ -226,6 +233,8 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
         { href: "/projects", label: "My projects", icon: FolderKanban, hint: "Projects you're on" },
         { href: "/leads", label: "My leads", icon: Users },
         { href: "/sme", label: "Clients", icon: Briefcase },
+        ...(ownCompany ? [{ href: companyHref(ownCompany), label: "My deals", icon: Handshake }] : []),
+        { href: "/finance", label: "My expenses", icon: Wallet, hint: "Record what you spend" },
         { href: "/contacts", label: "Contacts", icon: Contact },
         ...complianceItem,
         { href: "/risks", label: "My risk actions", icon: AlertTriangle, hint: "Risk actions assigned to you" },
