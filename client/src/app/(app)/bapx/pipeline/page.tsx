@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
 import { DataTable } from "@/components/DataTable";
-import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { WizardShell, useWizard } from "@/app/(app)/leads/components/WizardShell";
+import { DEAL_STEPS, DealStatusBadge, DealValueFields, dealMoneyText, dealStatus, dealValueBody, dealValueOf, useNewDealLink, type NewDealLink } from "@/components/deals/dealMoney";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
@@ -41,6 +43,11 @@ type BapxDeal = {
   nextSteps: string | null;
   nextCallDate: string | null;
   targetGhs: number | null;
+  dealValue?: number | null;
+  expectedPaymentDate?: string | null;
+  revenueReceivedGhs?: number | null;
+  balanceGhs?: number | null;
+  paymentStatus?: string | null;
   daysSinceLastContact: number | null;
   aiCoachRecommendation: string | null;
   aiCoachGeneratedAt?: string | null;
@@ -48,22 +55,21 @@ type BapxDeal = {
 
 type BdoOption = { id: string; name: string; company: string };
 
-const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
-const STAGE_OPTS = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
 const PRIORITY_OPTS = ["HIGH", "MEDIUM", "LOW"];
 const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
-const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
 
 const EMPTY_FORM = {
   smeId: "", businessName: "", clientName: "", holdingFirm: "", industry: "", telephone: "",
   email: "", region: "", date: "", bdoId: "", activityType: "", product: "",
   keyTopics: "", callOutcome: "", nextSteps: "", nextCallDate: "",
-  targetGhs: "", dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
+  dealValue: "", expectedPaymentDate: "", priority: "MEDIUM",
   invoiceStatus: "NOT_INVOICED", currency: "GHS", exchangeRate: "",
 };
 
 export default function BapxPipelinePage() {
-  const [filters, setFilters] = useState({ bdo: "", stage: "", health: "", priority: "" });
+  const [filters, setFilters] = useState({ bdo: "", priority: "" });
+  const [prefill, setPrefill] = useState<NewDealLink | null>(null);
+  useNewDealLink(useCallback((link: NewDealLink) => { setPrefill(link); setEditing(null); setShowForm(true); }, []));
   const [editing, setEditing] = useState<BapxDeal | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [detail, setDetail] = useState<BapxDeal | null>(null);
@@ -94,7 +100,6 @@ export default function BapxPipelinePage() {
   });
 
   const columns = [
-    { key: "dealHealth", label: "Health", render: (r: BapxDeal) => <DealHealthBadge value={r.dealHealth} />, sortable: true, width: "90px" },
     {
       key: "businessName", label: "Business", sortable: true,
       render: (r: BapxDeal) => (
@@ -107,19 +112,21 @@ export default function BapxPipelinePage() {
     { key: "bdo", label: "BDO", render: (r: BapxDeal) => r.bdo?.name ?? "—" },
     { key: "industry", label: "Industry", render: (r: BapxDeal) => r.industry ?? "—" },
     { key: "region", label: "Region", render: (r: BapxDeal) => r.region ?? "—" },
-    { key: "dealStage", label: "Stage", render: (r: BapxDeal) => <DealStageBadge value={r.dealStage} />, sortable: true },
+    { key: "paymentStatus", label: "Status", render: (r: BapxDeal) => <DealStatusBadge deal={r} /> },
     { key: "priority", label: "Priority", render: (r: BapxDeal) => <PriorityBadge value={r.priority} />, sortable: true },
     { key: "invoiceStatus", label: "Invoice", sortable: true, render: (r: BapxDeal) => <InvoiceStatusBadge value={r.invoiceStatus ?? "NOT_INVOICED"} /> },
     { key: "product", label: "Product", render: (r: BapxDeal) => r.product ?? "—" },
-    { key: "targetGhs", label: "Target (GHS)", render: (r: BapxDeal) => r.targetGhs ? `GHS ${r.targetGhs.toLocaleString()}` : "—", sortable: true },
+    { key: "dealValue", label: "Deal value", render: (r: BapxDeal) => dealValueOf(r) ? `${r.currency ?? "GHS"} ${Number(dealValueOf(r)).toLocaleString()}` : "—", sortable: true },
+    { key: "revenueReceivedGhs", label: "Received", render: (r: BapxDeal) => dealMoneyText(r.revenueReceivedGhs ?? 0, r) },
+    { key: "balanceGhs", label: "Balance", render: (r: BapxDeal) => dealStatus(r) === "CANCELLED" ? "—" : dealMoneyText(r.balanceGhs, r) },
     { key: "nextSteps", label: "Next Steps", render: (r: BapxDeal) => <span className="truncate block max-w-[160px]">{r.nextSteps ?? "—"}</span> },
   ];
 
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">BAPX Pipeline</h1>
-        <p className="text-sm text-gray-500 mt-1">{data.length} active deals</p>
+        <h1 className="text-2xl font-bold text-gray-900">BAPX deals</h1>
+        <p className="text-sm text-gray-500 mt-1">Won work: value, money received and balance</p>
       </div>
 
       <DataTable
@@ -135,8 +142,6 @@ export default function BapxPipelinePage() {
         filterBar={
           <div className="flex gap-2 flex-wrap">
             <FilterSelect value={filters.bdo} options={[{ value: "", label: "All BDOs" }, ...bapxBdos.map((b) => ({ value: b.name, label: b.name }))]} onChange={(v) => setFilters((f) => ({ ...f, bdo: v }))} />
-            <FilterSelect value={filters.stage} options={[{ value: "", label: "All Stages" }, ...STAGE_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]} onChange={(v) => setFilters((f) => ({ ...f, stage: v }))} />
-            <FilterSelect value={filters.health} options={[{ value: "", label: "All Health" }, ...HEALTH_OPTS.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))]} onChange={(v) => setFilters((f) => ({ ...f, health: v }))} />
             <FilterSelect value={filters.priority} options={[{ value: "", label: "All Priorities" }, ...PRIORITY_OPTS.map((s) => ({ value: s, label: s }))]} onChange={(v) => setFilters((f) => ({ ...f, priority: v }))} />
           </div>
         }
@@ -145,14 +150,15 @@ export default function BapxPipelinePage() {
       {showForm && (
         <DealFormModal
           deal={editing}
+          prefill={prefill}
           bdos={bapxBdos}
           clients={clients}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ["bapx"] }); }}
+          onClose={() => { setShowForm(false); setPrefill(null); }}
+          onSaved={() => { setShowForm(false); setPrefill(null); qc.invalidateQueries({ queryKey: ["bapx"] }); }}
         />
       )}
 
-      {detail && <DetailDrawer deal={detail} onClose={() => setDetail(null)} onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }} />}
+      {detail && <DetailDrawer deal={detail} onClose={() => setDetail(null)} onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }} onChanged={() => { setDetail(null); qc.invalidateQueries({ queryKey: ["bapx"] }); }} />}
     </div>
   );
 }
@@ -169,11 +175,9 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 
 // ─── Add / Edit modal ─────────────────────────────────────────────────────────
 
-function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDeal | null; bdos: BdoOption[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
+function DealFormModal({ deal, prefill, bdos, clients, onClose, onSaved }: { deal: BapxDeal | null; prefill: NewDealLink | null; bdos: BdoOption[]; clients: ClientOption[]; onClose: () => void; onSaved: () => void }) {
   const dCur = deal?.currency ?? "GHS";
   const dRate = deal?.exchangeRate ?? 1;
-  const disp = (ghs: number | null | undefined) =>
-    ghs == null ? "" : String(dCur === "GHS" || !dRate ? ghs : Math.round((ghs / dRate) * 100) / 100);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(deal ? {
@@ -193,11 +197,10 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
       callOutcome: deal.callOutcome ?? "",
       nextSteps: deal.nextSteps ?? "",
       nextCallDate: deal.nextCallDate ? deal.nextCallDate.slice(0, 10) : "",
-      targetGhs: disp(deal.targetGhs),
+      dealValue: dealValueOf(deal),
+      expectedPaymentDate: (deal.expectedPaymentDate ?? "").slice(0, 10),
       currency: dCur,
       exchangeRate: dCur === "GHS" ? "" : String(dRate),
-      dealStage: deal.dealStage,
-      dealHealth: deal.dealHealth,
       priority: deal.priority,
       invoiceStatus: deal.invoiceStatus ?? "NOT_INVOICED",
     } : {}),
@@ -206,18 +209,25 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
   const [error, setError] = useState("");
   const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const { step, dir, reached, go, last } = useWizard(DEAL_STEPS.length, deal ? DEAL_STEPS.length - 1 : 0);
+  const hasClient = !!form.businessName.trim();
+
+  // Coming from a converted lead: the client and estimated value are filled in.
+  useEffect(() => {
+    if (!prefill || form.smeId) return;
+    const m = clients.find((c) => c.id === prefill.smeId);
+    if (m) setForm((f) => ({ ...f, smeId: m.id, businessName: m.companyName, clientName: m.contactName ?? "", email: m.email ?? "", telephone: m.phone ?? "", industry: m.valueChain ?? "", region: m.region ?? "", dealValue: prefill.value || f.dealValue }));
+  }, [prefill, clients, form.smeId]);
 
   const save = async () => {
     if (!deal && !form.smeId) { setError("Please select a client."); return; }
     if (!form.businessName.trim()) { setError("Please select a client."); return; }
     setSaving(true);
     setError("");
-    const rate = form.currency === "GHS" ? 1 : (Number(form.exchangeRate) || 1);
     const body = {
       ...form,
+      ...dealValueBody(form),
       smeId: form.smeId || null,
-      targetGhs: form.targetGhs !== "" ? Number(form.targetGhs) * rate : null,
-      exchangeRate: rate,
       date: form.date || null,
       nextCallDate: form.nextCallDate || null,
       bdoId: form.bdoId || null,
@@ -239,118 +249,96 @@ function DealFormModal({ deal, bdos, clients, onClose, onSaved }: { deal: BapxDe
       else await api.post("/bapx", body);
       toast.success(deal ? "Deal updated" : "Deal added", { description: form.businessName.trim() || undefined });
       onSaved();
-    } catch {
-      setError("Failed to save. Check the server.");
+    } catch (err) {
+      setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "We couldn't save this deal. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-gray-900">{deal ? "Edit Deal" : "Add Deal"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+    <WizardShell
+      steps={DEAL_STEPS} step={step} dir={dir} reached={reached} onGo={go} onClose={onClose} error={error}
+      primary={last
+        ? { label: saving ? "Saving…" : deal ? "Update deal" : "Add deal", disabled: saving || !hasClient, onClick: save }
+        : { label: "Continue", disabled: !hasClient, onClick: () => go(step + 1) }}
+    >
+      {step === 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2">
+              <ClientSelect
+                label="Client *"
+                value={form.smeId}
+                options={clients}
+                fallbackLabel={form.businessName || undefined}
+                onChange={(id) => {
+                  const match = clients.find((c) => c.id === id);
+                  setForm((f) => ({
+                    ...f,
+                    smeId: id,
+                    businessName: match?.companyName ?? "",
+                    clientName: match?.contactName ?? f.clientName,
+                    email: match?.email ?? f.email,
+                    telephone: match?.phone ?? f.telephone,
+                    industry: match?.valueChain ?? f.industry,
+                    region: match?.region ?? f.region,
+                  }));
+                }}
+              />
+              <p className="text-[11px] text-muted mt-1">
+                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add them on the Clients page first →</Link>
+              </p>
+          </div>
+          <Field label="Client Name" value={form.clientName} onChange={(v) => set("clientName", v)} />
+          <Field label="Holding Firm" value={form.holdingFirm} onChange={(v) => set("holdingFirm", v)} />
+          <Field label="Industry / Value Chain" value={form.industry} onChange={(v) => set("industry", v)} />
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
+            <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
+              <option value="">— Select region —</option>
+              {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+              {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <Field label="Telephone" value={form.telephone} onChange={(v) => set("telephone", v)} />
+          <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
         </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          {/* Basic info */}
-          <Section label="Basic Information">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <ClientSelect
-                  label="Client *"
-                  value={form.smeId}
-                  options={clients}
-                  fallbackLabel={form.businessName || undefined}
-                  onChange={(id) => {
-                    const match = clients.find((c) => c.id === id);
-                    setForm((f) => ({
-                      ...f,
-                      smeId: id,
-                      businessName: match?.companyName ?? "",
-                      clientName: match?.contactName ?? f.clientName,
-                      email: match?.email ?? f.email,
-                      telephone: match?.phone ?? f.telephone,
-                      industry: match?.valueChain ?? f.industry,
-                      region: match?.region ?? f.region,
-                    }));
-                  }}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add in Client Overview first →</Link>
-                </p>
-              </div>
-              <Field label="Client Name" value={form.clientName} onChange={(v) => set("clientName", v)} />
-              <Field label="Holding Firm" value={form.holdingFirm} onChange={(v) => set("holdingFirm", v)} />
-              <Field label="Industry / Value Chain" value={form.industry} onChange={(v) => set("industry", v)} />
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Region</label>
-                <select value={form.region} onChange={(e) => set("region", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                  <option value="">— Select region —</option>
-                  {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
-                  {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <Field label="Telephone" value={form.telephone} onChange={(v) => set("telephone", v)} />
-              <Field label="Email" type="email" value={form.email} onChange={(v) => set("email", v)} />
+      )}
+      {step === 1 && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Who owns this deal?</label>
+              <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
+                <option value="">— Unassigned —</option>
+                {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
             </div>
-          </Section>
-
-          {/* Deal info */}
-          <Section label="Deal Details">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">BDO</label>
-                <select value={form.bdoId} onChange={(e) => set("bdoId", e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30">
-                  <option value="">— Unassigned —</option>
-                  {bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-              </div>
-              <AssigneesField value={assigned} onChange={setAssigned} people={bdos} ownerId={form.bdoId} />
-              <Field label="Product / Service" value={form.product} onChange={(v) => set("product", v)} />
-              <Field label="Activity Type" value={form.activityType} onChange={(v) => set("activityType", v)} />
-              <FormSelect label="Currency" value={form.currency} options={CURRENCIES} onChange={(v) => set("currency", v)} />
-              {form.currency !== "GHS" && (
-                <Field label={`Rate (1 ${form.currency} = ? GHS)`} type="number" value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} />
-              )}
-              <Field label={`Target (${form.currency})`} type="number" value={form.targetGhs} onChange={(v) => set("targetGhs", v)} />
-              <Field label="Date" type="date" value={form.date} onChange={(v) => set("date", v)} />
-              <Field label="Next Call Date" type="date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-              <FormSelect label="Deal Stage" value={form.dealStage} options={STAGE_OPTS} onChange={(v) => set("dealStage", v)} />
-              <FormSelect label="Health" value={form.dealHealth} options={HEALTH_OPTS} onChange={(v) => set("dealHealth", v)} />
-              <FormSelect label="Priority" value={form.priority} options={PRIORITY_OPTS} onChange={(v) => set("priority", v)} />
-              <FormSelect label="Invoice Status" value={form.invoiceStatus} options={INVOICE_OPTS} onChange={(v) => set("invoiceStatus", v)} />
-            </div>
-          </Section>
-
-          {/* Notes */}
-          <Section label="Notes & Updates">
-            <TextArea label="Key Topics" value={form.keyTopics} onChange={(v) => set("keyTopics", v)} rows={2} />
-            <TextArea label="Call Outcome / Updates" value={form.callOutcome} onChange={(v) => set("callOutcome", v)} rows={3} />
-            <TextArea label="Next Steps" value={form.nextSteps} onChange={(v) => set("nextSteps", v)} rows={2} />
-          </Section>
-
-          {error && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+            <AssigneesField value={assigned} onChange={setAssigned} people={bdos} ownerId={form.bdoId} />
+            <Field label="Product / Service" value={form.product} onChange={(v) => set("product", v)} />
+            <Field label="Activity Type" value={form.activityType} onChange={(v) => set("activityType", v)} />
+            <Field label="Date" type="date" value={form.date} onChange={(v) => set("date", v)} />
+            <Field label="Next Call Date" type="date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} />
+            <FormSelect label="Priority" value={form.priority} options={PRIORITY_OPTS} onChange={(v) => set("priority", v)} />
+          </div>
+          <TextArea label="Key Topics" value={form.keyTopics} onChange={(v) => set("keyTopics", v)} rows={2} />
+          <TextArea label="Call Outcome / Updates" value={form.callOutcome} onChange={(v) => set("callOutcome", v)} rows={2} />
+          <TextArea label="Next Steps" value={form.nextSteps} onChange={(v) => set("nextSteps", v)} rows={2} />
         </div>
-
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:opacity-90 disabled:opacity-50">
-            {saving ? "Saving…" : deal ? "Update Deal" : "Create Deal"}
-          </button>
+      )}
+      {step === 2 && (
+        <div className="space-y-3">
+          <DealValueFields form={form} set={(k, v) => set(k, v)} inputClass="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30" labelClass="text-xs font-medium text-gray-600 block mb-1" />
+          <FormSelect label="Invoice Status" value={form.invoiceStatus} options={INVOICE_OPTS} onChange={(v) => set("invoiceStatus", v)} />
         </div>
-      </div>
-    </div>
+      )}
+    </WizardShell>
   );
 }
 
 // ─── Detail drawer ────────────────────────────────────────────────────────────
 
-function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () => void; onEdit: () => void }) {
+function DetailDrawer({ deal, onClose, onEdit, onChanged }: { deal: BapxDeal; onClose: () => void; onEdit: () => void; onChanged: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
@@ -369,8 +357,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
         <div className="p-5 space-y-5">
           {/* Badges */}
           <div className="flex flex-wrap gap-2">
-            <DealHealthBadge value={deal.dealHealth} />
-            <DealStageBadge value={deal.dealStage} />
+            <DealStatusBadge deal={deal} />
             <PriorityBadge value={deal.priority} />
             <InvoiceStatusBadge value={deal.invoiceStatus ?? "NOT_INVOICED"} />
           </div>
@@ -386,7 +373,10 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
             <DetailItem label="BDO" value={deal.bdo?.name} />
             <DetailItem label="Product" value={deal.product} />
             <DetailItem label="Activity Type" value={deal.activityType} />
-            <DetailItem label="Target (GHS)" value={deal.targetGhs != null ? `GHS ${deal.targetGhs.toLocaleString()}` : null} />
+            <DetailItem label="Deal value" value={dealValueOf(deal) ? `${deal.currency ?? "GHS"} ${Number(dealValueOf(deal)).toLocaleString()}` : null} />
+            <DetailItem label="Received" value={dealMoneyText(deal.revenueReceivedGhs ?? 0, deal)} />
+            <DetailItem label="Balance" value={dealStatus(deal) === "CANCELLED" ? null : dealMoneyText(deal.balanceGhs, deal)} />
+            <DetailItem label="Expected payment" value={deal.expectedPaymentDate ? new Date(deal.expectedPaymentDate).toLocaleDateString() : null} />
             <DetailItem label="Date" value={deal.date ? new Date(deal.date).toLocaleDateString() : null} />
             <DetailItem label="Next Call Date" value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />
             <DetailItem label="Days Since Contact" value={deal.daysSinceLastContact != null ? String(deal.daysSinceLastContact) : null} />
@@ -396,7 +386,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: BapxDeal; onClose: () =
           {deal.keyTopics && <LongField label="Key Topics" value={deal.keyTopics} />}
           {deal.callOutcome && <LongField label="Call Outcome / Updates" value={deal.callOutcome} />}
           {deal.nextSteps && <LongField label="Next Steps" value={deal.nextSteps} />}
-          <DealPayments source="BAPX" dealId={deal.id} />
+          <DealPayments source="BAPX" dealId={deal.id} company="BAPX" dealName={deal.businessName} cancelled={deal.dealStage === "CLOSED_LOST"} endpoint={`/bapx/${deal.id}`} onChanged={onChanged} />
           <CoachBox deal={deal} />
         </div>
       </div>
@@ -448,15 +438,6 @@ function CoachBox({ deal }: { deal: BapxDeal }) {
 }
 
 // ─── Small helpers ─────────────────────────────────────────────────────────────
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{label}</p>
-      {children}
-    </div>
-  );
-}
 
 function Field({ label, value, onChange, type = "text", span }: { label: string; value: string; onChange: (v: string) => void; type?: string; span?: number }) {
   return (

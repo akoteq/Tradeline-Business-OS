@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { Lock } from "lucide-react";
+import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "./TaskMoney";
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
@@ -11,6 +13,7 @@ import { useCompanies } from "@/lib/companies";
 import { KpiSheet } from "@/components/kpi";
 import {
   CURRENCIES,
+  EXPENSE_CATEGORIES,
   OUTCOME_LABEL,
   OUTCOME_OPTS,
   PRIORITIES,
@@ -165,6 +168,12 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   // Whoever runs the project picks any member; everyone else adds work for themselves.
   const pickOwner = project ? project.canManage : !isBdo;
 
+  const startCompany = task?.company ?? projectCompany ?? ownCompany ?? "TRADELINE";
+  // A new task starts with the logged-in person as owner, when they can own it: someone on the
+  // project, or someone at the chosen company. Whoever can reassign just picks someone else.
+  const meCanOwn = (company: string) => !!user?.bdoId && (project ? project.members.some((m) => m.bdoId === user.bdoId) : user.bdoCompany === company);
+  const defaultOwner = !task && pickOwner && meCanOwn(startCompany) ? (user?.bdoId ?? "") : "";
+
   const [form, setForm] = useState({
     priority: task?.priority ?? "MEDIUM",
     deliverable: task?.deliverable ?? "",
@@ -173,8 +182,8 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
     // task with no start date stays empty so nothing is filled in behind your back.
     startDate: task ? (task.startDate ? task.startDate.slice(0, 10) : "") : inDays(0),
     status: task?.status === "OVERDUE" ? "PENDING" : task?.status ?? "PENDING",
-    company: task?.company ?? projectCompany ?? ownCompany ?? "TRADELINE",
-    bdoId: task?.bdoId ?? "",
+    company: startCompany,
+    bdoId: task?.bdoId ?? defaultOwner,
     notes: task?.notes ?? "",
     type: task?.type ?? defaultType,
     smeId: task?.smeId ?? "",
@@ -184,10 +193,10 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
     kpiId: task?.kpiId ?? "",
     completionCriteria: task?.completionCriteria ?? "",
     dependsOn: task?.dependsOn ?? ([] as string[]),
-    expenseActual: task?.expenseActual != null ? String(task.expenseActual) : "",
-    revenueActual: task?.revenueActual != null ? String(task.revenueActual) : "",
+    expectedExpense: task?.expectedExpense != null ? String(task.expectedExpense) : "",
+    expectedRevenue: task?.expectedRevenue != null ? String(task.expectedRevenue) : "",
+    expenseCategory: task?.expenseCategory ?? "Other",
     currency: task?.currency ?? "GHS",
-    exchangeRate: task?.exchangeRate && task.exchangeRate !== 1 ? String(task.exchangeRate) : "",
     dealId: task?.dealId ?? "",
     attachments: task?.attachments ?? ([] as TaskAttachment[]),
   });
@@ -254,7 +263,19 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
     setReachable((r) => Math.max(r, n));
   };
 
-  const save = async () => {
+  // A manager finishing a task here says what was received and spent before it saves.
+  const [askMoney, setAskMoney] = useState(false);
+  const moneyTask = {
+    deliverable: form.deliverable, currency: form.currency, dealId: form.dealId || null,
+    expectedRevenue: form.dealId || form.expectedRevenue === "" ? null : Number(form.expectedRevenue),
+    expectedExpense: form.expectedExpense === "" ? null : Number(form.expectedExpense),
+    receivedSoFar: task?.receivedSoFar, spentSoFar: task?.spentSoFar,
+  };
+  const finishingNow = !isBdo && form.status === "COMPLETED" && task?.status !== "COMPLETED" && hasTaskMoney(moneyTask);
+
+  const save = async (completionMoney?: ReturnType<typeof moneyBody>) => {
+    if (finishingNow && !completionMoney) { setAskMoney(true); return; }
+    setAskMoney(false);
     if (!hasName) { go(1); return; }
     const dErr = dateError();
     if (dErr) { setError(dErr); setStep(2); return; }
@@ -282,12 +303,14 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
       projectId,
       completionCriteria: form.completionCriteria || null,
       dependsOn: form.dependsOn,
-      expenseActual: form.expenseActual === "" ? null : Number(form.expenseActual),
-      revenueActual: form.revenueActual === "" ? null : Number(form.revenueActual),
+      expectedExpense: form.expectedExpense === "" ? null : Number(form.expectedExpense),
+      // The deal holds the expected revenue when the task is on one.
+      expectedRevenue: form.dealId || form.expectedRevenue === "" ? null : Number(form.expectedRevenue),
+      expenseCategory: form.expenseCategory,
       currency: form.currency,
-      exchangeRate: form.currency === "GHS" ? 1 : Number(form.exchangeRate) || null,
       dealId: form.dealId || null,
       attachments: form.attachments,
+      ...(completionMoney ? { completionMoney } : {}),
     };
     try {
       const res = task ? await api.put(`/tasks/${task.id}`, body) : await api.post("/tasks", body);
@@ -316,7 +339,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
       ? { title: "When does it need to happen?", sub: "Set the deadline and how urgent it is." }
       : step === 3
       ? { title: "Who owns it?", sub: "Who's responsible, and what it's for." }
-      : { title: "Money and deal", sub: "Link a deal, and note what it costs and what it should bring in." };
+      : { title: "Money and deal", sub: "These amounts are saved as expected entries in Finance." };
 
   const dueLabel = isProposal ? "When is it due or sent?" : "When is it due?";
   const summaryBits = [
@@ -344,7 +367,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
         <button type="button" onClick={() => go(4)} className={primaryBtn}>Continue</button>
       )}
       {step === 4 && (
-        <button type="button" onClick={save} disabled={saving || !hasName} className={primaryBtn}>
+        <button type="button" onClick={() => save()} disabled={saving || !hasName} className={primaryBtn}>
           {saving ? "Saving…" : editing ? "Save changes" : isProposal ? "Add proposal" : "Add task"}
         </button>
       )}
@@ -359,6 +382,13 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
   );
 
   return (
+    <>
+    {askMoney && (
+      <TaskMoneySheet
+        task={moneyTask} title="Finish this task" confirmLabel="Save and mark as done" busy={saving}
+        onConfirm={(m) => save(m)} onClose={() => setAskMoney(false)}
+      />
+    )}
     <KpiSheet title={heading.title} subtitle={heading.sub} onClose={close} footer={footer}>
       <div className="space-y-5">
         <StepProgress step={step} reachable={reachable} onGo={go} />
@@ -509,7 +539,7 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                     // The deal belongs to a company too, so it is cleared with it.
                     setForm((f) => ({
                       ...f, company, kpiId: "", dealId: "",
-                      bdoId: bdos.find((b) => b.id === f.bdoId)?.company === company ? f.bdoId : "",
+                      bdoId: bdos.find((b) => b.id === f.bdoId)?.company === company ? f.bdoId : !task && meCanOwn(company) ? (user?.bdoId ?? "") : "",
                     }));
                   }}
                   className={inputClass}
@@ -546,6 +576,21 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
                     .map((b) => <option key={b.id} value={b.id}>{b.name}{!oneCompany && b.company !== form.company ? ` (${b.company})` : ""}</option>)}
                 </select>
               </Field>
+            )}
+
+            {!pickOwner && (
+              <Field label="Who's responsible for it?">
+                <div className={clsx(inputClass, "flex items-center justify-between bg-subtle text-muted")}>
+                  {user?.bdoName ?? "You"} (you) <Lock size={14} />
+                </div>
+                <p className="text-xs text-muted mt-1.5">{project ? "Only whoever runs the project can assign tasks to other people." : "Only your Business CEO can assign tasks to other people."}</p>
+              </Field>
+            )}
+
+            {pickOwner && form.bdoId && (
+              <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">
+                This will be assigned to {form.bdoId === user?.bdoId ? "you" : (bdos.find((b) => b.id === form.bdoId)?.name ?? project?.members.find((m) => m.bdoId === form.bdoId)?.name ?? "them")}.
+              </p>
             )}
 
             <Field label="Which KPI does it move?" hint="(optional)">
@@ -609,37 +654,34 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
               <select value={form.dealId} onChange={(e) => set("dealId", e.target.value)} className={inputClass}>
                 <option value="">None</option>
                 {linkedDeal && !dealOpts.some((d) => d.id === linkedDeal.id) && <option value={linkedDeal.id}>{linkedDeal.name}</option>}
-                {dealOpts.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.stage.replace(/_/g, " ").toLowerCase()}</option>)}
+                {dealOpts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
 
-            {/* One tidy grid: short labels so nothing wraps and every box lines up.
-                GHS: Currency | Expenditure | Expected revenue on one row.
-                Other currency: Currency | Rate, then Expenditure | Expected revenue. */}
-            <div className={clsx("grid items-start gap-3", form.currency === "GHS" ? "grid-cols-3" : "grid-cols-2")}>
+            <div className={clsx("grid items-start gap-3", form.dealId ? "grid-cols-3" : "grid-cols-2")}>
               <Field label="Currency">
                 <select value={form.currency} onChange={(e) => set("currency", e.target.value)} className={inputClass}>
-                  {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                  {(CURRENCIES.includes(form.currency) ? CURRENCIES : [form.currency, ...CURRENCIES]).map((c) => <option key={c}>{c}</option>)}
                 </select>
               </Field>
-              {form.currency !== "GHS" && (
-                <Field label="Rate to GHS">
-                  <input type="number" min="0" step="any" value={form.exchangeRate} onChange={(e) => set("exchangeRate", e.target.value)} placeholder="e.g. 15.2" className={inputClass} />
+              {!form.dealId && (
+                <Field label="Expected revenue">
+                  <input type="number" min="0" value={form.expectedRevenue} onChange={(e) => set("expectedRevenue", e.target.value)} placeholder="0" className={inputClass} />
                 </Field>
               )}
-              <Field label="Expenditure">
-                <input type="number" min="0" value={form.expenseActual} onChange={(e) => set("expenseActual", e.target.value)} placeholder="0" className={inputClass} />
+              <Field label="Expected expense">
+                <input type="number" min="0" value={form.expectedExpense} onChange={(e) => set("expectedExpense", e.target.value)} placeholder="0" className={inputClass} />
               </Field>
-              <Field label="Expected revenue">
-                <input type="number" min="0" value={form.revenueActual} onChange={(e) => set("revenueActual", e.target.value)} placeholder="0" className={inputClass} />
+              <Field label="Expense category">
+                <select value={form.expenseCategory} onChange={(e) => set("expenseCategory", e.target.value)} className={inputClass}>
+                  {EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
               </Field>
             </div>
-            <p className="text-xs text-muted -mt-2">Expenditure is what the work costs. Expected revenue is what it should bring in.</p>
-
             <p className="text-xs text-muted">
               {form.dealId
-                ? `When you mark this done${isBdo ? " and your Business CEO approves it" : ""}, the expected revenue is added as a payment on ${linkedDeal?.name ?? "the deal"}. It counts toward revenue for the deal, the people on it, the company and the group. Reopen the task and it comes off again.`
-                : "Pick a deal above so the expected revenue counts toward revenue once the task is done. You can leave all of this empty and come back to it later."}
+                ? `${linkedDeal?.name ?? "The deal"} already holds the expected revenue, so it isn't asked for here. Finishing this task adds no money: only your Business CEO adds actual revenue.`
+                : "Expected revenue is what this work should bring in. Expected expense is what it should cost. You can leave these empty and come back later."}
             </p>
           </>
         )}
@@ -651,5 +693,6 @@ export function TaskForm({ task, bdos, clients, allTasks, isBdo, oneCompany, myB
         )}
       </div>
     </KpiSheet>
+    </>
   );
 }

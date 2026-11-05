@@ -11,6 +11,7 @@ import { toast } from "@/components/Toast";
 import { TaskRow } from "../../tasks/components/TaskRow";
 import { TaskForm } from "../../tasks/components/TaskForm";
 import { TaskBoard, matchesFocus } from "../../tasks/components/TaskBoard";
+import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "../../tasks/components/TaskMoney";
 import { CollaboratorTaskSheet } from "../../tasks/components/CollaboratorTaskSheet";
 import { ReviewModal } from "../../tasks/components/ReviewModal";
 import { ResultPrompt } from "../../tasks/components/ResultPrompt";
@@ -94,9 +95,9 @@ export function ProjectTasks({ project }: { project: Project }) {
   const openAdd = () => (external ? setSheet({ task: null }) : setForm({ task: null }));
 
   const toggleMutation = useMutation({
-    mutationFn: ({ task, status }: { task: Task; status: string }) => {
+    mutationFn: ({ task, status, completionMoney }: { task: Task; status: string; completionMoney?: ReturnType<typeof moneyBody> }) => {
       if (!canChange(task)) return Promise.reject(new Error("Only its owner or whoever runs the project can change it."));
-      return api.put(`/tasks/${task.id}`, { status });
+      return api.put(`/tasks/${task.id}`, { status, ...(completionMoney ? { completionMoney } : {}) });
     },
     onSuccess: (res, { status }) => {
       refresh();
@@ -113,8 +114,17 @@ export function ProjectTasks({ project }: { project: Project }) {
     onError: (err) => { setToDelete(null); toast.error("Couldn't delete that", { description: apiError(err, "Please try again.") }); },
   });
 
+  // A manager's finished task counts at once, so they say what was received and spent first.
+  const [finishing, setFinishing] = useState<Task | null>(null);
+  const needsMoney = (task: Task, status: string) => (isGroupOwner(user) || isBusinessCeo(user)) && status === "COMPLETED" && task.status !== "COMPLETED" && hasTaskMoney(task);
+  const changeStatus = (task: Task, status: string) => {
+    if (needsMoney(task, status)) setFinishing(task);
+    else toggleMutation.mutate({ task, status });
+  };
+
   // Board drop: the card moves straight away; if the server says no it goes back.
   const moveTask = async (task: Task, to: string) => {
+    if (needsMoney(task, to)) { setFinishing(task); return; }
     const setStatus = (status: string) => qc.setQueryData<Task[]>(tasksKey, (old) => old?.map((x) => (x.id === task.id ? { ...x, status } : x)));
     setStatus(to);
     try { await toggleMutation.mutateAsync({ task, status: to }); } catch { setStatus(task.status); }
@@ -341,8 +351,8 @@ export function ProjectTasks({ project }: { project: Project }) {
                       showBdo
                       companyName=""
                       updating={toggleMutation.isPending && toggleMutation.variables?.task.id === t.id}
-                      onToggle={() => toggleMutation.mutate({ task: t, status: t.status === "COMPLETED" ? "PENDING" : "COMPLETED" })}
-                      onChangeStatus={(status) => toggleMutation.mutate({ task: t, status })}
+                      onToggle={() => changeStatus(t, t.status === "COMPLETED" ? "PENDING" : "COMPLETED")}
+                      onChangeStatus={(status) => changeStatus(t, status)}
                       onEdit={() => openTask(t)}
                       onDelete={project.canManage && !external ? () => setToDelete(t) : undefined}
                       onAttach={() => (canChange(t) ? setAttaching(t) : openTask(t))}
@@ -359,6 +369,13 @@ export function ProjectTasks({ project }: { project: Project }) {
         />
       )}
 
+      {finishing && (
+        <TaskMoneySheet
+          task={finishing} title="Finish this task" confirmLabel="Mark as done" busy={toggleMutation.isPending}
+          onConfirm={(completionMoney) => toggleMutation.mutate({ task: finishing, status: "COMPLETED", completionMoney }, { onSettled: () => setFinishing(null) })}
+          onClose={() => setFinishing(null)}
+        />
+      )}
       {form && (
         <TaskForm
           task={form.task}

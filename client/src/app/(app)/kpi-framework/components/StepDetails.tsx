@@ -22,11 +22,12 @@ export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
       </p>
 
       <div>
-        <Label hint="(you can pick later)">Who's responsible for it?</Label>
+        <Label>Who's responsible for it?</Label>
         <select value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)} className={selectClass}>
           <option value="">Nobody yet</option>
           {owners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        {form.ownerId && <p className="text-xs text-muted mt-1">This KPI will also show on this person's KPI list.</p>}
       </div>
 
       <div>

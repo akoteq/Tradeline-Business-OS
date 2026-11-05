@@ -16,6 +16,7 @@ import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
 import { CollaboratorTaskSheet } from "./components/CollaboratorTaskSheet";
 import { ResultPrompt } from "./components/ResultPrompt";
+import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "./components/TaskMoney";
 import { ApprovalsList } from "./components/ApprovalsList";
 import { ReviewModal } from "./components/ReviewModal";
 import { ConfirmDialog, FilterSelect, OutcomeBadge, RingStat, Stat } from "./components/TaskBits";
@@ -173,7 +174,7 @@ export default function TasksPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ task, status }: { task: Task; status: string }) => api.put(`/tasks/${task.id}`, { status }),
+    mutationFn: ({ task, status, completionMoney }: { task: Task; status: string; completionMoney?: ReturnType<typeof moneyBody> }) => api.put(`/tasks/${task.id}`, { status, ...(completionMoney ? { completionMoney } : {}) }),
     onSuccess: (res, { status }) => {
       refresh();
       const saved = res.data as Task;
@@ -190,10 +191,19 @@ export default function TasksPage() {
     },
   });
 
+  // A manager's finished task counts at once, so they say what was received and spent first.
+  const [finishing, setFinishing] = useState<Task | null>(null);
+  const needsMoney = (task: Task, status: string) => !isBdo && status === "COMPLETED" && task.status !== "COMPLETED" && hasTaskMoney(task);
+  const changeStatus = (task: Task, status: string) => {
+    if (needsMoney(task, status)) setFinishing(task);
+    else toggleMutation.mutate({ task, status });
+  };
+
   // Board drop: the card jumps to the new column straight away, then the server catches up. If the
   // server says no (the mutation's own toast explains why) the card goes back where it was.
   // Finishing a task this way behaves exactly like ticking its checkbox, including the result prompt.
   const moveTask = async (task: Task, to: string) => {
+    if (needsMoney(task, to)) { setFinishing(task); return; }
     const setStatus = (status: string) =>
       qc.setQueryData<Task[]>(tasksKey, (old) => old?.map((x) => (x.id === task.id ? { ...x, status } : x)));
     setStatus(to);
@@ -585,8 +595,8 @@ export default function TasksPage() {
                       showBdo={!isBdo}
                       companyName={t.company ? (byKey[t.company]?.name ?? t.company) : ""}
                       updating={toggleMutation.isPending && toggleMutation.variables?.task.id === t.id}
-                      onToggle={() => toggleMutation.mutate({ task: t, status: t.status === "COMPLETED" ? "PENDING" : "COMPLETED" })}
-                      onChangeStatus={(status) => toggleMutation.mutate({ task: t, status })}
+                      onToggle={() => changeStatus(t, t.status === "COMPLETED" ? "PENDING" : "COMPLETED")}
+                      onChangeStatus={(status) => changeStatus(t, status)}
                       onEdit={() => openEdit(t)}
                       onDelete={external ? undefined : () => setToDelete(t)}
                       onAttach={() => setAttaching(t)}
@@ -656,6 +666,13 @@ export default function TasksPage() {
         />
       )}
 
+      {finishing && (
+        <TaskMoneySheet
+          task={finishing} title="Finish this task" confirmLabel="Mark as done" busy={toggleMutation.isPending}
+          onConfirm={(completionMoney) => toggleMutation.mutate({ task: finishing, status: "COMPLETED", completionMoney }, { onSettled: () => setFinishing(null) })}
+          onClose={() => setFinishing(null)}
+        />
+      )}
       {prompt && <ResultPrompt task={prompt} onClose={() => setPrompt(null)} onDone={() => { setPrompt(null); refresh(); }} />}
 
       {toDelete && (

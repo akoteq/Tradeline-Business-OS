@@ -18,6 +18,8 @@ export type ProjectMember = {
 };
 
 export type Project = {
+  dealId?: string | null;
+  dealSource?: string | null;
   id: string;
   name: string;
   status: ProjectStatus;

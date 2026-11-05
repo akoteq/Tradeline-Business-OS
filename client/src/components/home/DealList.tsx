@@ -33,7 +33,7 @@ export function DealList({
                 <p className="truncate font-medium text-foreground">{d.businessName}</p>
                 <p className="truncate text-xs text-muted">{d.company}</p>
               </div>
-              <Tag value={risk ? d.dealHealth : d.dealStage} />
+              <Tag value={d.paymentStatus ?? "UNPAID"} />
               <span className="w-28 shrink-0 whitespace-nowrap text-right font-medium tabular-nums text-foreground">{fmt(d.amount)}</span>
             </li>
           ))}
