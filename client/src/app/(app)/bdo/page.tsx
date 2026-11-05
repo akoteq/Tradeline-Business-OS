@@ -1,5 +1,6 @@
 "use client";
 
+import { DealStatusBadge } from '@/components/deals/dealMoney';
 import { useQuery } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
@@ -56,8 +57,8 @@ export default function BdoDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PipelineList title="BAPX Pipeline" deals={bapxDeals.slice(0, 8)} href="/bapx/pipeline" />
-        <PipelineList title="Tradeline Pipeline" deals={tradelineDeals.slice(0, 8)} href="/tradeline/pipeline" />
+        <PipelineList title="BAPX deals" deals={bapxDeals.slice(0, 8)} href="/bapx/pipeline" />
+        <PipelineList title="Tradeline deals" deals={tradelineDeals.slice(0, 8)} href="/tradeline/pipeline" />
       </div>
 
       {openTasks > 0 && (
@@ -108,7 +109,7 @@ function KpiCard({ label, value, sub, icon, color, href }: {
 
 function PipelineList({ title, deals, href }: {
   title: string;
-  deals: Array<{ id: string; businessName: string; dealStage: string; dealHealth: string }>;
+  deals: Array<{ id: string; businessName: string; dealStage: string; dealHealth: string; paymentStatus?: string | null }>;
   href: string;
 }) {
   return (
@@ -125,14 +126,8 @@ function PipelineList({ title, deals, href }: {
             <div key={d.id} className="px-4 py-2.5 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-800">{d.businessName}</p>
-                <p className="text-xs text-gray-400">{d.dealStage.replace(/_/g, ' ')}</p>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                d.dealHealth === 'ACTIVE' ? 'bg-green-50 text-green-700' :
-                d.dealHealth === 'CLOSED_WON' ? 'bg-indigo-50 text-indigo-700' :
-                d.dealHealth === 'AT_RISK' ? 'bg-red-50 text-red-700' :
-                'bg-gray-100 text-gray-600'
-              }`}>{d.dealHealth.replace(/_/g, ' ')}</span>
+              <DealStatusBadge deal={d} />
             </div>
           ))}
         </div>

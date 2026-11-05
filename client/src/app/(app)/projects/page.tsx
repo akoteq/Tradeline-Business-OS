@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
@@ -13,7 +13,7 @@ import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
 import { Menu, MenuItem } from "../leads/components/Menu";
 import { Avatar, ProjectStatusPill, apiError, fmtDay, isClosed, type Project } from "./lib";
-import { ProjectFormSheet } from "./components/ProjectFormSheet";
+import { ProjectFormSheet, type ProjectPrefill } from "./components/ProjectFormSheet";
 import {
   Empty, FilterBar, GroupSection, PageHeader, PrimaryButton, RowsSkeleton, StatCards, TextTabs, selectClass,
   type GroupStyle, type Stat, type TabDef,
@@ -52,7 +52,14 @@ export default function ProjectsPage() {
   const [company, setCompany] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("name");
-  const [form, setForm] = useState<{ project: Project | null } | null>(null);
+  const [form, setForm] = useState<{ project: Project | null; prefill?: ProjectPrefill } | null>(null);
+  // "Add a project" on a deal links here with the deal already chosen.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("new") !== "1" || !q.get("dealId")) return;
+    setForm({ project: null, prefill: { dealId: q.get("dealId") as string, dealSource: q.get("dealSource") ?? "", company: q.get("company") ?? "", name: q.get("name") ?? "" } });
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   const { data: projects = [], isLoading, isError, refetch } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -178,6 +185,7 @@ export default function ProjectsPage() {
       {form && (
         <ProjectFormSheet
           project={form.project}
+          prefill={form.prefill}
           canPickCompany={owner}
           onClose={() => setForm(null)}
           onSaved={(saved) => {

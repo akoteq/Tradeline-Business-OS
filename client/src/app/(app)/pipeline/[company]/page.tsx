@@ -1,13 +1,15 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
 import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
 import { useCompanies } from "@/lib/companies";
 import { DataTable } from "@/components/DataTable";
-import { DealHealthBadge, DealStageBadge, PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { PriorityBadge, InvoiceStatusBadge } from "@/components/Badges";
+import { WizardShell, useWizard } from "@/app/(app)/leads/components/WizardShell";
+import { DEAL_STEPS, DealStatusBadge, DealValueFields, dealMoneyText, dealStatus, dealValueBody, dealValueOf, useNewDealLink, type NewDealLink } from "@/components/deals/dealMoney";
 import { ClientSelect, type ClientOption } from "@/components/ClientSelect";
 import { AssigneesField } from "@/components/AssigneesField";
 import { GHANA_REGIONS } from "@/lib/regions";
@@ -16,10 +18,8 @@ import { X, Layers, CircleDollarSign, Wallet, TrendingUp } from "lucide-react";
 import { DealPayments } from "@/components/DealPayments";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-// Note: this is the post-conversion deal pipeline (stage / health / invoice),
-// distinct from the Tradeline SQD's `Lead` entity (pre-conversion prospect,
-// FR-8–13). Nothing here maps to Lead/KPI/Investment, so no fields were added
-// or removed against that spec — just restyled to the shared design system.
+// A deal is won work: a lead becomes a client, and the client gets a deal. Sales stages live on
+// leads. A deal holds its value, and its status comes from the money the CEO has added.
 
 type Deal = {
   id: string;
@@ -45,6 +45,8 @@ type Deal = {
   balanceGhs?: number | null;
   currency?: string | null;
   exchangeRate?: number | null;
+  dealValue?: number | null;
+  expectedPaymentDate?: string | null;
   nextSteps?: string | null;
   nextCallDate?: string | null;
   notes?: string | null;
@@ -52,18 +54,13 @@ type Deal = {
 
 type BdoOption = { id: string; name: string; company: string };
 
-const STAGE_OPTS  = ["QUALIFICATION", "DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CONTRACT_REVIEW", "CLOSED_WON", "CLOSED_LOST", "ON_HOLD"];
-const HEALTH_OPTS = ["ACTIVE", "STALE", "AT_RISK", "CLOSED_WON", "CLOSED_LOST"];
-const PAY_OPTS    = ["PAID", "UNPAID", "PARTIAL", "OVERDUE"];
 const INVOICE_OPTS = ["NOT_INVOICED", "INVOICED", "PAID", "OVERDUE"];
-const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
 
 const EMPTY_FORM = {
   smeId: "", businessName: "", clientName: "", email: "", telephone: "", region: "",
   industry: "", valueChain: "", product: "", bdoId: "",
-  dealStage: "QUALIFICATION", dealHealth: "ACTIVE", priority: "MEDIUM",
-  paymentStatus: "UNPAID", invoiceStatus: "NOT_INVOICED",
-  revenuePotentialGhs: "", revenueReceivedGhs: "", balanceGhs: "",
+  priority: "MEDIUM", invoiceStatus: "NOT_INVOICED",
+  dealValue: "", expectedPaymentDate: "",
   currency: "GHS", exchangeRate: "",
   nextSteps: "", nextCallDate: "", notes: "",
 };
@@ -87,14 +84,14 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
   const { bySlug } = useCompanies();
   const co = bySlug[slug];
   const companyKey = co?.key ?? "";
-  const label = co?.name ?? "Pipeline";
+  const label = co?.name ?? "Deals";
 
   const qc = useQueryClient();
-  const [filterStage, setFilterStage]   = useState("");
-  const [filterHealth, setFilterHealth] = useState("");
   const [editing, setEditing]           = useState<Deal | null>(null);
   const [showForm, setShowForm]         = useState(false);
   const [detail, setDetail]             = useState<Deal | null>(null);
+  const [prefill, setPrefill]           = useState<NewDealLink | null>(null);
+  useNewDealLink(useCallback((link: NewDealLink) => { setPrefill(link); setEditing(null); setShowForm(true); }, []));
 
   const { data: bdos = [] } = useQuery<BdoOption[]>({
     queryKey: ["bdos"],
@@ -108,11 +105,9 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
   const clients = smeRes?.data ?? [];
 
   const qp = new URLSearchParams({ company: companyKey });
-  if (filterStage)  qp.set("stage",  filterStage);
-  if (filterHealth) qp.set("health", filterHealth);
 
   const { data: deals = [], isLoading } = useQuery<Deal[]>({
-    queryKey: ["company-deals", companyKey, filterStage, filterHealth],
+    queryKey: ["company-deals", companyKey],
     queryFn: () => fetcher(`/company-deals?${qp}`),
     enabled: !!companyKey,
   });
@@ -126,7 +121,9 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
   });
 
   const totalRevenue  = deals.reduce((s, d) => s + (d.revenueReceivedGhs ?? 0), 0);
-  const totalPotential = deals.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
+  const live = deals.filter((d) => d.dealStage !== "CLOSED_LOST");
+  const totalValue = live.reduce((s, d) => s + (d.revenuePotentialGhs ?? 0), 0);
+  const totalBalance = live.reduce((s, d) => s + (d.balanceGhs ?? 0), 0);
 
   const columns = [
     {
@@ -139,18 +136,18 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
     },
     { key: "clientName", label: "Client",   render: (r: Deal) => r.clientName ?? "—" },
     { key: "industry",   label: "Industry", render: (r: Deal) => r.industry   ?? "—" },
-    { key: "dealStage",  label: "Stage",    sortable: true, render: (r: Deal) => <DealStageBadge  value={r.dealStage} /> },
-    { key: "dealHealth", label: "Health",   sortable: true, render: (r: Deal) => <DealHealthBadge value={r.dealHealth} /> },
+    { key: "paymentStatus", label: "Status", render: (r: Deal) => <DealStatusBadge deal={r} /> },
     { key: "priority",   label: "Priority", sortable: true, render: (r: Deal) => <PriorityBadge  value={r.priority} /> },
+    { key: "dealValue", label: "Deal value", render: (r: Deal) => <span className="tabular-nums text-foreground">{dealValueOf(r) ? `${r.currency ?? "GHS"} ${Number(dealValueOf(r)).toLocaleString()}` : "—"}</span> },
     {
       key: "revenueReceivedGhs", label: "Received",
-      render: (r: Deal) => <span className="font-medium tabular-nums text-foreground">{fmt(r.revenueReceivedGhs)}</span>,
+      render: (r: Deal) => <span className="font-medium tabular-nums text-foreground">{dealMoneyText(r.revenueReceivedGhs ?? 0, r)}</span>,
     },
     {
       key: "balanceGhs", label: "Balance",
       render: (r: Deal) => (
         <span className={`tabular-nums ${r.balanceGhs && r.balanceGhs > 0 ? "font-medium text-accent" : "text-muted"}`}>
-          {fmt(r.balanceGhs)}
+          {dealStatus(r) === "CANCELLED" ? "—" : dealMoneyText(r.balanceGhs, r)}
         </span>
       ),
     },
@@ -163,15 +160,15 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
         <div className="border-b border-dashed border-border pb-5">
           <h1 className="font-serif text-[1.75rem] leading-[1.15] text-foreground md:text-[2rem]">{label}</h1>
-          <p className="mt-1 text-sm text-muted">Deal pipeline</p>
+          <p className="mt-1 text-sm text-muted">Deals: won work, money received and balance</p>
         </div>
 
         {/* Summary KPI row */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">
           <KpiTile icon={Layers} label="Total deals" value={deals.length} />
-          <KpiTile icon={CircleDollarSign} label="Revenue received" value={fmt(totalRevenue)} />
-          <KpiTile icon={Wallet} label="Revenue potential" value={fmt(totalPotential)} />
-          <KpiTile icon={TrendingUp} label="Active" value={deals.filter((d) => d.dealHealth === "ACTIVE").length} />
+          <KpiTile icon={Wallet} label="Deal value" value={fmt(totalValue)} />
+          <KpiTile icon={CircleDollarSign} label="Received" value={fmt(totalRevenue)} />
+          <KpiTile icon={TrendingUp} label="Balance" value={fmt(totalBalance)} />
         </div>
 
         <div>
@@ -185,29 +182,18 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
             onDelete={(row) => {
               confirmAction({ title: `Delete the deal for ${row.businessName}?`, body: "This can't be undone.", confirmLabel: "Delete deal" }).then((ok) => { if (ok) deleteMutation.mutate(row.id); });
             }}
-            filterBar={
-              <div className="flex flex-wrap gap-2">
-                <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className={selectCls}>
-                  <option value="">All stages</option>
-                  {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-                </select>
-                <select value={filterHealth} onChange={(e) => setFilterHealth(e.target.value)} className={selectCls}>
-                  <option value="">All health</option>
-                  {HEALTH_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-                </select>
-              </div>
-            }
           />
         </div>
 
         {showForm && (
           <DealFormModal
             deal={editing}
+            prefill={prefill}
             companyKey={companyKey}
             bdos={bdos}
             clients={clients}
-            onClose={() => setShowForm(false)}
-            onSaved={() => { setShowForm(false); invalidate(); }}
+            onClose={() => { setShowForm(false); setPrefill(null); }}
+            onSaved={() => { setShowForm(false); setPrefill(null); invalidate(); }}
           />
         )}
 
@@ -216,6 +202,7 @@ export default function CompanyPipelinePage({ params }: { params: Promise<{ comp
             deal={detail}
             onClose={() => setDetail(null)}
             onEdit={() => { setEditing(detail); setDetail(null); setShowForm(true); }}
+            onChanged={() => { setDetail(null); invalidate(); }}
           />
         )}
       </div>
@@ -243,21 +230,18 @@ function KpiTile({ icon: Icon, label, value }: { icon: React.ComponentType<{ siz
 // ─── Add / Edit modal ──────────────────────────────────────────────────────────
 
 function DealFormModal({
-  deal, companyKey, bdos, clients, onClose, onSaved,
+  deal, prefill, companyKey, bdos, clients, onClose, onSaved,
 }: {
   deal: Deal | null;
+  prefill: NewDealLink | null;
   companyKey: string;
   bdos: BdoOption[];
   clients: ClientOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  // Round-trip: stored amounts are GHS; if the deal was entered in another currency,
-  // show the original-currency values in the form (GHS ÷ rate).
   const dCur = deal?.currency ?? "GHS";
   const dRate = deal?.exchangeRate ?? 1;
-  const disp = (ghs: number | null | undefined) =>
-    ghs == null ? "" : String(dCur === "GHS" || !dRate ? ghs : Math.round((ghs / dRate) * 100) / 100);
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     ...(deal ? {
@@ -271,14 +255,10 @@ function DealFormModal({
       valueChain:          deal.valueChain          ?? "",
       product:             deal.product             ?? "",
       bdoId:               deal.bdoId               ?? "",
-      dealStage:           deal.dealStage,
-      dealHealth:          deal.dealHealth,
       priority:            deal.priority,
-      paymentStatus:       deal.paymentStatus       ?? "UNPAID",
       invoiceStatus:       deal.invoiceStatus       ?? "NOT_INVOICED",
-      revenuePotentialGhs: disp(deal.revenuePotentialGhs),
-      revenueReceivedGhs:  disp(deal.revenueReceivedGhs),
-      balanceGhs:          disp(deal.balanceGhs),
+      dealValue:           dealValueOf(deal),
+      expectedPaymentDate: (deal.expectedPaymentDate ?? "").slice(0, 10),
       currency:            dCur,
       exchangeRate:        dCur === "GHS" ? "" : String(dRate),
       nextSteps:           deal.nextSteps           ?? "",
@@ -291,17 +271,24 @@ function DealFormModal({
   const [error, setError]   = useState("");
   const [assigned, setAssigned] = useState<string[]>((deal as { assignedBdoIds?: string[] } | null)?.assignedBdoIds ?? []);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const { step, dir, reached, go, last } = useWizard(DEAL_STEPS.length, deal ? DEAL_STEPS.length - 1 : 0);
+  const hasClient = !!form.businessName.trim();
+
+  // Coming from a converted lead: the client and estimated value are filled in.
+  useEffect(() => {
+    if (!prefill || form.smeId) return;
+    const m = clients.find((c) => c.id === prefill.smeId);
+    if (m) setForm((f) => ({ ...f, smeId: m.id, businessName: m.companyName, clientName: m.contactName ?? "", email: m.email ?? "", telephone: m.phone ?? "", valueChain: m.valueChain ?? "", region: m.region ?? "", dealValue: prefill.value || f.dealValue }));
+  }, [prefill, clients, form.smeId]);
 
   const save = async () => {
     if (!deal && !form.smeId) { setError("Please select a client."); return; }
     if (!form.businessName.trim()) { setError("Please select a client."); return; }
     setSaving(true); setError("");
-    // Convert entered amounts to GHS (the stored / reporting currency).
-    const rate = form.currency === "GHS" ? 1 : (Number(form.exchangeRate) || 1);
-    const toGhs = (v: string) => (v ? Number(v) * rate : null);
     const body = {
       company: companyKey,
       ...form,
+      ...dealValueBody(form),
       smeId:               form.smeId               || null,
       bdoId:               form.bdoId               || null,
       clientName:          form.clientName           || null,
@@ -311,10 +298,6 @@ function DealFormModal({
       industry:            form.industry             || null,
       valueChain:          form.valueChain           || null,
       product:             form.product              || null,
-      exchangeRate:        rate,
-      revenuePotentialGhs: toGhs(form.revenuePotentialGhs),
-      revenueReceivedGhs:  toGhs(form.revenueReceivedGhs),
-      balanceGhs:          toGhs(form.balanceGhs),
       nextSteps:           form.nextSteps            || null,
       nextCallDate:        form.nextCallDate         || null,
       notes:               form.notes               || null,
@@ -324,24 +307,23 @@ function DealFormModal({
       deal ? await api.put(`/company-deals/${deal.id}`, body) : await api.post("/company-deals", body);
       toast.success(deal ? "Deal updated" : "Deal added", { description: form.businessName.trim() || undefined });
       onSaved();
-    } catch {
-      setError("Failed to save. Check the server.");
+    } catch (err) {
+      setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "We couldn't save this deal. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-surface shadow-xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">{deal ? "Edit deal" : "Add deal"}</h2>
-          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
-        </div>
-
-        <div className="space-y-4 overflow-y-auto p-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="col-span-2">
+    <WizardShell
+      steps={DEAL_STEPS} step={step} dir={dir} reached={reached} onGo={go} onClose={onClose} error={error}
+      primary={last
+        ? { label: saving ? "Saving…" : deal ? "Update deal" : "Add deal", disabled: saving || !hasClient, onClick: save }
+        : { label: "Continue", disabled: !hasClient, onClick: () => go(step + 1) }}
+    >
+      {step === 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
               <ClientSelect
                 label="Client *"
                 value={form.smeId}
@@ -361,96 +343,61 @@ function DealFormModal({
                   }));
                 }}
               />
-              <p className="mt-1 text-[11px] text-muted">
-                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add in Client Overview first →</Link>
+              <p className="text-[11px] text-muted mt-1">
+                Picking a client fills in their details. Don&apos;t see them? <Link href="/sme" className="text-accent hover:underline">Add them on the Clients page first →</Link>
               </p>
-            </div>
-            <Field label="Client contact"  value={form.clientName}   onChange={(v) => set("clientName", v)} />
-            <Field label="Industry"        value={form.industry}     onChange={(v) => set("industry", v)} />
-            <Field label="Email"           value={form.email}        onChange={(v) => set("email", v)} type="email" />
-            <Field label="Telephone"       value={form.telephone}    onChange={(v) => set("telephone", v)} />
-            <SelectField label="Region" value={form.region} onChange={(v) => set("region", v)}>
-              <option value="">— Select region —</option>
-              {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
-              {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </SelectField>
-            <Field label="Value chain"     value={form.valueChain}   onChange={(v) => set("valueChain", v)} />
-            <Field label="Product"         value={form.product}      onChange={(v) => set("product", v)} />
           </div>
-
+          <Field label="Client contact" value={form.clientName} onChange={(v) => set("clientName", v)} />
+          <Field label="Industry" value={form.industry} onChange={(v) => set("industry", v)} />
+          <Field label="Email" value={form.email} onChange={(v) => set("email", v)} type="email" />
+          <Field label="Telephone" value={form.telephone} onChange={(v) => set("telephone", v)} />
+          <SelectField label="Region" value={form.region} onChange={(v) => set("region", v)}>
+            <option value="">— Select region —</option>
+            {form.region && !GHANA_REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+            {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </SelectField>
+          <Field label="Value chain" value={form.valueChain} onChange={(v) => set("valueChain", v)} />
+        </div>
+      )}
+      {step === 1 && (
+        <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SelectField label="Assigned BDO" value={form.bdoId} onChange={(v) => set("bdoId", v)}>
+            <SelectField label="Who owns this deal?" value={form.bdoId} onChange={(v) => set("bdoId", v)}>
               <option value="">— Unassigned —</option>
               {bdos.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.company})</option>)}
             </SelectField>
             <AssigneesField value={assigned} onChange={setAssigned} people={bdos.filter((b) => b.company === companyKey)} ownerId={form.bdoId} />
-            <SelectField label="Deal stage"     value={form.dealStage}     onChange={(v) => set("dealStage", v)}>
-              {STAGE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-            </SelectField>
-            <SelectField label="Deal health"    value={form.dealHealth}    onChange={(v) => set("dealHealth", v)}>
-              {HEALTH_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-            </SelectField>
-            <SelectField label="Priority"       value={form.priority}      onChange={(v) => set("priority", v)}>
+            <Field label="Product" value={form.product} onChange={(v) => set("product", v)} />
+            <SelectField label="Priority" value={form.priority} onChange={(v) => set("priority", v)}>
               {["HIGH", "MEDIUM", "LOW"].map((s) => <option key={s} value={s}>{s}</option>)}
-            </SelectField>
-            <SelectField label="Payment status" value={form.paymentStatus} onChange={(v) => set("paymentStatus", v)}>
-              {PAY_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </SelectField>
-            <SelectField label="Invoice status" value={form.invoiceStatus} onChange={(v) => set("invoiceStatus", v)}>
-              {INVOICE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
             </SelectField>
             <Field label="Next call date" value={form.nextCallDate} onChange={(v) => set("nextCallDate", v)} type="date" />
           </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SelectField label="Currency" value={form.currency} onChange={(v) => set("currency", v)}>
-              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </SelectField>
-            {form.currency !== "GHS" && (
-              <Field label={`Exchange rate (1 ${form.currency} = ? GHS)`} value={form.exchangeRate} onChange={(v) => set("exchangeRate", v)} type="number" />
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label={`Revenue potential (${form.currency})`} value={form.revenuePotentialGhs} onChange={(v) => set("revenuePotentialGhs", v)} type="number" />
-            <Field label={`Revenue received (${form.currency})`}  value={form.revenueReceivedGhs}  onChange={(v) => set("revenueReceivedGhs", v)}  type="number" />
-            <Field label={`Balance (${form.currency})`}           value={form.balanceGhs}          onChange={(v) => set("balanceGhs", v)}          type="number" />
-          </div>
-          {form.currency !== "GHS" && form.exchangeRate && (
-            <p className="text-[11px] text-muted">Entered in {form.currency}, stored as GHS at 1 {form.currency} = {form.exchangeRate} GHS.</p>
-          )}
-
           <div>
             <label className={labelCls}>Next steps</label>
             <textarea value={form.nextSteps} onChange={(e) => set("nextSteps", e.target.value)} rows={2} className={`${inputCls} resize-none`} />
           </div>
           <div>
             <label className={labelCls}>Notes</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className={`${inputCls} resize-none`} />
           </div>
-
-          {error && (
-            <p className="rounded-lg border border-accent/25 bg-accent/[0.08] px-3 py-2 text-sm text-accent">{error}</p>
-          )}
         </div>
-
-        <div className="flex shrink-0 justify-end gap-2 border-t border-border px-5 py-3">
-          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-muted hover:bg-background">Cancel</button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : deal ? "Update deal" : "Add deal"}
-          </button>
+      )}
+      {step === 2 && (
+        <div className="space-y-3">
+          <DealValueFields form={form} set={(k, v) => set(k, v)} inputClass={inputCls} labelClass={labelCls} />
+          <SelectField label="Invoice status" value={form.invoiceStatus} onChange={(v) => set("invoiceStatus", v)}>
+            {INVOICE_OPTS.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+          </SelectField>
         </div>
-      </div>
-    </div>
+      )}
+    </WizardShell>
   );
 }
 
 // ─── Detail drawer ─────────────────────────────────────────────────────────────
 
-function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => void; onEdit: () => void }) {
+function DetailDrawer({ deal, onClose, onEdit, onChanged }: { deal: Deal; onClose: () => void; onEdit: () => void; onChanged: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-foreground/30" onClick={onClose} />
@@ -467,8 +414,7 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
         </div>
         <div className="space-y-4 p-5">
           <div className="flex flex-wrap gap-2">
-            <DealStageBadge  value={deal.dealStage} />
-            <DealHealthBadge value={deal.dealHealth} />
+            <DealStatusBadge deal={deal} />
             <PriorityBadge   value={deal.priority} />
           </div>
           <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -477,14 +423,14 @@ function DetailDrawer({ deal, onClose, onEdit }: { deal: Deal; onClose: () => vo
             <DItem label="Region"           value={deal.region} />
             <DItem label="Industry"         value={deal.industry} />
             <DItem label="BDO"              value={deal.bdo?.name} />
-            <DItem label="Payment status"   value={deal.paymentStatus} />
             <DItem label="Invoice status"   value={deal.invoiceStatus ? deal.invoiceStatus.replace(/_/g, " ") : null} />
-            <DItem label="Entered in"       value={deal.currency && deal.currency !== "GHS" ? `${deal.currency} @ ${deal.exchangeRate} GHS` : "GHS"} />
-            <DItem label="Revenue received" value={fmt(deal.revenueReceivedGhs)} />
-            <DItem label="Balance"          value={fmt(deal.balanceGhs)} />
+            <DItem label="Deal value"       value={dealValueOf(deal) ? `${deal.currency ?? "GHS"} ${Number(dealValueOf(deal)).toLocaleString()}` : null} />
+            <DItem label="Received"         value={dealMoneyText(deal.revenueReceivedGhs ?? 0, deal)} />
+            <DItem label="Balance"          value={dealStatus(deal) === "CANCELLED" ? null : dealMoneyText(deal.balanceGhs, deal)} />
+            <DItem label="Expected payment" value={deal.expectedPaymentDate ? new Date(deal.expectedPaymentDate).toLocaleDateString() : null} />
             <DItem label="Next call"        value={deal.nextCallDate ? new Date(deal.nextCallDate).toLocaleDateString() : null} />
           </dl>
-          <DealPayments source="COMPANY" dealId={deal.id} />
+          <DealPayments source="COMPANY" dealId={deal.id} company={deal.company} dealName={deal.businessName} cancelled={deal.dealStage === "CLOSED_LOST"} endpoint={`/company-deals/${deal.id}`} onChanged={onChanged} />
           {deal.nextSteps && (
             <div>
               <p className="mb-1.5 text-xs font-semibold text-muted">Next steps</p>

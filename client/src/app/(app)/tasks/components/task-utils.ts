@@ -48,11 +48,16 @@ export type Task = {
   blockedBy: { id: string; deliverable: string }[];
   overdue: boolean;
   needsResult: boolean;
-  expenseActual: number | null;
-  revenueActual: number | null;
+  // Saved as expected entries in Finance, linked to this task. A task on a deal has no expected
+  // revenue, because the deal holds that amount.
+  expectedRevenue: number | null;
+  expectedExpense: number | null;
+  expenseCategory: string | null;
+  // What has really been recorded in Finance for this task so far.
+  receivedSoFar?: number;
+  spentSoFar?: number;
   currency: string | null;
-  exchangeRate: number | null;
-  // The deal this work is for; money brought in is recorded as a payment on it.
+  // The deal this work is for.
   dealId: string | null;
   deal: { id: string; source: string; name: string } | null;
   // The project this work belongs to (its members can all see it).
@@ -157,7 +162,8 @@ export const STATUS_STYLES: Record<string, string> = {
   CANCELLED: "bg-subtle text-muted",
 };
 
-export const CURRENCIES = ["GHS", "USD", "EUR", "NGN", "RWF"];
+export const CURRENCIES = ["GHS", "USD", "EUR"];
+export const EXPENSE_CATEGORIES = ["Staff payment", "Rent", "Utilities", "Transport", "Marketing", "Supplies", "Software", "Other"];
 export const COLLAPSED_ROWS = 4;
 
 /* ------------------------------------------------------------------ */

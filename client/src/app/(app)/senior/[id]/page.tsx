@@ -47,7 +47,7 @@ export default function SeniorDashboardPage({ params }: { params: Promise<{ id: 
         <Tile icon={<Users size={15} />} label="Members" value={String(totals.members)} />
         <Tile icon={<Briefcase size={15} />} label="Deals" value={String(totals.deals)} />
         <Tile label="Revenue Received" value={fmt(totals.revenueReceived)} accent="text-green-700" />
-        <Tile label="Pipeline Potential" value={fmt(totals.revenuePotential)} accent="text-accent" />
+        <Tile label="Deal value" value={fmt(totals.revenuePotential)} accent="text-accent" />
         <Tile icon={<ListChecks size={15} />} label="Open / Overdue Tasks" value={`${totals.tasksOpen} / ${totals.tasksOverdue}`} accent={totals.tasksOverdue > 0 ? "text-red-600" : undefined} />
       </div>
 

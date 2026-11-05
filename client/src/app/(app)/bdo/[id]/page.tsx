@@ -159,7 +159,7 @@ function BapxBody({ bdo, deals, leads, tasks }: { bdo: BDO; deals: BapxDeal[]; l
             <MiniStat label="Active" value={activeDeals} />
             <MiniStat label="Closed won" value={wonDeals} />
           </div>
-          <MoneyTile icon={Wallet} label="Target pipeline" amount={targetPipeline} display={fmt(targetPipeline)} />
+          <MoneyTile icon={Wallet} label="Deal value" amount={targetPipeline} display={fmt(targetPipeline)} />
         </div>
       </section>
 
@@ -300,79 +300,30 @@ function TasksSection({ bdo, tasks }: { bdo: BDO; tasks: TaskCounts }) {
   );
 }
 
-function countBy(deals: { dealStage: string; dealHealth: string }[], key: "dealStage" | "dealHealth") {
-  const counts = deals.reduce<Record<string, number>>((acc, d) => { acc[d[key]] = (acc[d[key]] ?? 0) + 1; return acc; }, {});
-  return Object.entries(counts).map(([raw, value]) => ({ raw, name: label(raw), value }));
-}
-
-// Neutral ink for the baseline, the accent for "look here" (won deals, deals at risk).
-function PipelineCharts({ deals }: { deals: { dealStage: string; dealHealth: string }[] }) {
-  const stageData = countBy(deals, "dealStage");
-  const healthData = countBy(deals, "dealHealth").sort((a, b) => b.value - a.value);
-  const healthTotal = healthData.reduce((n, d) => n + d.value, 0);
-  const healthColor = (raw: string, i: number) =>
-    isFlagged(raw) ? { fill: COLOR.accent, opacity: 1 }
-    : raw === "CLOSED_WON" ? { fill: COLOR.accent, opacity: 0.55 }
-    : { fill: COLOR.ink, opacity: ramp(i, healthData.length, 0.85, 0.3) };
-
+// How their deals stand on money. Sales stages live on leads.
+function PipelineCharts({ deals }: { deals: { dealStage: string; paymentStatus?: string | null }[] }) {
+  const live = deals.filter((d) => d.dealStage !== "CLOSED_LOST");
+  const counts = live.reduce<Record<string, number>>((acc, d) => { const k = d.paymentStatus ?? "UNPAID"; acc[k] = (acc[k] ?? 0) + 1; return acc; }, {});
+  const data = Object.entries(counts).map(([raw, value]) => ({ raw, name: label(raw), value })).sort((a, b) => b.value - a.value);
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <ChartCard title="Deals by stage" description="How many of their deals sit at each stage">
-        {stageData.length === 0 ? (
-          <ChartEmpty>No deals yet.</ChartEmpty>
-        ) : (
-          <div className="w-full" style={{ height: Math.max(160, stageData.length * 34) }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={stageData} layout="vertical" margin={{ top: 0, right: 28, left: 0, bottom: 0 }} barCategoryGap={8}>
-                <XAxis type="number" hide allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={110} tick={AXIS_TICK} axisLine={false} tickLine={false} />
-                <Tooltip content={<ChartTooltip format={(n) => `${n} deal${n === 1 ? "" : "s"}`} />} cursor={BAR_CURSOR} />
-                <Bar dataKey="value" name="Deals" radius={[0, 6, 6, 0]} maxBarSize={22}>
-                  {stageData.map((d, i) => (
-                    <Cell key={d.raw} fill={d.raw === "CLOSED_WON" ? COLOR.accent : COLOR.ink} fillOpacity={d.raw === "CLOSED_WON" ? 1 : ramp(i, stageData.length, 0.3, 0.85)} />
-                  ))}
-                  <LabelList dataKey="value" position="right" fontSize={11} fontWeight={600} fill={COLOR.ink} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </ChartCard>
-
-      <ChartCard title="Deal health" description="Whether their deals are moving, at risk or closed">
-        {healthData.length === 0 ? (
-          <ChartEmpty>No deals yet.</ChartEmpty>
-        ) : (
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="relative h-44 w-44 shrink-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <PieChart>
-                  <Pie data={healthData} dataKey="value" nameKey="name" innerRadius={56} outerRadius={80} paddingAngle={healthData.length > 1 ? 3 : 0} stroke="none" startAngle={90} endAngle={-270}>
-                    {healthData.map((d, i) => { const c = healthColor(d.raw, i); return <Cell key={d.raw} fill={c.fill} fillOpacity={c.opacity} />; })}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip format={(n) => `${n} deal${n === 1 ? "" : "s"}`} />} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold leading-none tracking-tight text-foreground tabular-nums">{healthTotal}</span>
-                <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Deals</span>
-              </div>
-            </div>
-            <ul className="min-w-[160px] flex-1 space-y-2.5">
-              {healthData.map((d, i) => {
-                const c = healthColor(d.raw, i);
-                return (
-                  <li key={d.raw} className="flex items-center gap-2.5 text-sm">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.fill, opacity: c.opacity }} aria-hidden />
-                    <span className="text-muted">{d.name}</span>
-                    <span className="ml-auto font-semibold tabular-nums text-foreground">{d.value}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </ChartCard>
-    </div>
+    <ChartCard title="Deals by payment" description="How much of their won work has been paid">
+      {data.length === 0 ? (
+        <ChartEmpty>No deals yet.</ChartEmpty>
+      ) : (
+        <div className="w-full" style={{ height: Math.max(160, data.length * 34) }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, left: 0, bottom: 0 }}>
+              <XAxis type="number" hide allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={110} tick={AXIS_TICK} axisLine={false} tickLine={false} />
+              <Tooltip content={<ChartTooltip format={(n) => `${n} deal${n === 1 ? "" : "s"}`} />} cursor={BAR_CURSOR} />
+              <Bar dataKey="value" name="Deals" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                {data.map((d) => <Cell key={d.raw} fill={d.raw === "PAID" ? COLOR.accent : COLOR.ink} />)}
+                <LabelList dataKey="value" position="right" fontSize={11} fontWeight={600} fill={COLOR.ink} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </ChartCard>
   );
 }

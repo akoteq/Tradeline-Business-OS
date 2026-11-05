@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { KpiSheet } from "@/components/kpi";
 import { TaskEvidence } from "@/components/TaskEvidence";
 import { apiError, fmtDate, type ApprovalTask, type Task } from "./task-utils";
+import { TaskMoneyFields, hasTaskMoney, initialMoney, moneyBody } from "./TaskMoney";
 
 /**
  * Review finished work in one place: what was done, what it moves, the evidence, then approve
@@ -22,9 +23,11 @@ export function ReviewModal({ task, companyName, onClose, onDone }: {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const withMoney = hasTaskMoney(task);
+  const [moneyValue, setMoneyValue] = useState(() => initialMoney(task));
   const [error, setError] = useState("");
 
-  const money = task.revenueActual ? `${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()}` : null;
+  const money = task.expectedRevenue ? `${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.expectedRevenue.toLocaleString()}` : null;
   const results = task.pendingResults ?? [];
   const isChange = !!task.approvedAt;
 
@@ -33,7 +36,7 @@ export function ReviewModal({ task, companyName, onClose, onDone }: {
     setBusy(action);
     setError("");
     try {
-      await api.post(`/tasks/${task.id}/${action}`, action === "reject" ? { reason: reason.trim() } : {});
+      await api.post(`/tasks/${task.id}/${action}`, action === "reject" ? { reason: reason.trim() } : withMoney ? { money: moneyBody(moneyValue) } : {});
       toast.success(action === "approve" ? "Task approved" : "Sent back for changes", { description: task.deliverable });
       onDone(action);
     } catch (err) {
@@ -84,7 +87,7 @@ export function ReviewModal({ task, companyName, onClose, onDone }: {
           {task.completionCriteria && <><dt className="text-muted">Done when</dt><dd className="text-foreground">{task.completionCriteria}</dd></>}
           {task.kpi && <><dt className="text-muted">KPI</dt><dd className="flex items-center gap-1 text-foreground"><Target size={13} className="text-accent" />{task.kpi.metric}</dd></>}
           {task.deal && <><dt className="text-muted">Deal</dt><dd className="text-foreground">{task.deal.name}</dd></>}
-          {money && <><dt className="text-muted">Brought in</dt><dd className="font-medium tabular-nums text-foreground">{money}</dd></>}
+          {money && <><dt className="text-muted">Expected revenue</dt><dd className="font-medium tabular-nums text-foreground">{money}</dd></>}
           {results.map((r, i) => (
             <Fragment key={i}><dt className="text-muted">Result</dt><dd className="text-foreground"><span className="tabular-nums">{r.value.toLocaleString()}</span> on {fmtDate(r.date)}{r.note ? ` · ${r.note}` : ""}</dd></Fragment>
           ))}
@@ -93,6 +96,8 @@ export function ReviewModal({ task, companyName, onClose, onDone }: {
       )}
 
       <TaskEvidence items={task.attachments} />
+
+      {!rejecting && withMoney && <TaskMoneyFields task={task} value={moneyValue} onChange={setMoneyValue} />}
 
       {rejecting && (
         <div>

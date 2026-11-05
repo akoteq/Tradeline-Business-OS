@@ -117,9 +117,6 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
               {task.deal && (
                 <span title="The deal this task is for">
                   {" "}· {task.deal.name}
-                  {task.revenueActual
-                    ? ` · ${task.currency && task.currency !== "GHS" ? task.currency : "GHS"} ${task.revenueActual.toLocaleString()} ${counts(task) ? "received" : done ? "awaiting approval" : "expected"}`
-                    : ""}
                 </span>
               )}
             </div>
