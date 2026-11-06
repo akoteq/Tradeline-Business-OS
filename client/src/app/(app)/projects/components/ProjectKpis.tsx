@@ -19,7 +19,7 @@ import { Field, FormError, apiError, inputClass, isClosed, primaryBtn, secondary
  * whoever runs it sets them and logs results. A project KPI can count toward a company KPI.
  */
 
-const UNITS: [string, string][] = [["COUNT", "A number"], ["CURRENCY", "Money (GHS)"], ["PERCENT", "A percentage"], ["SCORE", "A score"], ["DAYS", "Days"], ["HOURS", "Hours"]];
+const UNITS: [string, string][] = [["COUNT", "A number"], ["CURRENCY", "Money"], ["PERCENT", "A percentage"], ["SCORE", "A score"], ["DAYS", "Days"], ["HOURS", "Hours"]];
 const FREQUENCIES: [string, string][] = [["WEEKLY", "Every week"], ["MONTHLY", "Every month"], ["QUARTERLY", "Every quarter"], ["ANNUAL", "Every year"]];
 
 export function ProjectKpis({ project }: { project: Project }) {

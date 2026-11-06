@@ -3,11 +3,13 @@
 import type { KpiFormCtx } from "./types";
 import { ChoiceCard, Chips, Disclosure, Label, inputClass, selectClass } from "./fields";
 import { FREQ_WORD, fmtKpiVal } from "@/components/kpi";
+import { formatMoney } from "@/lib/currency";
 
 export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
   const { form, set, isEdit, owners, departments, parentChoices, hiddenParents, autoKeys, aggLabels, defaultAgg, lockedAggregation } = ctx;
   const target = Number(form.windowed ? form.targetValue : form.periodTarget);
   const hasTarget = Number.isFinite(target) && target > 0 && (form.windowed ? form.targetValue : form.periodTarget) !== "";
+  const shownTarget = form.unit === "CURRENCY" ? formatMoney(target, form.currency) : fmtKpiVal(target, form.unit);
 
   return (
     <div className="space-y-5">
@@ -16,7 +18,7 @@ export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
         <span className="font-medium">{form.metric || "Your KPI"}</span>
         <span className="text-muted">
           {hasTarget
-            ? ` · ${fmtKpiVal(target, form.unit)} ${form.windowed ? "in total" : `a ${FREQ_WORD[form.frequency] ?? "period"}`}`
+            ? ` · ${shownTarget} ${form.windowed ? "in total" : `a ${FREQ_WORD[form.frequency] ?? "period"}`}`
             : " · no target yet, saved as a draft"}
         </span>
       </p>
@@ -64,7 +66,11 @@ export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
               </option>
             ))}
           </select>
-          {hiddenParents && <p className="text-xs text-muted mt-1">Only KPIs with the same unit and the same or a longer interval are listed, so results can roll up.</p>}
+          {hiddenParents && (
+            <p className="text-xs text-muted mt-1">
+              Only KPIs with the same unit{form.unit === "CURRENCY" ? " and currency" : ""} and the same or a longer interval are listed, so results can roll up.
+            </p>
+          )}
         </div>
 
         {form.source === "MANUAL" && (

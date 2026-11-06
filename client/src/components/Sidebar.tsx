@@ -202,7 +202,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
     {
       title: "Money",
       items: [
-        { href: "/finance", label: "Finance", icon: Wallet, hint: "Expected and actual money, and the weekly report" },
+        { href: "/finance", label: "Revenue & Expenses", icon: Wallet, hint: "Expected and actual money, and the weekly report" },
         { href: "/grant-loans", label: "Grants & loans", icon: DollarSign },
       ],
     },

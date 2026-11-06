@@ -4,7 +4,7 @@ import type { KpiFormCtx } from "./types";
 import { Chips, Label, inputClass, selectClass } from "./fields";
 
 const UNIT_LABEL: Record<string, string> = {
-  CURRENCY: "Money (GHS)", COUNT: "A count", PERCENT: "Percent", SCORE: "A score", DAYS: "Days", HOURS: "Hours",
+  CURRENCY: "Money", COUNT: "A count", PERCENT: "Percent", SCORE: "A score", DAYS: "Days", HOURS: "Hours",
 };
 
 export function StepBasics({ ctx, onEnter }: { ctx: KpiFormCtx; onEnter: () => void }) {

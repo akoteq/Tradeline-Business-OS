@@ -34,6 +34,7 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
     parentId: editDef?.parentId ?? "",
     definition: editDef?.definition ?? "",
     unit: editDef?.unit ?? "COUNT",
+    currency: editDef?.currency ?? "GHS",
     higherIsBetter: editDef?.higherIsBetter ?? true,
     frequency: editDef?.frequency ?? "MONTHLY",
     source: editDef?.source ?? "MANUAL",
@@ -89,6 +90,8 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
     if (!form.metric.trim()) { setError("Give this KPI a name."); return; }
     if (form.source === "AUTO" && !form.autoKey) { setError("Choose where the numbers should come from."); return; }
     if (form.windowed && (!form.startDate || !form.endDate)) { setError("Add both a start date and an end date."); return; }
+    const t = form.windowed ? form.targetValue : form.periodTarget;
+    if (!isEdit && !(Number(t) > 0)) { setError("Set a target above zero."); return; }
     setSaving(true); setError("");
     const body: Record<string, unknown> = {
       metric: form.metric,
@@ -98,6 +101,7 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
       parentId: form.parentId || null,
       definition: form.definition || null,
       unit: form.unit,
+      currency: form.unit === "CURRENCY" ? form.currency : null,
       higherIsBetter: form.higherIsBetter,
       frequency: form.frequency,
       source: form.source,

@@ -50,7 +50,7 @@ export const KPI_STATUS_HINT: Record<KpiStatus, string> = {
 // The row the server returns for every KPI (board, My KPIs, cascade, detail).
 export type KpiDef = {
   id: string; metric: string; company: string; department: string | null; definition: string | null;
-  unit: string; higherIsBetter: boolean; frequency: string; source: string; autoKey: string | null;
+  unit: string; currency?: string | null; higherIsBetter: boolean; frequency: string; source: string; autoKey: string | null;
   aggregation: string; state: string; parentId: string | null; ownerId: string | null; ownerBdoId: string | null;
   departmentId: string | null; startDate: string | null; endDate: string | null; targetValue: number | null; startValue: number | null;
   milestones: { date: string; target: number }[]; assignedBy: string | null; scope?: string | null;
@@ -71,10 +71,11 @@ export type KpiRow = {
   children: { count: number; allocated: number | null; unallocated: number | null; over: boolean };
 };
 
-export function fmtKpiVal(v: number | null | undefined, unit: string) {
+// currency only matters when unit is CURRENCY. Old KPIs with no currency saved fall back to GHS.
+export function fmtKpiVal(v: number | null | undefined, unit: string, currency?: string | null) {
   if (v == null) return "—";
   const n = Math.round(v * 100) / 100;
-  if (unit === "CURRENCY") return "GHS " + n.toLocaleString();
+  if (unit === "CURRENCY") return `${currency || "GHS"} ${n.toLocaleString()}`;
   if (unit === "PERCENT") return `${n}%`;
   if (unit === "SCORE") return `${n}/100`;
   if (unit === "DAYS") return `${n}d`;
@@ -185,12 +186,13 @@ export function AllocationBar({ row }: { row: KpiRow }) {
   if (!c.count || target == null || !target) return null;
   const pct = Math.min(100, Math.round(((c.allocated ?? 0) / target) * 100));
   const unit = row.definition.unit;
+  const cur = row.definition.currency;
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[11px] text-muted">
-        <span>{c.count} KPI{c.count === 1 ? "" : "s"} under it take {fmtKpiVal(c.allocated, unit)}</span>
+        <span>{c.count} KPI{c.count === 1 ? "" : "s"} under it take {fmtKpiVal(c.allocated, unit, cur)}</span>
         <span className={c.over ? "text-red-600 font-medium" : ""}>
-          {c.over ? `over by ${fmtKpiVal(-(c.unallocated ?? 0), unit)}` : `${fmtKpiVal(c.unallocated, unit)} unallocated`}
+          {c.over ? `over by ${fmtKpiVal(-(c.unallocated ?? 0), unit, cur)}` : `${fmtKpiVal(c.unallocated, unit, cur)} unallocated`}
         </span>
       </div>
       <div className="h-1.5 rounded-full bg-foreground/5 overflow-hidden">
@@ -201,13 +203,18 @@ export function AllocationBar({ row }: { row: KpiRow }) {
 }
 
 // Bottom sheet on phones, centred dialog from sm up.
+// wide = max-w-2xl, wide="xl" = max-w-4xl (used by the Add KPI "Pick dates" step).
 export function KpiSheet({ title, subtitle, onClose, footer, children, wide }: {
-  title: React.ReactNode; subtitle?: React.ReactNode; onClose: () => void; footer?: React.ReactNode; children: React.ReactNode; wide?: boolean;
+  title: React.ReactNode; subtitle?: React.ReactNode; onClose: () => void; footer?: React.ReactNode; children: React.ReactNode; wide?: boolean | "xl";
 }) {
   return (
     <div className="fixed inset-0 bg-primary/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
       <div
-        className={clsx("bg-surface shadow-xl border border-border w-full max-h-[92vh] flex flex-col", wide ? "max-w-2xl" : "max-w-md", "rounded-t-2xl sm:rounded-2xl")}
+        className={clsx(
+          "bg-surface shadow-xl border border-border w-full max-h-[92vh] flex flex-col transition-[max-width] duration-200",
+          wide === "xl" ? "max-w-4xl" : wide ? "max-w-2xl" : "max-w-md",
+          "rounded-t-2xl sm:rounded-2xl",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 shrink-0">
@@ -299,8 +306,8 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
           {d.definition && <p className="text-xs text-muted bg-background border border-border rounded-lg p-3 leading-relaxed">{d.definition}</p>}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Stat label="Actual" value={fmtKpiVal(row.current, d.unit)} />
-            <Stat label={row.targetCarried ? "Target (carried)" : "Target"} value={fmtKpiVal(row.target, d.unit)} />
+            <Stat label="Actual" value={fmtKpiVal(row.current, d.unit, d.currency)} />
+            <Stat label={row.targetCarried ? "Target (carried)" : "Target"} value={fmtKpiVal(row.target, d.unit, d.currency)} />
             <Stat label="Progress" value={row.attainment != null ? `${row.attainment}%` : "—"} hint={row.expected != null ? `${row.expected}% expected by today` : undefined} />
             <Stat label="Pace" value={row.pace != null ? `${row.pace}%` : "—"} hint={row.aggregation === "SUM" ? "Actual vs where it should be by today" : "Reading vs target"} />
           </div>
@@ -309,7 +316,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
             {isAuto ? "Calculated live from deals, payments and other records for this scope and window."
               : row.aggregation === "SUM" ? "Total of the progress logged in the window, including what's logged on the KPIs under it."
               : row.aggregation === "LATEST" ? "The latest reading logged." : "The average of the readings logged."}
-            {row.children.count > 0 && data.attributed != null && <> KPIs under it account for <strong>{fmtKpiVal(data.attributed, d.unit)}</strong>.</>}
+            {row.children.count > 0 && data.attributed != null && <> KPIs under it account for <strong>{fmtKpiVal(data.attributed, d.unit, d.currency)}</strong>.</>}
           </p>
 
           {extra?.(row)}
@@ -326,7 +333,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                         <div className="text-sm text-foreground truncate">{c.definition.metric}</div>
                         <div className="text-[11px] text-muted truncate">{name(c.definition.company)}{c.owner ? ` · ${c.owner.name}` : ""}</div>
                       </div>
-                      <span className="text-xs tabular-nums text-muted whitespace-nowrap">{fmtKpiVal(c.current, c.definition.unit)} / {fmtKpiVal(c.target, c.definition.unit)}</span>
+                      <span className="text-xs tabular-nums text-muted whitespace-nowrap">{fmtKpiVal(c.current, c.definition.unit, c.definition.currency)} / {fmtKpiVal(c.target, c.definition.unit, c.definition.currency)}</span>
                       <StatusPill status={c.status} />
                     </button>
                   </li>
@@ -345,7 +352,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                   <li key={u.id} className="text-[11px] text-muted flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <span className="text-muted/70 mr-2">{new Date(u.date).toLocaleDateString()}</span>
-                      <span className={clsx("font-medium tabular-nums", u.value < 0 ? "text-red-600" : "text-foreground")}>{u.value > 0 && row.aggregation === "SUM" ? "+" : ""}{fmtKpiVal(u.value, d.unit)}</span>
+                      <span className={clsx("font-medium tabular-nums", u.value < 0 ? "text-red-600" : "text-foreground")}>{u.value > 0 && row.aggregation === "SUM" ? "+" : ""}{fmtKpiVal(u.value, d.unit, d.currency)}</span>
                       {u.person && <span> · {u.person}</span>}
                       {u.task && <span> · from “{u.task.deliverable}”</span>}
                       {u.note && <span className="italic"> · {u.note}</span>}
