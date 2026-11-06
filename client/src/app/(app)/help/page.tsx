@@ -8,7 +8,9 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "overview", title: "What is this system?" },
   { id: "companies", title: "The Companies" },
   { id: "roles", title: "Roles & Access" },
-  { id: "pipeline", title: "Deals" },
+  { id: "pipeline", title: "Deals & Pipeline" },
+  { id: "stages", title: "Deal Stages" },
+  { id: "health", title: "Deal Health" },
   { id: "revenue", title: "Revenue & Payment" },
   { id: "leads", title: "Leads & Clients" },
   { id: "scheme", title: "Scheme of Work" },
@@ -30,6 +32,21 @@ const ROLES: Def[] = [
   { term: "Admin", desc: "Full access. Can manage BDOs and user logins, and see every company's data. An admin can also be linked to a BDO profile, in which case they additionally get a personal 'My BDO Dashboard'." },
   { term: "CEO", desc: "A leadership view. Lands on the main dashboard with the group-wide overview across all companies." },
   { term: "BDO (Business Development Officer)", desc: "Owns a set of clients and deals. Signs in and lands on their own dashboard for their company only, and sees only their own deals, clients, tasks and alerts." },
+];
+
+const STAGES: Def[] = [
+  { term: "Identified", desc: "The opportunity has been spotted and logged, but no real conversation has happened yet." },
+  { term: "Qualified", desc: "We've confirmed the client has a real need, the budget and the authority to go ahead." },
+  { term: "Proposal", desc: "A proposal or quotation has been prepared and sent to the client." },
+  { term: "Negotiation", desc: "The client is reviewing the proposal and the terms, scope or price are being discussed." },
+  { term: "Won", desc: "The client has agreed. The deal value now counts as expected revenue." },
+  { term: "Lost", desc: "The client said no or stopped responding. The deal is closed and no revenue is expected." },
+];
+
+const HEALTH: Def[] = [
+  { term: "On Track", desc: "The deal is moving as planned. The client is responsive and nothing is blocking it." },
+  { term: "At Risk", desc: "Something could derail the deal, such as a slow client, a missed date or an open concern. It needs follow-up." },
+  { term: "Off Track", desc: "The deal has stalled or is clearly slipping. It needs action now or a decision to close it." },
 ];
 
 const REVENUE: Def[] = [
