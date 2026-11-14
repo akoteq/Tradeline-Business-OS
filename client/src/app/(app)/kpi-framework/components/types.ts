@@ -7,10 +7,10 @@ export type KpiForm = {
   aggregation: string; windowed: boolean; startDate: string; endDate: string;
   targetValue: string; startValue: string; milestones: { date: string; target: string }[];
   frequency: string; periodTarget: string; higherIsBetter: boolean; definition: string;
+  currency: string; // "GHS" | "USD" | "EUR" (see @/lib/currency). Only meaningful when unit === "CURRENCY".
 };
 
-// Everything the steps need, handed down by the page. The steps hold no data logic of their own,
-// so your existing save / pickParent / pickAutoKey / pickFrequency handlers stay exactly as they are.
+
 export type KpiFormCtx = {
   form: KpiForm;
   set: <K extends keyof KpiForm>(key: K, value: KpiForm[K]) => void;

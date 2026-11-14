@@ -222,9 +222,11 @@ export function KpiBoard({
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 font-medium text-foreground tabular-nums whitespace-nowrap">{fmtKpiVal(r.current, r.definition.unit)}</td>
+                      <td className="px-4 py-4 font-medium text-foreground tabular-nums whitespace-nowrap">
+                        {fmtKpiVal(r.current, r.definition.unit, r.definition.currency)}
+                      </td>
                       <td className="px-4 py-4 text-foreground/80 tabular-nums whitespace-nowrap" title={r.targetCarried ? "Carried over from an earlier period" : undefined}>
-                        {fmtKpiVal(r.target, r.definition.unit)}{r.targetCarried && <span className="text-muted/60">*</span>}
+                        {fmtKpiVal(r.target, r.definition.unit, r.definition.currency)}{r.targetCarried && <span className="text-muted/60">*</span>}
                       </td>
                       <td className="px-4 py-4 min-w-[150px]">
                         {r.attainment != null ? (

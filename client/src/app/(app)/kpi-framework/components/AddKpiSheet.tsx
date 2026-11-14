@@ -30,35 +30,31 @@ export function AddKpiSheet({ ctx, onClose, onSave, saving, error }: Props) {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [reached, setReached] = useState(isEdit ? STEPS.length - 1 : 0);
-  const [autoDrafted, setAutoDrafted] = useState(false);
 
   const targetKey = form.windowed ? "targetValue" : "periodTarget";
-  const hasTarget = String(form[targetKey]).trim() !== "";
+  // New KPIs must have a target above zero. Editing can leave it blank to keep the current one.
+  const targetOk = isEdit || Number(String(form[targetKey]).trim() || 0) > 0;
   const last = step === STEPS.length - 1;
 
-  // Typing a target undoes the draft we set when they skipped it.
-  const setTarget = (v: string) => {
-    set(targetKey, v);
-    if (autoDrafted && v.trim() !== "") { set("state", "ACTIVE"); setAutoDrafted(false); }
-  };
+  const setTarget = (v: string) => set(targetKey, v);
 
   const go = (to: number) => { setDir(to > step ? 1 : -1); setStep(to); setReached((r) => Math.max(r, to)); };
 
   const canContinue =
     step === 0 ? form.metric.trim() !== "" :
-    step === 1 && form.windowed ? !!form.startDate && !!form.endDate :
+    step === 1 ? (!form.windowed || (!!form.startDate && !!form.endDate)) && targetOk :
     true;
 
   const next = () => {
     if (!canContinue) return;
-    if (step === 1 && !isEdit && !hasTarget && form.state === "ACTIVE") { set("state", "DRAFT"); setAutoDrafted(true); }
     go(step + 1);
   };
 
-  const saveDisabled = saving || !form.metric.trim() || (form.source === "AUTO" && !form.autoKey);
+  const saveDisabled =
+    saving || !form.metric.trim() || !targetOk || (form.source === "AUTO" && !form.autoKey);
   const primaryLabel = last
     ? (saving ? "Saving…" : isEdit ? "Save changes" : form.state === "DRAFT" ? "Save draft" : "Add KPI")
-    : step === 1 && !isEdit && !hasTarget && !form.windowed ? "Skip for now" : "Continue";
+    : "Continue";
 
   const full: KpiFormCtx = { ...ctx, setTarget };
   const meta = STEPS[step];
@@ -67,6 +63,7 @@ export function AddKpiSheet({ ctx, onClose, onSave, saving, error }: Props) {
   return (
     <KpiSheet
       onClose={onClose}
+   wide={step === 1 && form.windowed ? "xl" : false}
       title={meta.title}
       subtitle={meta.subtitle}
       footer={

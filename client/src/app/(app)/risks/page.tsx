@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, fetcher } from "@/lib/api";
-import { toast } from "@/components/Toast";
-import { confirmAction } from "@/components/Confirm";
 import { DataTable, type Column } from "@/components/DataTable";
 import { useAuth } from "@/components/AuthProvider";
 import { accessLevel } from "@/lib/auth";
@@ -29,8 +27,18 @@ const MIT_STATUS = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
 const t = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ");
 const showDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString() : "—");
 const errText = (e: unknown, f: string) => (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? f;
-const scoreTone = (s: number) => (s >= 15 ? "bg-red-600 text-white" : s >= 8 ? "bg-amber-400 text-gray-900" : "bg-green-200 text-green-900");
-const REVIEW_STYLE: Record<string, string> = { ACTIVE: "bg-green-100 text-green-700", REVIEW_DUE: "bg-amber-100 text-amber-800", DRAFT: "bg-gray-100 text-gray-600", CLOSED: "bg-slate-100 text-slate-500" };
+
+// Every pair below is readable in both themes (the dark palette remaps red/amber/green 50–200 and 600–800, gray 50–900 except 400).
+const scoreTone = (s: number) =>
+  s >= 15 ? "bg-red-600 text-white" : s >= 8 ? "bg-amber-400 text-black" : "bg-green-100 text-green-800";
+const REVIEW_STYLE: Record<string, string> = {
+  ACTIVE: "bg-green-100 text-green-700",
+  REVIEW_DUE: "bg-amber-100 text-amber-800",
+  DRAFT: "bg-gray-100 text-gray-600",
+  CLOSED: "bg-gray-200 text-gray-500",
+};
+
+const selectCls = "text-sm bg-surface text-foreground border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent";
 
 export default function RisksPage() {
   const { user } = useAuth();
@@ -48,8 +56,7 @@ export default function RisksPage() {
   const rows = risks.filter((r) => !company || r.company === company);
 
   const setMitigation = async (r: Risk, m: Mitigation, status: string) => {
-    try { await api.patch(`/risks/${r.id}/mitigations/${m.id}`, { status }); toast.success("Mitigation updated", { description: r.title }); refresh(); }
-    catch (e) { toast.failed("Couldn't update the mitigation", e); }
+    try { await api.patch(`/risks/${r.id}/mitigations/${m.id}`, { status }); refresh(); } catch (e) { alert(errText(e, "Couldn't update.")); }
   };
 
   if (!user) return null;
@@ -59,17 +66,17 @@ export default function RisksPage() {
     const mine = risks.flatMap((r) => r.mitigations.filter((m) => m.ownerBdoId === user.bdoId).map((m) => ({ r, m })));
     return (
       <div className="p-4 md:p-6 space-y-4">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><AlertTriangle size={22} /> My risk actions</h1>
-        <p className="text-sm text-gray-500">Actions you own on your company&apos;s risk register. Update them as you go.</p>
-        {mine.length === 0 ? <p className="text-sm text-gray-400">Nothing assigned to you.</p> : (
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><AlertTriangle size={22} /> My risk actions</h1>
+        <p className="text-sm text-muted">Actions you own on your company&apos;s risk register. Update them as you go.</p>
+        {mine.length === 0 ? <p className="text-sm text-muted">Nothing assigned to you.</p> : (
           <div className="space-y-2">
             {mine.map(({ r, m }) => (
-              <div key={m.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div key={m.id} className="bg-surface border border-border shadow-card rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-medium text-gray-900">{m.action}</p>
-                  <p className="text-xs text-gray-500">Risk: {r.title} · due {showDate(m.deadline)}{m.overdue && <span className="text-red-600 font-medium"> · overdue</span>}</p>
+                  <p className="font-medium text-foreground">{m.action}</p>
+                  <p className="text-xs text-muted">Risk: {r.title} · due {showDate(m.deadline)}{m.overdue && <span className="text-red-600 font-medium"> · overdue</span>}</p>
                 </div>
-                <select value={m.status} onChange={(e) => setMitigation(r, m, e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
+                <select value={m.status} onChange={(e) => setMitigation(r, m, e.target.value)} className={selectCls}>
                   {MIT_STATUS.map((s) => <option key={s} value={s}>{t(s)}</option>)}
                 </select>
               </div>
@@ -100,8 +107,8 @@ export default function RisksPage() {
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900"><AlertTriangle size={22} /> Risk register</h1>
-        <p className="text-sm text-gray-500">Each company&apos;s top 10–15 material risks. Score = impact × likelihood (1–25).</p>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><AlertTriangle size={22} /> Risk register</h1>
+        <p className="text-sm text-muted">Each company&apos;s top 10–15 material risks. Score = impact × likelihood (1–25).</p>
       </div>
 
       <DataTable
@@ -112,37 +119,44 @@ export default function RisksPage() {
         onAdd={() => setEditing("new")}
         onEdit={(r) => setEditing(r)}
         canEditRow={(r) => r.canEdit}
-        onDelete={(r) => confirmAction({ title: `Delete "${r.title}"?`, body: "This can't be undone.", confirmLabel: "Delete risk" }).then((ok) => { if (ok) api.delete(`/risks/${r.id}`).then(() => { toast.success("Risk deleted", { description: r.title }); refresh(); }, (e) => toast.failed("Couldn't delete the risk", e)); })}
+        onDelete={(r) => { if (confirm(`Delete "${r.title}"?`)) api.delete(`/risks/${r.id}`).then(refresh, (e) => alert(errText(e, "Failed to delete."))); }}
         filterBar={
           <div className="flex gap-3 flex-wrap items-center">
             {level === "GROUP_OWNER" && (
-              <select value={company} onChange={(e) => setCompany(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5">
+              <select value={company} onChange={(e) => setCompany(e.target.value)} className={selectCls}>
                 <option value="">All companies</option>{[...new Set(risks.map((r) => r.company))].map((k) => <option key={k} value={k}>{byKey[k]?.name ?? k}</option>)}
               </select>
             )}
-            <label className="flex items-center gap-1.5 text-sm text-gray-600"><input type="checkbox" checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} /> Show closed</label>
+            <label className="flex items-center gap-1.5 text-sm text-muted"><input type="checkbox" className="accent-accent" checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} /> Show closed</label>
           </div>
         }
       />
 
-      {editing && <RiskModal risk={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(w) => {
-        toast.success(editing === "new" ? "Risk added" : "Risk updated");
-        if (w) toast.warning("Heads up", { description: w });
-        setEditing(null); refresh();
-      }} />}
-      {reviewing && <ReviewModal risk={reviewing} onClose={() => setReviewing(null)} onSaved={() => { toast.success("Review saved", { description: reviewing.title }); setReviewing(null); refresh(); }} />}
+      {editing && <RiskModal risk={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={(w) => { setEditing(null); refresh(); if (w) alert(w); }} />}
+      {reviewing && <ReviewModal risk={reviewing} onClose={() => setReviewing(null)} onSaved={() => { setReviewing(null); refresh(); }} />}
     </div>
   );
 }
 
-const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30";
+const inputCls = "w-full bg-surface text-foreground placeholder:text-muted border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent disabled:opacity-60";
+const cancelBtn = "px-4 py-2 text-sm border border-border text-foreground rounded-lg hover:bg-subtle";
+
 function L({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
-  return <div className={span ? "sm:col-span-2" : ""}><label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>{children}</div>;
+  return <div className={span ? "sm:col-span-2" : ""}><label className="text-xs font-medium text-muted block mb-1">{label}</label>{children}</div>;
 }
 function Scale({ value, onChange }: { value: number | null; onChange: (n: number | null) => void }) {
   return (
     <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => <button type="button" key={n} onClick={() => onChange(value === n ? null : n)} className={`w-8 h-8 rounded-lg text-sm font-semibold border ${value === n ? "bg-accent text-accent-foreground border-accent" : "bg-white text-gray-600 border-gray-200"}`}>{n}</button>)}
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          type="button"
+          key={n}
+          onClick={() => onChange(value === n ? null : n)}
+          className={`w-8 h-8 rounded-lg text-sm font-semibold border transition-colors ${value === n ? "bg-accent text-accent-foreground border-accent" : "bg-surface text-muted border-border hover:border-accent hover:text-foreground"}`}
+        >
+          {n}
+        </button>
+      ))}
     </div>
   );
 }
@@ -181,11 +195,11 @@ function RiskModal({ risk, onClose, onSaved }: { risk: Risk | null; onClose: () 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] flex flex-col">
-        <div className="px-5 py-4 border-b flex items-center justify-between shrink-0">
-          <h2 className="font-semibold">{risk ? risk.title : "New risk"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-border text-foreground rounded-xl shadow-pop w-full max-w-2xl max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <h2 className="font-semibold text-foreground">{risk ? risk.title : "New risk"}</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <fieldset disabled={readOnly} className="p-5 space-y-4 min-w-0">
@@ -210,42 +224,42 @@ function RiskModal({ risk, onClose, onSaved }: { risk: Risk | null; onClose: () 
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5"><p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Warning signs</p>
-              <button type="button" onClick={() => set("indicators", [...form.indicators, { name: "", threshold: "", triggered: false }])} className="text-xs text-accent flex items-center gap-1"><Plus size={12} /> Add</button></div>
+            <div className="flex items-center justify-between mb-1.5"><p className="type-colhead">Warning signs</p>
+              <button type="button" onClick={() => set("indicators", [...form.indicators, { name: "", threshold: "", triggered: false }])} className="text-xs text-accent flex items-center gap-1 hover:underline"><Plus size={12} /> Add</button></div>
             {form.indicators.map((ind, i) => (
               <div key={ind.id ?? `n${i}`} className="flex gap-2 mb-1.5 items-center">
                 <input value={ind.name} placeholder="What to watch" onChange={(e) => set("indicators", form.indicators.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} className={inputCls} />
                 <input value={ind.threshold} placeholder="Threshold" onChange={(e) => set("indicators", form.indicators.map((x, j) => (j === i ? { ...x, threshold: e.target.value } : x)))} className={inputCls} />
-                <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0"><input type="checkbox" checked={ind.triggered} onChange={(e) => set("indicators", form.indicators.map((x, j) => (j === i ? { ...x, triggered: e.target.checked } : x)))} /> Triggered</label>
-                <button type="button" onClick={() => set("indicators", form.indicators.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+                <label className="flex items-center gap-1 text-xs text-muted shrink-0"><input type="checkbox" className="accent-accent" checked={ind.triggered} onChange={(e) => set("indicators", form.indicators.map((x, j) => (j === i ? { ...x, triggered: e.target.checked } : x)))} /> Triggered</label>
+                <button type="button" onClick={() => set("indicators", form.indicators.filter((_, j) => j !== i))} className="text-muted hover:text-red-600"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5"><p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mitigation actions</p>
-              <button type="button" onClick={() => set("mitigations", [...form.mitigations, { action: "", ownerBdoId: null, deadline: null, status: "OPEN" }])} className="text-xs text-accent flex items-center gap-1"><Plus size={12} /> Add</button></div>
+            <div className="flex items-center justify-between mb-1.5"><p className="type-colhead">Mitigation actions</p>
+              <button type="button" onClick={() => set("mitigations", [...form.mitigations, { action: "", ownerBdoId: null, deadline: null, status: "OPEN" }])} className="text-xs text-accent flex items-center gap-1 hover:underline"><Plus size={12} /> Add</button></div>
             {form.mitigations.map((m, i) => (
               <div key={m.id ?? `n${i}`} className="grid grid-cols-1 sm:grid-cols-[1fr_140px_130px_120px_20px] gap-2 mb-1.5 items-center">
                 <input value={m.action} placeholder="Action" onChange={(e) => set("mitigations", form.mitigations.map((x, j) => (j === i ? { ...x, action: e.target.value } : x)))} className={inputCls} />
                 <select value={m.ownerBdoId ?? ""} onChange={(e) => set("mitigations", form.mitigations.map((x, j) => (j === i ? { ...x, ownerBdoId: e.target.value || null } : x)))} className={inputCls}><option value="">Owner</option>{bdos.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
                 <input type="date" value={m.deadline?.slice(0, 10) ?? ""} onChange={(e) => set("mitigations", form.mitigations.map((x, j) => (j === i ? { ...x, deadline: e.target.value || null } : x)))} className={inputCls} />
                 <select value={m.status} onChange={(e) => set("mitigations", form.mitigations.map((x, j) => (j === i ? { ...x, status: e.target.value } : x)))} className={inputCls}>{MIT_STATUS.map((s) => <option key={s} value={s}>{t(s)}</option>)}</select>
-                <button type="button" onClick={() => set("mitigations", form.mitigations.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+                <button type="button" onClick={() => set("mitigations", form.mitigations.filter((_, j) => j !== i))} className="text-muted hover:text-red-600"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
 
           {risk && audit.length > 0 && (
-            <details className="text-xs text-gray-500">
+            <details className="text-xs text-muted">
               <summary className="cursor-pointer flex items-center gap-1"><History size={12} /> History ({audit.length})</summary>
               <ul className="mt-2 space-y-1">{audit.map((a) => <li key={a.id}>{new Date(a.createdAt).toLocaleString()} · {a.actorName ?? "Someone"} · {a.action}{a.note ? ` — ${a.note}` : ""}</li>)}</ul>
             </details>
           )}
         </fieldset>
         </div>
-        <div className="px-5 py-3 border-t flex justify-end gap-2 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">{readOnly ? "Close" : "Cancel"}</button>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className={cancelBtn}>{readOnly ? "Close" : "Cancel"}</button>
           {!readOnly && <button onClick={save} disabled={saving || !form.title.trim() || (!risk && !form.company)} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>}
         </div>
       </div>
@@ -263,11 +277,14 @@ function ReviewModal({ risk, onClose, onSaved }: { risk: Risk; onClose: () => vo
     try { await api.post(`/risks/${risk.id}/review`, { ...form, nextReviewDate: form.nextReviewDate || undefined }); onSaved(); } catch (e) { setError(errText(e, "Failed to save the review.")); } finally { setSaving(false); }
   };
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[92vh] flex flex-col">
-        <div className="px-5 py-4 border-b flex items-center justify-between"><h2 className="font-semibold">Review: {risk.title}</h2><button onClick={onClose} className="text-gray-400"><X size={18} /></button></div>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-border text-foreground rounded-xl shadow-pop w-full max-w-md max-h-[92vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <h2 className="font-semibold text-foreground">Review: {risk.title}</h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
+        </div>
         <div className="p-5 space-y-3 flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          {error && <div className="bg-red-50 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">{error}</div>}
           <L label="Impact"><Scale value={form.impact} onChange={(n) => setForm({ ...form, impact: n })} /></L>
           <L label="Likelihood"><Scale value={form.likelihood} onChange={(n) => setForm({ ...form, likelihood: n })} /></L>
           <L label="Residual impact"><Scale value={form.residualImpact} onChange={(n) => setForm({ ...form, residualImpact: n })} /></L>
@@ -275,13 +292,13 @@ function ReviewModal({ risk, onClose, onSaved }: { risk: Risk; onClose: () => vo
           <L label="What changed?"><textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} className={`${inputCls} resize-none`} /></L>
           <L label="Next review (default: in 90 days)"><input type="date" value={form.nextReviewDate} onChange={(e) => setForm({ ...form, nextReviewDate: e.target.value })} className={inputCls} /></L>
           {history.length > 0 && (
-            <div className="text-xs text-gray-500"><p className="font-semibold mb-1">Past reviews</p>
+            <div className="text-xs text-muted"><p className="font-semibold text-foreground mb-1">Past reviews</p>
               {history.map((h) => <p key={h.id}>{showDate(h.at)} · {h.reviewerName ?? "—"} · score {h.score}{h.residualScore != null ? ` → ${h.residualScore}` : ""}{h.note ? ` — ${h.note}` : ""}</p>)}
             </div>
           )}
         </div>
-        <div className="px-5 py-3 border-t flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 shrink-0">
+          <button onClick={onClose} className={cancelBtn}>Cancel</button>
           <button onClick={save} disabled={saving || !form.impact || !form.likelihood} className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg disabled:opacity-50">{saving ? "Saving…" : "Save review"}</button>
         </div>
       </div>

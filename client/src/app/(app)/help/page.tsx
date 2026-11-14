@@ -8,7 +8,9 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "overview", title: "What is this system?" },
   { id: "companies", title: "The Companies" },
   { id: "roles", title: "Roles & Access" },
-  { id: "pipeline", title: "Deals" },
+  { id: "pipeline", title: "Deals & Pipeline" },
+  { id: "stages", title: "Deal Stages" },
+  { id: "health", title: "Deal Health" },
   { id: "revenue", title: "Revenue & Payment" },
   { id: "leads", title: "Leads & Clients" },
   { id: "scheme", title: "Scheme of Work" },
@@ -30,6 +32,21 @@ const ROLES: Def[] = [
   { term: "Admin", desc: "Full access. Can manage BDOs and user logins, and see every company's data. An admin can also be linked to a BDO profile, in which case they additionally get a personal 'My BDO Dashboard'." },
   { term: "CEO", desc: "A leadership view. Lands on the main dashboard with the group-wide overview across all companies." },
   { term: "BDO (Business Development Officer)", desc: "Owns a set of clients and deals. Signs in and lands on their own dashboard for their company only, and sees only their own deals, clients, tasks and alerts." },
+];
+
+const STAGES: Def[] = [
+  { term: "Identified", desc: "The opportunity has been spotted and logged, but no real conversation has happened yet." },
+  { term: "Qualified", desc: "We've confirmed the client has a real need, the budget and the authority to go ahead." },
+  { term: "Proposal", desc: "A proposal or quotation has been prepared and sent to the client." },
+  { term: "Negotiation", desc: "The client is reviewing the proposal and the terms, scope or price are being discussed." },
+  { term: "Won", desc: "The client has agreed. The deal value now counts as expected revenue." },
+  { term: "Lost", desc: "The client said no or stopped responding. The deal is closed and no revenue is expected." },
+];
+
+const HEALTH: Def[] = [
+  { term: "On Track", desc: "The deal is moving as planned. The client is responsive and nothing is blocking it." },
+  { term: "At Risk", desc: "Something could derail the deal, such as a slow client, a missed date or an open concern. It needs follow-up." },
+  { term: "Off Track", desc: "The deal has stalled or is clearly slipping. It needs action now or a decision to close it." },
 ];
 
 const REVENUE: Def[] = [
@@ -100,18 +117,22 @@ export default function HelpPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-gray-900">Help &amp; Glossary</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">Help &amp; Glossary</h1>
+        <p className="text-sm text-muted mt-1">
           A plain-language guide to the Tradeline Business Operating System — what the data means and how the system is organised. New to the team? Start here.
         </p>
       </header>
 
       {/* Table of contents */}
-      <nav className="bg-white rounded-xl border border-gray-200 p-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">On this page</p>
+      <nav className="bg-surface rounded-xl border border-border shadow-card p-4">
+        <p className="type-colhead mb-3">On this page</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
           {SECTIONS.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="text-sm text-accent hover:text-accent/80 hover:underline">
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="text-sm text-accent hover:text-accent/80 hover:underline underline-offset-2"
+            >
               {s.title}
             </a>
           ))}
@@ -119,16 +140,16 @@ export default function HelpPage() {
       </nav>
 
       <Section id="overview" title="What is this system?">
-        <p className="text-sm text-gray-700 leading-relaxed">
+        <p className="text-sm text-foreground/80 leading-relaxed">
           The Tradeline Business Operating System is one shared place to run the group&apos;s business development. It tracks the
-          <strong> clients</strong> we work with, the <strong>deals</strong> each company has won, the <strong>money</strong> expected and received,
-          the <strong>leads</strong> we&apos;re chasing, each officer&apos;s <strong>tasks and proposals</strong>, and funding like <strong>grants and loans</strong>.
+          <strong className="text-foreground"> clients</strong> we work with, the <strong className="text-foreground">deals</strong> in each company&apos;s pipeline, the <strong className="text-foreground">money</strong> expected and received,
+          the <strong className="text-foreground">leads</strong> we&apos;re chasing, each officer&apos;s <strong className="text-foreground">tasks and proposals</strong>, and funding like <strong className="text-foreground">grants and loans</strong>.
           Everyone works from the same data, so the leadership can see the whole picture while each officer focuses on their own.
         </p>
       </Section>
 
       <Section id="companies" title="The Companies">
-        <p className="text-sm text-gray-500 mb-3">The system covers six companies. Each has its own deals; BAPX and Tradeline are the two main ones.</p>
+        <p className="text-sm text-muted mb-3">The system covers six companies. Each has its own pipeline; BAPX and Tradeline are the two main ones.</p>
         <DefList defs={COMPANIES} />
       </Section>
 
@@ -136,18 +157,28 @@ export default function HelpPage() {
         <DefList defs={ROLES} />
       </Section>
 
-      <Section id="pipeline" title="Deals">
-        <p className="text-sm text-gray-700 leading-relaxed mb-3">
-          A <strong>deal</strong> is work a client has agreed to: a lead that was won. Converting a lead creates the client, and then you can add a deal for them.
-          A deal holds its value. A deal can have a project, but not all deals do. Sales stages are on the lead, not the deal.
+      <Section id="pipeline" title="Deals & Pipeline">
+        <p className="text-sm text-foreground/80 leading-relaxed mb-3">
+          A <strong className="text-foreground">deal</strong> is an opportunity with a specific client. The <strong className="text-foreground">pipeline</strong> is all of a company&apos;s deals together.
+          Every deal has a <strong className="text-foreground">stage</strong> (how far along it is) and a <strong className="text-foreground">health</strong> (whether it&apos;s going well), plus a tier and priority.
         </p>
         <DefList defs={TIER_PRIORITY} />
       </Section>
 
-<Section id="revenue" title="Revenue & Payment">
-        <p className="text-sm text-gray-500 mb-3">How the money on a deal is tracked. Amounts are in Ghana Cedis (GHS).</p>
+      <Section id="stages" title="Deal Stages">
+        <p className="text-sm text-muted mb-3">The steps a deal moves through, from first look to won or lost.</p>
+        <DefList defs={STAGES} />
+      </Section>
+
+      <Section id="health" title="Deal Health">
+        <p className="text-sm text-muted mb-3">A quick read on whether a deal is on track.</p>
+        <DefList defs={HEALTH} />
+      </Section>
+
+      <Section id="revenue" title="Revenue & Payment">
+        <p className="text-sm text-muted mb-3">How the money on a deal is tracked (mainly for Tradeline and the group companies). Amounts are in Ghana Cedis (GHS).</p>
         <DefList defs={REVENUE} />
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mt-4 mb-2">Payment Status</p>
+        <p className="type-colhead mt-5 mb-3">Payment Status</p>
         <DefList defs={PAYMENT} />
       </Section>
 
@@ -168,11 +199,11 @@ export default function HelpPage() {
       </Section>
 
       <Section id="pages" title="The Pages / Menu">
-        <p className="text-sm text-gray-500 mb-3">What each item in the left-hand menu is for.</p>
+        <p className="text-sm text-muted mb-3">What each item in the left-hand menu is for.</p>
         <DefList defs={PAGES} />
       </Section>
 
-      <p className="text-xs text-gray-400 pt-2">
+      <p className="text-xs text-muted pt-2">
         Something unclear or missing? Ask an admin to update this guide.
       </p>
     </div>
@@ -181,8 +212,8 @@ export default function HelpPage() {
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-4 bg-white rounded-xl border border-gray-200 p-5">
-      <h2 className="text-lg font-semibold text-gray-900 mb-3">{title}</h2>
+    <section id={id} className="scroll-mt-4 bg-surface rounded-xl border border-border shadow-card p-5">
+      <h2 className="text-lg font-semibold text-foreground mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -190,14 +221,17 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 function DefList({ defs }: { defs: Def[] }) {
   return (
-    <dl className="space-y-3">
+    <dl className="divide-y divide-border">
       {defs.map((d) => (
-        <div key={d.term} className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-1 sm:gap-4">
-          <dt className="text-sm font-semibold text-gray-800 flex items-center gap-2 flex-wrap">
+        <div
+          key={d.term}
+          className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-1 sm:gap-4 py-3 first:pt-0 last:pb-0"
+        >
+          <dt className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap content-start">
             <span>{d.term}</span>
             {d.badge}
           </dt>
-          <dd className="text-sm text-gray-600 leading-relaxed">{d.desc}</dd>
+          <dd className="text-sm text-muted leading-relaxed">{d.desc}</dd>
         </div>
       ))}
     </dl>
