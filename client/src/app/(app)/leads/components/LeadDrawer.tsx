@@ -7,6 +7,7 @@ import { Building2, CalendarClock, Lock, Mail, MessageCircle, Pencil, Phone, Use
 import { PriorityBadge } from "@/components/Badges";
 import { StatusBadge, VisibilityBadge } from "./badges";
 import type { LeadActions } from "./useLeadActions";
+import { CommentThread } from "@/components/comments/CommentThread";
 import { EDITABLE_STATUSES, STAGE_RING, STATUS_COLORS, STATUS_LABEL, apiError, followUpInfo, whatsappLink, type Lead } from "./lib";
 
 /**
@@ -35,9 +36,11 @@ function Section({ title, children, aside }: { title: string; children: ReactNod
   );
 }
 
-export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, onChanged }: {
+export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, onChanged, focusCommentId }: {
   lead: Lead; canEdit: boolean; canShare: boolean; actions: LeadActions;
   onClose: () => void; onEdit: () => void; onChanged: (lead: Lead) => void;
+  /** Scroll to this comment (opened from a notification). */
+  focusCommentId?: string | null;
 }) {
   const isPublic = lead.visibility === "PUBLIC";
   const closed = !!lead.archivedAt;
@@ -193,6 +196,10 @@ export function LeadDrawer({ lead, canEdit, canShare, actions, onClose, onEdit, 
             {lead.notes
               ? <p className="whitespace-pre-wrap rounded-xl border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground">{lead.notes}</p>
               : <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">Nothing written down yet.</p>}
+          </Section>
+
+          <Section title="Comments">
+            <CommentThread entityType="LEAD" entityId={lead.id} focusCommentId={focusCommentId} />
           </Section>
 
           {!closed && !canEdit && <p className="text-xs text-muted">Shared by your Business CEO. Only its owner can edit or convert it.</p>}

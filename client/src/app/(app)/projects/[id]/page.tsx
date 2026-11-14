@@ -18,9 +18,11 @@ import { ProjectFormSheet } from "../components/ProjectFormSheet";
 import { ProjectTasks } from "../components/ProjectTasks";
 import { ProjectPeople } from "../components/ProjectPeople";
 import { ProjectKpis } from "../components/ProjectKpis";
+import { CommentThread, useThread } from "@/components/comments/CommentThread";
+import { onDeepLink, clearParams } from "@/lib/mentions";
 import { Empty, OutlineButton, PageHeader, StatCards, TextTabs, type Stat } from "../components/ui";
 
-type Tab = "tasks" | "people" | "kpis";
+type Tab = "tasks" | "people" | "kpis" | "discussion";
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -32,12 +34,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [editing, setEditing] = useState(false);
 
   // ?tab=people right after starting a project, so the next step is adding its people.
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "people" || t === "kpis" || t === "tasks") setTab(t);
-  }, []);
+  // ?comment=<id> (from a notification) opens the discussion at that comment.
+  const [focusComment, setFocusComment] = useState<string | null>(null);
+  useEffect(() => onDeepLink((q) => {
+    const t = q.get("tab");
+    if (t === "people" || t === "kpis" || t === "tasks" || t === "discussion") setTab(t);
+    // A project KPI link (?kpi=) opens the KPIs tab; otherwise a comment is in the discussion.
+    if (q.get("kpi")) { setTab("kpis"); clearParams("kpi", "comment"); return; }
+    const c = q.get("comment");
+    if (c) { setTab("discussion"); setFocusComment(c); clearParams("comment"); }
+  }), []);
 
   const key = ["project", id];
+  // Loaded up front for the Discussion tab's count; the tab reuses the same cached thread.
+  const { data: thread } = useThread("PROJECT", id);
   const { data: project, isLoading, isError } = useQuery<Project>({ queryKey: key, queryFn: () => fetcher(`/projects/${id}`), enabled: !!user, retry: false });
   const { data: kpiCount } = useQuery<number>({
     queryKey: ["project-kpis", id, "count"],
@@ -136,12 +146,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           { id: "tasks", label: "Tasks", count: t.total, flag: false },
           { id: "people", label: outsiders ? `People (${outsiders} outside)` : "People", count: project.members.length },
           { id: "kpis", label: "KPIs", count: kpiCount },
+          { id: "discussion", label: "Discussion", count: thread?.comments.filter((c) => !c.deleted).length ?? 0, flag: false },
         ]}
       />
 
       {tab === "tasks" && <ProjectTasks project={project} />}
       {tab === "people" && <ProjectPeople project={project} onChanged={changed} />}
       {tab === "kpis" && <ProjectKpis project={project} />}
+      {tab === "discussion" && (
+        <section className="max-w-2xl rounded-2xl border border-border bg-surface p-4 sm:p-5">
+          <p className="mb-3 text-sm text-muted">Talk about the project here. Type @ to bring in someone on it; they get a notification and an email.</p>
+          <CommentThread entityType="PROJECT" entityId={project.id} focusCommentId={focusComment} />
+        </section>
+      )}
 
       {editing && (
         <ProjectFormSheet

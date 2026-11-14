@@ -15,6 +15,8 @@ import { toast } from "@/components/Toast";
 import { TaskRow } from "./components/TaskRow";
 import { TaskForm } from "./components/TaskForm";
 import { CollaboratorTaskSheet } from "./components/CollaboratorTaskSheet";
+import { TaskCommentsSheet } from "@/components/comments/TaskCommentsSheet";
+import { onDeepLink, clearParams } from "@/lib/mentions";
 import { ResultPrompt } from "./components/ResultPrompt";
 import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "./components/TaskMoney";
 import { ApprovalsList } from "./components/ApprovalsList";
@@ -91,6 +93,14 @@ export default function TasksPage() {
   const [reviewing, setReviewing] = useState<Task | null>(null);
   const [attaching, setAttaching] = useState<Task | null>(null);
   const [updating, setUpdating] = useState<Task | null>(null);
+  // The task whose comments are open, and the comment to scroll to (from a notification link).
+  const [commentsFor, setCommentsFor] = useState<{ id: string; title?: string; focus?: string | null } | null>(null);
+  useEffect(() => onDeepLink((q) => {
+    const id = q.get("task");
+    if (!id) return;
+    setCommentsFor({ id, focus: q.get("comment") });
+    clearParams("task", "comment");
+  }), []);
   // Which group the person asked to see first (clicking a status card), remembered on this device.
   const { focus, toggle: toggleFocus, clear: clearFocus, arrange } = useTaskFocus();
   const qc = useQueryClient();
@@ -604,6 +614,7 @@ export default function TasksPage() {
                       uploading={quickAttach.busy.has(t.id)}
                       onLogResult={() => setPrompt(t)}
                       onReview={isBdo ? undefined : () => setReviewing(t)}
+                      onComments={() => setCommentsFor({ id: t.id, title: t.deliverable })}
                     />
                   ))}
                 </div>
@@ -635,6 +646,15 @@ export default function TasksPage() {
             // Finishing work that is linked to a manual KPI: ask whether it produced a result.
             if (justCompleted && saved.kpi && saved.kpi.source !== "AUTO") setPrompt(saved);
           }}
+        />
+      )}
+
+      {commentsFor && (
+        <TaskCommentsSheet
+          taskId={commentsFor.id}
+          title={commentsFor.title ?? data?.find((t) => t.id === commentsFor.id)?.deliverable}
+          focusCommentId={commentsFor.focus}
+          onClose={() => setCommentsFor(null)}
         />
       )}
 

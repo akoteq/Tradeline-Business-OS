@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { Columns3, List } from "lucide-react";
-import { fetcher } from "@/lib/api";
+import { api, fetcher } from "@/lib/api";
+import { onDeepLink, clearParams } from "@/lib/mentions";
 import { accessLevel, isManager } from "@/lib/auth";
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "@/components/Toast";
@@ -41,6 +42,17 @@ export default function LeadsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [detail, setDetail] = useState<Lead | null>(null);
+  // Notification links: /leads?lead=<id>&comment=<id> open that lead at that comment.
+  const [focusComment, setFocusComment] = useState<string | null>(null);
+  useEffect(() => onDeepLink((q) => {
+    const id = q.get("lead");
+    if (!id) return;
+    const comment = q.get("comment");
+    clearParams("lead", "comment");
+    api.get<Lead>(`/leads/${id}`)
+      .then((r) => { setFocusComment(comment); setDetail(r.data); })
+      .catch((err) => toast.failed("Couldn't open that lead", err));
+  }), []);
 
   // List or Board, remembered on this device. null until we've read it (localStorage doesn't exist
   // on the server), so we never fire the wrong query first.
@@ -224,7 +236,8 @@ export default function LeadsPage() {
       {detail && (
         <LeadDrawer
           lead={detail} canEdit={canEditLead(user, detail)} canShare={canShare} actions={actions}
-          onClose={() => setDetail(null)} onEdit={() => handlers.onEdit(detail)}
+          focusCommentId={focusComment}
+          onClose={() => { setDetail(null); setFocusComment(null); }} onEdit={() => handlers.onEdit(detail)}
           onChanged={(updated) => { setDetail(updated); invalidate(); }}
         />
       )}

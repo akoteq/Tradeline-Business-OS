@@ -32,6 +32,8 @@ import { useState } from "react";
 import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
+import { NotificationBell } from "./notifications/Notifications";
+import { MessagesButton } from "./chat/MessagesButton";
 import { companyHref, useCompanies } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL, isExternal } from "@/lib/auth";
 
@@ -83,6 +85,8 @@ type SidebarProps = {
   mobileOpen?: boolean; onClose?: () => void;
   /** Desktop only: the sidebar is folded down to a slim rail. */
   hidden?: boolean; onToggleHidden?: () => void;
+  /** Opens the notifications panel (AppShell owns it). */
+  onOpenNotifications?: () => void;
 };
 
 // A link is active on its own page and on pages nested under it (/tasks/123 keeps "Assign tasks" lit).
@@ -94,7 +98,7 @@ function isActive(pathname: string, href: string) {
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
-export default function Sidebar({ mobileOpen = false, onClose, hidden = false, onToggleHidden }: SidebarProps) {
+export default function Sidebar({ mobileOpen = false, onClose, hidden = false, onToggleHidden, onOpenNotifications }: SidebarProps) {
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const { companies } = useCompanies();
@@ -336,7 +340,10 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
         </nav>
 
         {/* The person's name from their staff profile; a login without one (e.g. a Group Owner) shows the email. */}
-        <UserFooter name={user.bdoName?.trim() || user.email} email={user.email} meta={portalLabel} onLogout={logout} rail={rail} />
+        <UserFooter name={user.bdoName?.trim() || user.email} email={user.email} meta={portalLabel} onLogout={logout} rail={rail}
+          onOpenNotifications={onOpenNotifications ? () => { onClose?.(); onOpenNotifications(); } : undefined}
+          onNavigate={onClose}
+        />
       </aside>
 
       {/* Scrollbar hidden but still scrollable (wheel/touch/keyboard all still work) */}
@@ -550,7 +557,7 @@ function CompanyBranchGroup({
   );
 }
 
-function UserFooter({ name, email, meta, onLogout, rail }: { name: string | null; email: string; meta: string; onLogout: () => void; rail: boolean }) {
+function UserFooter({ name, email, meta, onLogout, rail, onOpenNotifications, onNavigate }: { name: string | null; email: string; meta: string; onLogout: () => void; rail: boolean; onOpenNotifications?: () => void; onNavigate?: () => void }) {
   const initial = (name ?? "?").trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="px-3 py-3 border-t border-border">
@@ -565,6 +572,8 @@ function UserFooter({ name, email, meta, onLogout, rail }: { name: string | null
         <ThemeToggle className={clsx("-mr-1 shrink-0", rail && "md:hidden")} />
       </div>
       {rail && <ThemeToggle className="hidden md:flex ml-1 mb-1" />}
+      <MessagesButton variant="row" rail={rail} onNavigate={onNavigate} />
+      {onOpenNotifications && <NotificationBell variant="row" rail={rail} onOpen={onOpenNotifications} />}
       <button
         onClick={onLogout}
         title={rail ? "Sign out" : undefined}

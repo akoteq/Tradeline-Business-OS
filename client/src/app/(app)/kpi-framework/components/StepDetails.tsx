@@ -3,10 +3,11 @@
 import type { KpiFormCtx } from "./types";
 import { ChoiceCard, Chips, Disclosure, Label, inputClass, selectClass } from "./fields";
 import { FREQ_WORD, fmtKpiVal } from "@/components/kpi";
+import { MentionInput } from "@/components/mentions/MentionInput";
 import { formatMoney } from "@/lib/currency";
 
 export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
-  const { form, set, isEdit, owners, departments, parentChoices, hiddenParents, autoKeys, aggLabels, defaultAgg, lockedAggregation } = ctx;
+  const { form, set, isEdit, editId, owners, departments, parentChoices, hiddenParents, autoKeys, aggLabels, defaultAgg, lockedAggregation } = ctx;
   const target = Number(form.windowed ? form.targetValue : form.periodTarget);
   const hasTarget = Number.isFinite(target) && target > 0 && (form.windowed ? form.targetValue : form.periodTarget) !== "";
   const shownTarget = form.unit === "CURRENCY" ? formatMoney(target, form.currency) : fmtKpiVal(target, form.unit);
@@ -101,7 +102,11 @@ export function StepDetails({ ctx }: { ctx: KpiFormCtx }) {
 
         <div>
           <Label>Description</Label>
-          <textarea value={form.definition} onChange={(e) => set("definition", e.target.value)} rows={2} className={inputClass + " resize-none"} placeholder="What does it measure, and why does it matter?" />
+          <MentionInput
+            value={form.definition} onChange={(v) => set("definition", v)} rows={2} aria-label="Description"
+            source={isEdit && editId ? { entityType: "KPI", entityId: editId } : { company: form.company }}
+            placeholder="What does it measure, and why does it matter? Type @ to mention someone."
+          />
         </div>
       </Disclosure>
     </div>

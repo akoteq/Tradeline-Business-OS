@@ -1,5 +1,6 @@
 "use client";
 
+import { plainText } from "@/lib/mentions";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { ArrowUpDown, Filter, Search } from "lucide-react";
@@ -45,7 +46,7 @@ export function MyKpiList({ rows, statusFilter, onStatusFilter, companyName, onO
   const q = search.trim().toLowerCase();
   const shown = rows
     .filter((r) => (kind === "all" || kindOf(r) === kind) && (!statusFilter || r.status === statusFilter))
-    .filter((r) => !q || [r.definition.metric, r.definition.definition, r.parent?.metric].some((v) => (v ?? "").toLowerCase().includes(q)))
+    .filter((r) => !q || [r.definition.metric, plainText(r.definition.definition), r.parent?.metric].some((v) => (v ?? "").toLowerCase().includes(q)))
     .sort((a, b) => {
       if (sort === "name") return a.definition.metric.localeCompare(b.definition.metric);
       if (sort === "attain_asc" || sort === "attain_desc") {

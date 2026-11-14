@@ -2,7 +2,7 @@
 
 import { useState, type DragEvent } from "react";
 import { clsx } from "clsx";
-import { Calendar, FileText, Loader2, Paperclip, Target, UploadCloud } from "lucide-react";
+import { Calendar, FileText, Loader2, MessageSquare, Paperclip, Target, UploadCloud } from "lucide-react";
 import { CATEGORY_ICONS, categoryOf, counts, fmtDate, isOverdue, shownStatus, type Task, type TaskGroup } from "./task-utils";
 import { PriorityPill, RowMenu, StatusMenu } from "./TaskBits";
 import { AttachmentChips } from "./Attachments";
@@ -14,7 +14,7 @@ import { AttachmentChips } from "./Attachments";
  *   line 2  status, priority, owner, due date
  * The two wrappers use `lg:contents`, so on desktop their children become the grid cells.
  */
-export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onAttach, onDropFiles, uploading, onLogResult, onReview }: {
+export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyName, updating, onToggle, onChangeStatus, onEdit, onDelete, onAttach, onDropFiles, uploading, onLogResult, onReview, onComments }: {
   task: Task;
   /** Only the icon colours are used, so a group made on the fly (like "Due in 7 days") works too. */
   group: Pick<TaskGroup, "rowIcon">;
@@ -35,6 +35,8 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
   /** True while dropped files are uploading to this task. */
   uploading?: boolean;
   onLogResult: () => void;
+  /** Opens the task's comments, where people can @mention each other. */
+  onComments?: () => void;
   /** Managers only: opens the approve / reject popup for work waiting on them. */
   onReview?: () => void;
 }) {
@@ -143,6 +145,18 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
                 {/* On desktop the word appears when you point at the row; phones always show it */}
                 <span className={clsx(hasFiles ? "hidden" : "max-lg:inline lg:hidden lg:group-hover/row:inline")}>Attach</span>
               </button>
+              {onComments && (
+                <button
+                  type="button"
+                  onClick={onComments}
+                  title="Comments: type @ to bring someone in"
+                  aria-label="Comments"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted transition-colors hover:bg-subtle hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/30"
+                >
+                  <MessageSquare size={12} />
+                  <span className="max-lg:inline lg:hidden lg:group-hover/row:inline">Comment</span>
+                </button>
+              )}
             </div>
 
             {task.rejectedReason && task.approval !== "PENDING" && (
@@ -206,7 +220,7 @@ export function TaskRow({ task, group, gridCols, showCompany, showBdo, companyNa
 
       {/* Menu: top-right on a phone, last column on desktop */}
       <div className="absolute top-2.5 right-2 lg:static lg:justify-self-end">
-        <RowMenu onEdit={onEdit} onDelete={onDelete} onAttach={onAttach} />
+        <RowMenu onEdit={onEdit} onDelete={onDelete} onAttach={onAttach} onComments={onComments} />
       </div>
     </div>
   );

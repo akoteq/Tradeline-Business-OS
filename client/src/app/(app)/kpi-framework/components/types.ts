@@ -16,6 +16,7 @@ export type KpiFormCtx = {
   set: <K extends keyof KpiForm>(key: K, value: KpiForm[K]) => void;
   setForm: Dispatch<SetStateAction<KpiForm>>;
   isEdit: boolean;
+  editId: string | null;                  // the KPI being edited, for the @ picker
   lockedAggregation: boolean;            // isEdit && editDef?.state === "ACTIVE"
   companyOpts: { key: string; name: string }[];
   owners: { id: string; name: string }[];
