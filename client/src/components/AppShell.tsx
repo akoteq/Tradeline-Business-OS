@@ -10,6 +10,8 @@ import { ConfirmHost } from "./Confirm";
 import { useAuth } from "./AuthProvider";
 import { isExternal, externalCanOpen } from "@/lib/auth";
 import { NotificationBell, NotificationsListener, NotificationsPanel } from "./notifications/Notifications";
+import { ChatListener } from "./chat/ChatListener";
+import { MessagesButton } from "./chat/MessagesButton";
 
 const NO_SHELL = ["/login", "/change-password"];
 const HIDDEN_KEY = "sidebar-hidden";
@@ -63,7 +65,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu size={20} />
           </button>
           <span className="font-semibold text-gray-900 text-sm truncate">Tradeline Business Operating System</span>
-          <NotificationBell className="ml-auto shrink-0" onOpen={() => setNotificationsOpen(true)} />
+          <MessagesButton className="ml-auto shrink-0" />
+          <NotificationBell className="shrink-0" onOpen={() => setNotificationsOpen(true)} />
         </header>
 
         {/* Deadlines, deals needing attention and KPI alerts live on the home page (Attention tab),
@@ -71,8 +74,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-auto">{blocked ? null : children}</main>
       </div>
 
-      {!external && <AssistantLauncher />}
+      {/* The assistant's floating button would sit on top of the chat's Send button. */}
+      {!external && pathname !== "/messages" && <AssistantLauncher />}
       <NotificationsListener />
+      <ChatListener />
       {notificationsOpen && <NotificationsPanel onClose={closeNotifications} />}
       <Toaster />
       <ConfirmHost />

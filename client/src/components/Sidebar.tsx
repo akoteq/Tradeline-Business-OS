@@ -33,6 +33,7 @@ import { clsx } from "clsx";
 import { useAuth } from "./AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./notifications/Notifications";
+import { MessagesButton } from "./chat/MessagesButton";
 import { companyHref, useCompanies } from "@/lib/companies";
 import { accessLevel, ACCESS_LEVEL_LABEL, isExternal } from "@/lib/auth";
 
@@ -341,6 +342,7 @@ export default function Sidebar({ mobileOpen = false, onClose, hidden = false, o
         {/* The person's name from their staff profile; a login without one (e.g. a Group Owner) shows the email. */}
         <UserFooter name={user.bdoName?.trim() || user.email} email={user.email} meta={portalLabel} onLogout={logout} rail={rail}
           onOpenNotifications={onOpenNotifications ? () => { onClose?.(); onOpenNotifications(); } : undefined}
+          onNavigate={onClose}
         />
       </aside>
 
@@ -555,7 +557,7 @@ function CompanyBranchGroup({
   );
 }
 
-function UserFooter({ name, email, meta, onLogout, rail, onOpenNotifications }: { name: string | null; email: string; meta: string; onLogout: () => void; rail: boolean; onOpenNotifications?: () => void }) {
+function UserFooter({ name, email, meta, onLogout, rail, onOpenNotifications, onNavigate }: { name: string | null; email: string; meta: string; onLogout: () => void; rail: boolean; onOpenNotifications?: () => void; onNavigate?: () => void }) {
   const initial = (name ?? "?").trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="px-3 py-3 border-t border-border">
@@ -570,6 +572,7 @@ function UserFooter({ name, email, meta, onLogout, rail, onOpenNotifications }: 
         <ThemeToggle className={clsx("-mr-1 shrink-0", rail && "md:hidden")} />
       </div>
       {rail && <ThemeToggle className="hidden md:flex ml-1 mb-1" />}
+      <MessagesButton variant="row" rail={rail} onNavigate={onNavigate} />
       {onOpenNotifications && <NotificationBell variant="row" rail={rail} onOpen={onOpenNotifications} />}
       <button
         onClick={onLogout}
