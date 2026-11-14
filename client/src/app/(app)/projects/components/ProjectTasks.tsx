@@ -14,6 +14,7 @@ import { TaskBoard, matchesFocus } from "../../tasks/components/TaskBoard";
 import { TaskMoneySheet, hasTaskMoney, type moneyBody } from "../../tasks/components/TaskMoney";
 import { CollaboratorTaskSheet } from "../../tasks/components/CollaboratorTaskSheet";
 import { ReviewModal } from "../../tasks/components/ReviewModal";
+import { TaskCommentsSheet } from "@/components/comments/TaskCommentsSheet";
 import { ResultPrompt } from "../../tasks/components/ResultPrompt";
 import { AttachDialog } from "../../tasks/components/AttachDialog";
 import { SortableStats } from "../../tasks/components/SortableStats";
@@ -61,6 +62,7 @@ export function ProjectTasks({ project }: { project: Project }) {
   const [attaching, setAttaching] = useState<Task | null>(null);
   const [prompt, setPrompt] = useState<Task | null>(null);
   const [toDelete, setToDelete] = useState<Task | null>(null);
+  const [commentsFor, setCommentsFor] = useState<Task | null>(null);
   const { focus, toggle: toggleFocus, clear: clearFocus, arrange } = useTaskFocus();
 
   // List or Board, remembered on this device (separately from the Tasks page).
@@ -360,6 +362,7 @@ export function ProjectTasks({ project }: { project: Project }) {
                       uploading={quickAttach.busy.has(t.id)}
                       onLogResult={() => setPrompt(t)}
                       onReview={canApprove ? () => setReviewing(t) : undefined}
+                      onComments={() => setCommentsFor(t)}
                     />
                   ))}
                 </div>
@@ -409,6 +412,9 @@ export function ProjectTasks({ project }: { project: Project }) {
         />
       )}
 
+      {commentsFor && (
+        <TaskCommentsSheet taskId={commentsFor.id} title={commentsFor.deliverable} subtitle={`Comments on this task in ${project.name}`} onClose={() => setCommentsFor(null)} />
+      )}
       {reviewing && <ReviewModal task={reviewing} companyName="" onClose={() => setReviewing(null)} onDone={() => { setReviewing(null); refresh(); }} />}
 
       {attaching && (

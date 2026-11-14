@@ -7,6 +7,8 @@ import { clsx } from "clsx";
 import { api, fetcher } from "@/lib/api";
 import { toast } from "./Toast";
 import { confirmAction } from "./Confirm";
+import { CommentThread } from "./comments/CommentThread";
+import { MentionText } from "./mentions/MentionText";
 
 // Shared KPI vocabulary and pieces. The server (lib/kpiEngine.ts, lib/kpiStatus.ts) computes
 // every number and status; this only shows them.
@@ -257,9 +259,11 @@ type Detail = {
   tasks: { id: string; deliverable: string; status: string; progress: number; weight: number; targetDate: string | null; bdo: string | null; blocked: boolean; noResult: boolean; kpiId: string }[];
 };
 
-export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpen, extra, companyName }: {
+export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpen, extra, companyName, focusCommentId }: {
   kpiId: string; period?: string; bdoId?: string | null; onClose: () => void; onChanged?: () => void;
   onOpen?: (id: string) => void; extra?: (row: KpiRow) => React.ReactNode; companyName?: (key: string) => string;
+  /** Scroll to this comment (opened from a notification). */
+  focusCommentId?: string | null;
 }) {
   const qc = useQueryClient();
   const qp = new URLSearchParams();
@@ -296,7 +300,7 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
         : error || !data || !row || !d ? <p className="text-sm text-red-600">{apiError(error, "Couldn't load this KPI.")}</p>
         : (
         <>
-          {d.definition && <p className="text-xs text-muted bg-background border border-border rounded-lg p-3 leading-relaxed">{d.definition}</p>}
+          {d.definition && <p className="text-xs text-muted bg-background border border-border rounded-lg p-3 leading-relaxed"><MentionText value={d.definition} /></p>}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Stat label="Actual" value={fmtKpiVal(row.current, d.unit)} />
@@ -386,6 +390,10 @@ export function KpiDetailSheet({ kpiId, period, bdoId, onClose, onChanged, onOpe
                 ))}
               </ul>
             )}
+          </Section>
+
+          <Section title="Comments">
+            <CommentThread entityType="KPI" entityId={kpiId} focusCommentId={focusCommentId} />
           </Section>
         </>
       )}

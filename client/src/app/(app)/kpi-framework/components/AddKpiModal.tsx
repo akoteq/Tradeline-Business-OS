@@ -129,7 +129,7 @@ export function AddKpiModal({ editDef, departments, companyOpts, defaultCompany,
       saving={saving}
       error={error}
       ctx={{
-        form, set, setForm, isEdit,
+        form, set, setForm, isEdit, editId: editDef?.id ?? null,
         lockedAggregation: isEdit && editDef?.state === "ACTIVE",
         companyOpts, owners, departments: formDepts,
         parent, parentChoices, hiddenParents: parents.length > parentChoices.length,

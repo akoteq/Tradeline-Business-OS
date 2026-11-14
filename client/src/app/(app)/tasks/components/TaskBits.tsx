@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { clsx } from "clsx";
-import { Check, CheckCircle2, ChevronDown, Loader2, MoreHorizontal, Paperclip, Pencil, Trash2 } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Loader2, MessageSquare, MoreHorizontal, Paperclip, Pencil, Trash2 } from "lucide-react";
 import {
   OUTCOME_COLORS,
   OUTCOME_LABEL,
@@ -203,7 +203,7 @@ export function FilterSelect({ value, onChange, label, children }: { value: stri
   );
 }
 
-export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; onDelete?: () => void; onAttach?: () => void }) {
+export function RowMenu({ onEdit, onDelete, onAttach, onComments }: { onEdit: () => void; onDelete?: () => void; onAttach?: () => void; onComments?: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -235,6 +235,11 @@ export function RowMenu({ onEdit, onDelete, onAttach }: { onEdit: () => void; on
           {onAttach && (
             <button onClick={() => { setOpen(false); onAttach(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">
               <Paperclip size={14} /> Attach file or link
+            </button>
+          )}
+          {onComments && (
+            <button onClick={() => { setOpen(false); onComments(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">
+              <MessageSquare size={14} /> Comments
             </button>
           )}
           <button onClick={() => { setOpen(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/5">

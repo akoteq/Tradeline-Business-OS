@@ -9,6 +9,7 @@ import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
 import { isGroupOwner, isBusinessCeo } from "@/lib/auth";
 import { KpiRow, KpiDef, KpiStatus, KpiDetailSheet } from "@/components/kpi";
+import { onDeepLink, clearParams } from "@/lib/mentions";
 import { KpiSummary } from "./components/KpiSummary";
 import { KpiBoard } from "./components/KpiBoard";
 import { KpiHierarchy } from "./components/KpiHierarchy";
@@ -40,14 +41,15 @@ export default function KpiFrameworkPage() {
   const [showDepartments, setShowDepartments] = useState(false);
 
   // Links like /kpi-framework?view=cascade&kpi=<id> (alerts, the assistant) open a view or a KPI.
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
+  // Notification links add &comment=<id>, which the detail sheet scrolls to.
+  const [focusComment, setFocusComment] = useState<string | null>(null);
+  useEffect(() => onDeepLink((q) => {
     const v = q.get("view");
     if (v === "cascade" || v === "department" || v === "list") setView(v);
     else if (v === "category") setView("department"); // old links
     const id = q.get("kpi");
-    if (id) setOpenKpi(id);
-  }, []);
+    if (id) { setOpenKpi(id); setFocusComment(q.get("comment")); clearParams("kpi", "comment"); }
+  }), []);
 
   const companyOpts = ownCompany
     ? [{ key: ownCompany, name: byKey[ownCompany]?.name ?? ownCompany }]
@@ -117,8 +119,8 @@ export default function KpiFrameworkPage() {
 
       {openKpi && (
         <KpiDetailSheet
-          kpiId={openKpi} period={period}
-          onClose={() => setOpenKpi(null)} onChanged={invalidate} onOpen={setOpenKpi} companyName={companyName}
+          kpiId={openKpi} period={period} focusCommentId={focusComment}
+          onClose={() => { setOpenKpi(null); setFocusComment(null); }} onChanged={invalidate} onOpen={setOpenKpi} companyName={companyName}
           extra={(row) => <ReviewPanel row={row} role={user?.role ?? ""} onChanged={() => { invalidate(); qc.invalidateQueries({ queryKey: ["kpi-detail"] }); }} />}
         />
       )}

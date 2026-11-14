@@ -1,5 +1,6 @@
 "use client";
 
+import { plainText } from "@/lib/mentions";
 import { useState, useEffect, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { clsx } from "clsx";
@@ -71,7 +72,7 @@ export function KpiBoard({
   const q = search.trim().toLowerCase();
   const filtered = board.filter((r) =>
     (!statusFilter || r.status === statusFilter) &&
-    (!q || [r.definition.metric, r.definition.definition, r.owner?.name, r.department?.name, r.parent?.metric]
+    (!q || [r.definition.metric, plainText(r.definition.definition), r.owner?.name, r.department?.name, r.parent?.metric]
       .some((v) => (v ?? "").toLowerCase().includes(q))),
   );
   const rows = [...filtered].sort((a, b) => {

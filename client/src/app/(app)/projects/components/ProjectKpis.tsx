@@ -9,6 +9,8 @@ import { toast } from "@/components/Toast";
 import { confirmAction } from "@/components/Confirm";
 import { KpiSheet, PaceBar, StatusPill, WorkChip, fmtKpiVal, windowLabel, type KpiRow } from "@/components/kpi";
 import { useCompanies } from "@/lib/companies";
+import { MentionInput } from "@/components/mentions/MentionInput";
+import { MentionText } from "@/components/mentions/MentionText";
 import { card } from "../../dashboard/components/ui";
 import { Empty, PrimaryButton } from "./ui";
 import { Field, FormError, apiError, inputClass, isClosed, primaryBtn, secondaryBtn, type Project } from "../lib";
@@ -77,7 +79,7 @@ export function ProjectKpis({ project }: { project: Project }) {
                 <WorkChip work={r.work} />
                 {r.parent && <span className="text-xs text-muted truncate" title="Counts toward this KPI">Part of {r.parent.metric}</span>}
               </div>
-              {r.definition.definition && <p className="text-xs text-muted">{r.definition.definition}</p>}
+              {r.definition.definition && <p className="text-xs text-muted"><MentionText value={r.definition.definition} /></p>}
               {manage && (
                 <div className="flex gap-2 border-t border-border pt-3">
                   <button onClick={() => setLogging(r)} className="rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/15">Log a result</button>
@@ -166,8 +168,12 @@ function AddKpiSheet({ project, onClose, onSaved }: { project: Project; onClose:
           </select>
           {parents.length > 0 && fit.length === 0 && <p className="text-xs text-muted mt-1.5">No company KPI is measured the same way, so there&apos;s nothing to count toward.</p>}
         </Field>
-        <Field label="Description" hint="(optional)">
-          <textarea value={form.definition} onChange={(e) => set("definition", e.target.value)} rows={2} className={clsx(inputClass, "resize-none")} placeholder="What counts, so everyone reads it the same way" />
+        <Field label="Description" hint="(optional, type @ to mention someone on the project)">
+          <MentionInput
+            value={form.definition} onChange={(v) => set("definition", v)} rows={2}
+            source={{ entityType: "PROJECT", entityId: project.id }}
+            placeholder="What counts, so everyone reads it the same way" aria-label="Description"
+          />
         </Field>
         <FormError message={error} />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -9,6 +9,7 @@ import { Toaster } from "./Toast";
 import { ConfirmHost } from "./Confirm";
 import { useAuth } from "./AuthProvider";
 import { isExternal, externalCanOpen } from "@/lib/auth";
+import { NotificationBell, NotificationsListener, NotificationsPanel } from "./notifications/Notifications";
 
 const NO_SHELL = ["/login", "/change-password"];
 const HIDDEN_KEY = "sidebar-hidden";
@@ -22,6 +23,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const blocked = external && !NO_SHELL.includes(pathname) && !externalCanOpen(pathname);
   useEffect(() => { if (blocked) router.replace("/projects"); }, [blocked, router]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const closeNotifications = useCallback(() => setNotificationsOpen(false), []);
   // Desktop only, remembered per browser. Read after mount so the server render matches.
   const [sidebarHidden, setSidebarHidden] = useState(false);
   useEffect(() => {
@@ -44,7 +47,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} hidden={sidebarHidden} onToggleHidden={toggleHidden} />
+      <Sidebar
+        mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} hidden={sidebarHidden} onToggleHidden={toggleHidden}
+        onOpenNotifications={() => setNotificationsOpen(true)}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
@@ -56,7 +62,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Menu size={20} />
           </button>
-          <span className="font-semibold text-gray-900 text-sm">Tradeline Business Operating System</span>
+          <span className="font-semibold text-gray-900 text-sm truncate">Tradeline Business Operating System</span>
+          <NotificationBell className="ml-auto shrink-0" onOpen={() => setNotificationsOpen(true)} />
         </header>
 
         {/* Deadlines, deals needing attention and KPI alerts live on the home page (Attention tab),
@@ -65,6 +72,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {!external && <AssistantLauncher />}
+      <NotificationsListener />
+      {notificationsOpen && <NotificationsPanel onClose={closeNotifications} />}
       <Toaster />
       <ConfirmHost />
     </div>
